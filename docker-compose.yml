@@ -58,11 +58,7 @@ services:
       QRCODE_LIMIT: 30
       LANGUAGE: pt-BR
       CONFIG_SESSION_PHONE_VERSION: "2.3000.1035194821"
-      PROXY_HOST: 192.46.200.163
-      PROXY_PORT: "5833"
-      PROXY_PROTOCOL: socks5
-      PROXY_USERNAME: zefydyqi
-      PROXY_PASSWORD: bmcidk68mx8j
+      PROXY_ENABLED: "false"
     depends_on:
       postgres:
         condition: service_healthy
