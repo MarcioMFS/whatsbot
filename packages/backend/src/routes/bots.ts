@@ -91,6 +91,15 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     return { qrCode }
   })
 
+  app.get<{ Params: { id: string } }>('/:id/connection-status', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+    const status = await ctx.messaging.getInstanceStatus(bot.evolutionConfig.instanceName)
+    return { state: status.state }
+  })
+
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const user = req.user as { id: string }
     const bot = await ctx.botRepo.findById(req.params.id)

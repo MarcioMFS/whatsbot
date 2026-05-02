@@ -54,6 +54,7 @@ export const api = {
     deactivate: (id: string) =>
       request<unknown>(`/bots/${id}/deactivate`, { method: 'PATCH' }),
     qrcode: (id: string) => request<{ qrCode: string }>(`/bots/${id}/qrcode`),
+    connectionStatus: (id: string) => request<{ state: string }>(`/bots/${id}/connection-status`),
     delete: (id: string) => request<void>(`/bots/${id}`, { method: 'DELETE' }),
   },
   flows: {

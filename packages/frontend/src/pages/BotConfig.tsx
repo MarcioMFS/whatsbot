@@ -33,14 +33,16 @@ export function BotConfig() {
   const [showQR, setShowQR] = useState(false)
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState('')
+  const [waState, setWaState] = useState<'open' | 'connecting' | 'close' | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { t } = useUIStore()
 
   useEffect(() => {
     if (!botId) return
-    Promise.all([api.bots.get(botId), api.flows.list(botId)]).then(([b, f]) => {
+    Promise.all([api.bots.get(botId), api.flows.list(botId), api.bots.connectionStatus(botId)]).then(([b, f, s]) => {
       setBot(b as BotData)
       setFlows(f as FlowData[])
+      setWaState((s as { state: 'open' | 'connecting' | 'close' }).state)
     })
     if (headingRef.current) {
       gsap.fromTo(headingRef.current, { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, ease: 'power3.out' })
@@ -66,6 +68,7 @@ export function BotConfig() {
       } else {
         setQrCode(qr)
         setShowQR(true)
+        setWaState('connecting')
       }
     } catch (err) {
       setQrError(err instanceof Error ? err.message : 'Failed to load QR code')
@@ -118,13 +121,28 @@ export function BotConfig() {
 
           <GlassCard animate delay={0.08}>
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">{t('whatsappConnection')}</h3>
-            <p className="text-sm text-slate-400 mb-4">{t('scanQR')}</p>
+
+            {/* Connection status badge */}
+            <div className="flex items-center gap-2 mb-4">
+              <span className={`w-2 h-2 rounded-full ${waState === 'open' ? 'bg-emerald-400' : waState === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span className="text-sm text-slate-400">
+                {waState === 'open' ? 'Connected' : waState === 'connecting' ? 'Connecting...' : waState === 'close' ? 'Disconnected' : '—'}
+              </span>
+            </div>
+
             <div className="flex flex-col gap-2">
-              <button onClick={loadQR} disabled={qrLoading}
-                className="flex items-center gap-2 bg-glass-200 hover:bg-glass-300 disabled:opacity-50 border border-glass-border text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
-                {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
-                {t('showQRCode')}
-              </button>
+              {waState === 'open' ? (
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm px-4 py-2.5 rounded-xl">
+                  <QrCode size={16} />
+                  WhatsApp already connected
+                </div>
+              ) : (
+                <button onClick={loadQR} disabled={qrLoading}
+                  className="flex items-center gap-2 bg-glass-200 hover:bg-glass-300 disabled:opacity-50 border border-glass-border text-white text-sm font-medium px-4 py-2.5 rounded-xl transition-all">
+                  {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
+                  {t('showQRCode')}
+                </button>
+              )}
               <a
                 href="https://evolution.whatsbot.mfslabs.com.br/manager"
                 target="_blank"
@@ -141,7 +159,7 @@ export function BotConfig() {
                 <p className="text-slate-500">Tip: use the Evolution Manager link above to connect manually — instance name: <span className="font-mono text-slate-300">{bot.evolutionConfig.instanceName}</span></p>
               </div>
             )}
-            {showQR && qrCode && (
+            {showQR && qrCode && waState !== 'open' && (
               <div className="mt-4 p-3 bg-white rounded-xl inline-block">
                 <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-40 h-40" />
               </div>
