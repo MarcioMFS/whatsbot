@@ -1,0 +1,21 @@
+{
+  "name": "@whatsbot/sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/whatsbot.umd.cjs",
+  "module": "./dist/whatsbot.js",
+  "exports": {
+    ".": {
+      "import": "./dist/whatsbot.js",
+      "require": "./dist/whatsbot.umd.cjs"
+    }
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch"
+  },
+  "devDependencies": {
+    "vite": "^5.2.11",
+    "typescript": "^5.4.5"
+  }
+}

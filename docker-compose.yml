@@ -1,0 +1,111 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: whatsbot
+      POSTGRES_USER: whatsbot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-whatsbot123}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U whatsbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6381:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  tor:
+    image: dperson/torproxy
+    restart: unless-stopped
+    ports:
+      - "9050:9050"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --socks5 localhost:9050 https://check.torproject.org/api/ip | grep -q IsTor || exit 1"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 20s
+
+  evolution:
+    image: atendai/evolution-api:latest
+    ports:
+      - "8082:8080"
+    environment:
+      SERVER_URL: ${EVOLUTION_SERVER_URL:-http://localhost:8082}
+      AUTHENTICATION_TYPE: apikey
+      AUTHENTICATION_API_KEY: ${EVOLUTION_API_KEY:-evolution_secret_key}
+      DATABASE_ENABLED: "true"
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://whatsbot:${POSTGRES_PASSWORD:-whatsbot123}@postgres:5432/evolution
+      DATABASE_CONNECTION_CLIENT_NAME: evolution
+      REDIS_ENABLED: "true"
+      REDIS_URI: redis://redis:6379
+      REDIS_PREFIX_KEY: evolution
+      DEL_INSTANCE: "false"
+      QRCODE_LIMIT: 30
+      LANGUAGE: pt-BR
+      CONFIG_SESSION_PHONE_VERSION: "2.3000.1035194821"
+      PROXY_HOST: 192.46.200.163
+      PROXY_PORT: "5833"
+      PROXY_PROTOCOL: socks5
+      PROXY_USERNAME: zefydyqi
+      PROXY_PASSWORD: bmcidk68mx8j
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      tor:
+        condition: service_started
+    volumes:
+      - evolution_data:/evolution/instances
+
+  backend:
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+    ports:
+      - "3010:3001"
+    environment:
+      DATABASE_URL: postgresql://whatsbot:${POSTGRES_PASSWORD:-whatsbot123}@postgres:5432/whatsbot
+      REDIS_URL: redis://redis:6379
+      EVOLUTION_URL: http://evolution:8080
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-evolution_secret_key}
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      CLAUDE_API_KEY: ${CLAUDE_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      WEBHOOK_BASE_URL: ${WEBHOOK_BASE_URL:-http://localhost:3010}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3011}
+      PORT: 3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+    ports:
+      - "3011:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  evolution_data:
