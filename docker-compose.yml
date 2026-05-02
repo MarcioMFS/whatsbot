@@ -41,6 +41,7 @@ services:
 
   evolution:
     image: atendai/evolution-api:latest
+    restart: unless-stopped
     ports:
       - "8082:8080"
     environment:
@@ -64,8 +65,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      tor:
-        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/ | grep -q 'Evolution' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     volumes:
       - evolution_data:/evolution/instances
 
