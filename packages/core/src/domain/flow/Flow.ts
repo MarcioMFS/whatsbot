@@ -8,6 +8,11 @@ export type NodeType =
   | 'capture'
   | 'webhook'
   | 'delay'
+  | 'distributor'
+  | 'notification'
+  | 'pixel'
+  | 'pix'
+  | 'label'
   | 'end'
 
 export interface NodeData {
@@ -23,6 +28,36 @@ export interface TriggerNodeData extends NodeData {
 export interface AIResponseNodeData extends NodeData {
   promptTemplate: string
   useHistory: boolean
+  saveResponseAs?: string
+  model?: string
+}
+
+export interface DistributorNodeData extends NodeData {
+  variations: string[]
+}
+
+export interface NotificationNodeData extends NodeData {
+  phoneNumber: string
+  message: string
+}
+
+export interface PixelNodeData extends NodeData {
+  pixelId: string
+  accessToken: string
+  eventName: string
+  value?: string
+  currency?: string
+}
+
+export interface PixNodeData extends NodeData {
+  pixKey: string
+  amount?: string
+  description?: string
+  recipientName?: string
+}
+
+export interface LabelNodeData extends NodeData {
+  labelName: string
 }
 
 export interface TextNodeData extends NodeData {
@@ -123,8 +158,6 @@ export class Flow {
     if (triggers.length === 0) throw new Error('Flow must have at least one trigger node')
     if (triggers.length > 1) throw new Error('Flow can only have one trigger node')
 
-    const ends = this.props.nodes.filter(n => n.type === 'end')
-    if (ends.length === 0) throw new Error('Flow must have at least one end node')
   }
 
   updateNodes(nodes: FlowNode[], edges: FlowEdge[]): void {

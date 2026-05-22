@@ -49,6 +49,20 @@ export function BotConfig() {
     }
   }, [botId])
 
+  // Poll connection status every 3s so UI reflects real state after QR scan
+  useEffect(() => {
+    if (!botId) return
+    const interval = setInterval(async () => {
+      try {
+        const s = await api.bots.connectionStatus(botId)
+        const state = (s as { state: 'open' | 'connecting' | 'close' }).state
+        setWaState(state)
+        if (state === 'open') setShowQR(false)
+      } catch { /* ignore */ }
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [botId])
+
   const createFlow = async () => {
     if (!botId) return
     const name = prompt(`${t('flowName')}`)

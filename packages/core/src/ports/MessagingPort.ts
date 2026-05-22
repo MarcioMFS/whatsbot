@@ -9,6 +9,7 @@ export interface IncomingMessage {
 
 export interface OutgoingMessage {
   instanceName: string
+  instanceId?: string
   phoneNumber: string
   message: string
 }
@@ -25,5 +26,5 @@ export interface MessagingPort {
   createInstance(instanceName: string, webhookUrl?: string, webhookSecret?: string): Promise<{ qrCode: string }>
   deleteInstance(instanceName: string): Promise<void>
   setWebhook(instanceName: string, webhookUrl: string, secret: string): Promise<void>
-  connectInstance(instanceName: string): Promise<{ qrCode: string }>
+  connectInstance(instanceName: string, webhookUrl?: string): Promise<{ qrCode: string }>
 }

@@ -20,6 +20,7 @@ export interface BotAIConfig {
 
 export interface BotEvolutionConfig {
   instanceName: string
+  instanceId?: string
   phoneNumber?: string
 }
 
@@ -83,6 +84,11 @@ export class Bot {
 
   deactivate(): void {
     this.props.isActive = false
+    this.props.updatedAt = new Date()
+  }
+
+  setInstanceId(instanceId: string): void {
+    this.props.evolutionConfig = { ...this.props.evolutionConfig, instanceId }
     this.props.updatedAt = new Date()
   }
 

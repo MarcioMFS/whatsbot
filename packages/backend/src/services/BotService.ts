@@ -29,12 +29,13 @@ export class BotService {
     })
 
     const webhookUrl = `${params.webhookBaseUrl}/webhooks/evolution/${bot.id}`
-    // Evolution API v2: webhook must be set at instance creation time
-    await this.messaging.createInstance(
+    const result = await this.messaging.createInstance(
       params.evolutionConfig.instanceName,
       webhookUrl,
       bot.webhookSecret,
-    )
+    ) as { qrCode: string; instanceId?: string }
+
+    if (result.instanceId) bot.setInstanceId(result.instanceId)
 
     await this.botRepo.save(bot)
 
@@ -74,22 +75,14 @@ export class BotService {
     const instanceName = bot.evolutionConfig.instanceName
     const webhookUrl = `${webhookBaseUrl}/webhooks/evolution/${bot.id}`
 
-    const pollQR = async (): Promise<string> => {
-      for (let i = 0; i < 8; i++) {
-        await new Promise(r => setTimeout(r, 3000))
-        const { qrCode } = await this.messaging.connectInstance(instanceName)
-        if (qrCode) return qrCode
-      }
-      return ''
-    }
-
     try {
-      const { qrCode } = await this.messaging.connectInstance(instanceName)
-      if (qrCode) return qrCode
-      return pollQR()
+      const { qrCode } = await this.messaging.connectInstance(instanceName, webhookUrl)
+      return qrCode
     } catch {
       await this.messaging.createInstance(instanceName, webhookUrl, bot.webhookSecret)
-      return pollQR()
+      await new Promise(r => setTimeout(r, 2000))
+      const { qrCode } = await this.messaging.connectInstance(instanceName, webhookUrl)
+      return qrCode
     }
   }
 }

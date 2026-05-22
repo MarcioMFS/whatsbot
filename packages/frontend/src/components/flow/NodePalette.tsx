@@ -1,15 +1,20 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
-import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle } from 'lucide-react'
+import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag } from 'lucide-react'
 
 const NODE_TYPES = [
-  { type: 'text_message', label: 'Text Message', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
-  { type: 'ai_response', label: 'AI Response', icon: Bot, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
-  { type: 'condition', label: 'Condition', icon: GitBranch, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
-  { type: 'capture', label: 'Capture Input', icon: Clipboard, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  { type: 'text_message', label: 'Mensagem', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+  { type: 'distributor', label: 'Distribuidor', icon: Shuffle, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
+  { type: 'ai_response', label: 'IA / GPT', icon: Bot, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
+  { type: 'capture', label: 'Aguardar Resp.', icon: Clipboard, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  { type: 'condition', label: 'Condição', icon: GitBranch, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+  { type: 'notification', label: 'Notificação', icon: Bell, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
+  { type: 'pix', label: 'Botão Pix', icon: QrCode, color: 'text-emerald-300', bg: 'bg-emerald-400/10 border-emerald-400/20' },
+  { type: 'pixel', label: 'Pixel', icon: BarChart2, color: 'text-blue-300', bg: 'bg-blue-400/10 border-blue-400/20' },
+  { type: 'label', label: 'Etiqueta', icon: Tag, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
   { type: 'webhook', label: 'Webhook', icon: Globe, color: 'text-cyan-400', bg: 'bg-cyan-500/10 border-cyan-500/20' },
-  { type: 'delay', label: 'Delay', icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
-  { type: 'end', label: 'End', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
+  { type: 'delay', label: 'Delay', icon: Clock, color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' },
+  { type: 'end', label: 'Fim', icon: XCircle, color: 'text-red-400', bg: 'bg-red-500/10 border-red-500/20' },
 ]
 
 interface Props {

@@ -10,11 +10,12 @@ import {
   useEdgesState,
   type Connection,
   type Edge,
+  type Node,
   BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import gsap from 'gsap'
-import { ArrowLeft, Save, Play, Square } from 'lucide-react'
+import { ArrowLeft, Save, Play, Square, AlertTriangle, X } from 'lucide-react'
 import { api } from '../api/client.ts'
 import { NodePalette } from '../components/flow/NodePalette.tsx'
 import { NodeConfigPanel } from '../components/flow/NodeConfigPanel.tsx'
@@ -26,6 +27,48 @@ import { CaptureNode } from '../components/flow/nodes/CaptureNode.tsx'
 import { WebhookNode } from '../components/flow/nodes/WebhookNode.tsx'
 import { DelayNode } from '../components/flow/nodes/DelayNode.tsx'
 import { EndNode } from '../components/flow/nodes/EndNode.tsx'
+import { DistributorNode } from '../components/flow/nodes/DistributorNode.tsx'
+import { NotificationNode } from '../components/flow/nodes/NotificationNode.tsx'
+import { PixelNode } from '../components/flow/nodes/PixelNode.tsx'
+import { PixNode } from '../components/flow/nodes/PixNode.tsx'
+import { LabelNode } from '../components/flow/nodes/LabelNode.tsx'
+
+function validateFlow(nodes: Node[], edges: Edge[]): string[] {
+  const errors: string[] = []
+
+  const triggers = nodes.filter(n => n.type === 'trigger')
+  if (triggers.length === 0) errors.push('O fluxo precisa ter um nó Trigger.')
+  else if (triggers.length > 1) errors.push('O fluxo pode ter apenas 1 nó Trigger.')
+  else if (!edges.find(e => e.source === triggers[0].id))
+    errors.push('O Trigger precisa estar conectado a outro nó.')
+
+  nodes.filter(n => n.type === 'condition').forEach(n => {
+    const lbl = String(n.data.label ?? 'Condição')
+    if (!edges.find(e => e.source === n.id && e.sourceHandle === 'true'))
+      errors.push(`"${lbl}": conecte a saída verde (true).`)
+    if (!edges.find(e => e.source === n.id && e.sourceHandle === 'false'))
+      errors.push(`"${lbl}": conecte a saída vermelha (false).`)
+  })
+
+  nodes.filter(n => n.type === 'capture').forEach(n => {
+    const lbl = String(n.data.label ?? 'Capture')
+    if (!edges.find(e => e.source === n.id))
+      errors.push(`"${lbl}": saída "respondeu" não está conectada.`)
+    const varName = String(n.data.variableName ?? '')
+    if (!varName || !/^\w+$/.test(varName))
+      errors.push(`"${lbl}": nome da variável inválido — use só letras, números e _.`)
+  })
+
+  nodes
+    .filter(n => !['end', 'trigger', 'condition', 'capture'].includes(n.type ?? ''))
+    .forEach(n => {
+      const hasOut = edges.find(e => e.source === n.id)
+      if (!hasOut)
+        errors.push(`"${String(n.data.label ?? n.type)}": nó sem saída conectada.`)
+    })
+
+  return errors
+}
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -35,19 +78,25 @@ const nodeTypes = {
   capture: CaptureNode,
   webhook: WebhookNode,
   delay: DelayNode,
+  distributor: DistributorNode,
+  notification: NotificationNode,
+  pixel: PixelNode,
+  pix: PixNode,
+  label: LabelNode,
   end: EndNode,
 }
 
 export function FlowBuilder() {
   const { botId, flowId } = useParams<{ botId: string; flowId: string }>()
   const navigate = useNavigate()
-  const [nodes, setNodes, onNodesChange] = useNodesState([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNode, setSelectedNode] = useState<{ id: string; type: string; data: Record<string, unknown> } | null>(null)
   const [flowName, setFlowName] = useState('Flow')
   const [saving, setSaving] = useState(false)
   const [bot, setBot] = useState<{ isActive: boolean; activeFlowId: string | null } | null>(null)
   const [activateError, setActivateError] = useState<string | null>(null)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const headerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -71,7 +120,15 @@ export function FlowBuilder() {
   }, [botId, flowId])
 
   const onConnect = useCallback(
-    (connection: Connection) => setEdges(eds => addEdge({ ...connection, type: 'smoothstep' }, eds)),
+    (connection: Connection) => {
+      setEdges(eds => {
+        const duplicate = eds.find(
+          e => e.source === connection.source && (e.sourceHandle ?? null) === (connection.sourceHandle ?? null)
+        )
+        if (duplicate) return eds
+        return addEdge({ ...connection, type: 'smoothstep' }, eds)
+      })
+    },
     [setEdges]
   )
 
@@ -93,6 +150,11 @@ export function FlowBuilder() {
       capture: { label: 'Ask a question here...', variableName: 'user_input' },
       webhook: { label: 'Webhook', url: 'https://...', method: 'POST' },
       delay: { label: 'Wait', seconds: 2 },
+      distributor: { label: 'Distribuidor', variations: ['Olá! Como posso ajudar?', 'Oi! Em que posso te ajudar?'] },
+      notification: { label: 'Notificação', phoneNumber: '', message: '{{name}} ({{phone}}) entrou em contato.' },
+      pixel: { label: 'Facebook Pixel', pixelId: '', accessToken: '', eventName: 'Purchase', value: '0', currency: 'BRL' },
+      pix: { label: 'Botão Pix', pixKey: '', amount: '', description: '', recipientName: '' },
+      label: { label: 'Etiqueta', labelName: '' },
       end: { label: 'End' },
     }
     setNodes(nds => [
@@ -103,6 +165,9 @@ export function FlowBuilder() {
 
   const save = async () => {
     if (!flowId) return
+    const errs = validateFlow(nodes, edges)
+    if (errs.length > 0) { setValidationErrors(errs); return }
+    setValidationErrors([])
     setSaving(true)
     try {
       await api.flows.update(flowId, { name: flowName, nodes, edges })
@@ -114,6 +179,11 @@ export function FlowBuilder() {
   const toggleActive = async () => {
     if (!botId || !flowId || !bot) return
     setActivateError(null)
+    if (!bot.isActive || bot.activeFlowId !== flowId) {
+      const errs = validateFlow(nodes, edges)
+      if (errs.length > 0) { setValidationErrors(errs); return }
+      setValidationErrors([])
+    }
     try {
       if (bot.isActive && bot.activeFlowId === flowId) {
         const updated = await api.bots.deactivate(botId)
@@ -167,6 +237,20 @@ export function FlowBuilder() {
           {saving ? 'Saving...' : 'Save'}
         </button>
       </div>
+
+      {validationErrors.length > 0 && (
+        <div className="mx-4 my-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 flex gap-3 items-start">
+          <AlertTriangle size={15} className="text-red-400 mt-0.5 shrink-0" />
+          <div className="flex-1 space-y-0.5">
+            {validationErrors.map((e, i) => (
+              <p key={i} className="text-xs text-red-300">{e}</p>
+            ))}
+          </div>
+          <button onClick={() => setValidationErrors([])} className="text-slate-400 hover:text-white">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       <div className="flex-1 flex overflow-hidden">
         {/* Node Palette */}

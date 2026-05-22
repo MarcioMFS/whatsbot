@@ -51,7 +51,7 @@ export class Conversation {
   }
 
   static reconstitute(props: ConversationProps): Conversation {
-    return new Conversation({ timeoutAt: null, ...props })
+    return new Conversation({ ...props, timeoutAt: props.timeoutAt ?? null })
   }
 
   addUserMessage(content: string): void {

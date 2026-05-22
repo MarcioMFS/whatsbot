@@ -11,22 +11,29 @@ export class ClaudeAdapter implements AIProviderPort {
 
   async generate(params: AIGenerateParams): Promise<AIGenerateResult> {
     const userPrompt = this.buildUserPrompt(params)
+    const model = params.imageBase64 ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6'
+
+    const lastUserContent: Anthropic.MessageParam['content'] = params.imageBase64
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: params.imageBase64 } },
+          { type: 'text', text: userPrompt },
+        ]
+      : userPrompt
 
     const response = await this.client.messages.create({
-      model: 'claude-sonnet-4-6',
+      model,
       max_tokens: params.maxTokens ?? 1024,
       temperature: params.temperature ?? 0.7,
       system: [
         {
           type: 'text',
           text: params.systemPrompt,
-          // Cache the system prompt — only changes when bot config changes
           ...(params.cacheSystemPrompt ? { cache_control: { type: 'ephemeral' } } : {}),
         },
       ],
       messages: [
         ...params.history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-        { role: 'user', content: userPrompt },
+        { role: 'user', content: lastUserContent },
       ],
     })
 

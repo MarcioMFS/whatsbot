@@ -1,10 +1,12 @@
 import type { FastifyInstance } from 'fastify'
-import { createHmac, timingSafeEqual } from 'crypto'
+import { timingSafeEqual } from 'crypto'
 import { Queue } from 'bullmq'
+import type Redis from 'ioredis'
 import type { BotRepository } from '@whatsbot/core'
 
 interface WebhookCtx {
   botRepo: BotRepository
+  redis: Redis
 }
 
 export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
@@ -20,33 +22,70 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       if (!bot) return reply.code(404).send({ error: 'Bot not found' })
 
       const signature = req.headers['x-webhook-secret'] as string | undefined
-      if (!verifySecret(signature, bot.webhookSecret)) {
+      if (signature && !verifySecret(signature, bot.webhookSecret)) {
         return reply.code(401).send({ error: 'Invalid signature' })
       }
 
       const payload = req.body as Record<string, unknown>
-      console.log('[webhook] event:', payload.event, '| keys:', Object.keys(payload))
-      const event = (payload.event as string ?? '').toLowerCase().replace('.', '_')
-      if (event !== 'messages_upsert') return reply.code(200).send()
+      const event = ((payload.event as string) ?? '').toUpperCase()
 
-      console.log('[webhook] data:', JSON.stringify(payload.data).substring(0, 300))
-      const data = payload.data as {
-        key: { remoteJid: string; fromMe: boolean }
-        message?: { conversation?: string; extendedTextMessage?: { text: string } }
+      if (event !== 'MESSAGE' && event !== 'MESSAGES_UPSERT') return reply.code(200).send()
+
+      const raw = (payload.data ?? payload) as Record<string, unknown>
+
+      // Evolution Go format: { Info: { Chat, IsFromMe, IsGroup, ID }, Message: { ... } }
+      // Evolution API format: { key: { remoteJid, fromMe, id }, message: { ... } }
+      const info = raw.Info as Record<string, unknown> | undefined
+      const msgGo = raw.Message as Record<string, unknown> | undefined
+      const keyApi = raw.key as Record<string, unknown> | undefined
+      const msgApi = raw.message as Record<string, unknown> | undefined
+
+      const fromMe = (info?.IsFromMe ?? keyApi?.fromMe ?? false) as boolean
+      if (fromMe) return reply.code(200).send()
+
+      const isGroup = (info?.IsGroup ?? false) as boolean
+      if (isGroup) return reply.code(200).send()
+
+      // Deduplicação — Evolution Go envia 2-3 webhooks por mensagem
+      const msgId = (info?.ID ?? keyApi?.id ?? '') as string
+      if (msgId) {
+        const dedupKey = `webhook:dedup:${bot.id}:${msgId}`
+        const already = await ctx.redis.set(dedupKey, '1', 'EX', 30, 'NX')
+        if (!already) return reply.code(200).send({ ok: true, dup: true })
       }
 
-      if (data.key.fromMe) return reply.code(200).send()
+      const chat = (info?.Chat ?? keyApi?.remoteJid ?? '') as string
+      const jid = chat.endsWith('@lid') && keyApi?.remoteJidAlt
+        ? (keyApi.remoteJidAlt as string)
+        : chat
+      const phoneNumber = jid.split('@')[0]
 
-      const phoneNumber = data.key.remoteJid.replace('@s.whatsapp.net', '')
+      const extText = (msgApi?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined
+
+      const imgMsg = (msgGo?.imageMessage ?? msgApi?.imageMessage) as Record<string, unknown> | undefined
+      const hasImage = !!(imgMsg ?? msgGo?.documentMessage ?? msgApi?.documentMessage)
+
+      // Objeto Message completo para /message/downloadimage
+      const imageCaption = (imgMsg?.caption as string | undefined) ?? ''
+      const imageMeta = imgMsg ? { imgMsg } : undefined
+
       const message =
-        data.message?.conversation ??
-        data.message?.extendedTextMessage?.text ??
-        ''
+        (msgGo?.conversation as string | undefined) ??
+        (msgGo?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined ??
+        (msgApi?.conversation as string | undefined) ??
+        extText ??
+        (raw.text as string | undefined) ??
+        (raw.body as string | undefined) ??
+        (hasImage ? (imageCaption || '[image]') : '')
 
-      if (!message.trim()) return reply.code(200).send()
+      if (!phoneNumber || !message.trim()) return reply.code(200).send()
 
-      await messageQueue.add('process', { botId: bot.id, phoneNumber, message })
-
+      await messageQueue.add('process', {
+        botId: bot.id,
+        phoneNumber,
+        message,
+        imageMeta: imageMeta || undefined,
+      })
       return reply.code(200).send({ ok: true })
     }
   )

@@ -59,7 +59,7 @@ await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
 await app.register(jwt, { secret: process.env.JWT_SECRET! })
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
-const ctx = { botRepo, flowRepo, conversationRepo, botService, flowExecService, messaging }
+const ctx = { botRepo, flowRepo, conversationRepo, botService, flowExecService, messaging, redis }
 
 await app.register(authRoutes, { prefix: '/api/auth', db })
 await app.register(aiRoutes, { prefix: '/api/ai', aiService })

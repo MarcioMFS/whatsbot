@@ -12,6 +12,7 @@ export interface AIGenerateParams {
   temperature?: number
   maxTokens?: number
   cacheSystemPrompt?: boolean
+  imageBase64?: string
 }
 
 export interface AIGenerateResult {

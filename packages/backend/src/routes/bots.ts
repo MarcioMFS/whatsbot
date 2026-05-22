@@ -69,8 +69,12 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     const bot = await ctx.botRepo.findById(req.params.id)
     if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
 
-    const updated = await ctx.botService.activateBot(bot.id, flowId)
-    return updated.toJSON()
+    try {
+      const updated = await ctx.botService.activateBot(bot.id, flowId)
+      return updated.toJSON()
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Failed to activate' })
+    }
   })
 
   app.patch<{ Params: { id: string } }>('/:id/deactivate', async (req, reply) => {

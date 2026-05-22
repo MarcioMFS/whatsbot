@@ -52,7 +52,7 @@ export const api = {
     activate: (id: string, flowId: string) =>
       request<unknown>(`/bots/${id}/activate`, { method: 'PATCH', body: JSON.stringify({ flowId }) }),
     deactivate: (id: string) =>
-      request<unknown>(`/bots/${id}/deactivate`, { method: 'PATCH' }),
+      request<unknown>(`/bots/${id}/deactivate`, { method: 'PATCH', body: '{}' }),
     qrcode: (id: string) => request<{ qrCode: string }>(`/bots/${id}/qrcode`),
     connectionStatus: (id: string) => request<{ state: string }>(`/bots/${id}/connection-status`),
     delete: (id: string) => request<void>(`/bots/${id}`, { method: 'DELETE' }),
