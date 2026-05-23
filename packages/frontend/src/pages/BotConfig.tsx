@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2, Settings2, Activity } from 'lucide-react'
 import { Layout } from '../components/ui/Layout.tsx'
 import { GlassCard } from '../components/ui/GlassCard.tsx'
 import { api } from '../api/client.ts'
@@ -9,12 +9,22 @@ import { useUIStore } from '../stores/uiStore.ts'
 
 interface RoutingRule { tag: string; flowId: string }
 
+interface GlobalConfig {
+  defaultPixKey?: string
+  defaultReceiverName?: string
+  ownerPhone?: string
+  supportFlowId?: string
+  defaultCurrency?: string
+  defaultPaymentExpirationMinutes?: number
+}
+
 interface BotData {
   id: string
   name: string
   isActive: boolean
   activeFlowId: string | null
   routingRules: RoutingRule[]
+  globalConfig: GlobalConfig
   productInfo: { name: string; description: string; persona: string; language: string }
   aiConfig: { provider: string; model: string; temperature: number }
   evolutionConfig: { instanceName: string }
@@ -39,6 +49,8 @@ export function BotConfig() {
   const [waState, setWaState] = useState<'open' | 'connecting' | 'close' | null>(null)
   const [routingRules, setRoutingRules] = useState<RoutingRule[]>([])
   const [routingSaving, setRoutingSaving] = useState(false)
+  const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({})
+  const [configSaving, setConfigSaving] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { t } = useUIStore()
 
@@ -48,6 +60,7 @@ export function BotConfig() {
       const botData = b as BotData
       setBot(botData)
       setRoutingRules(botData.routingRules ?? [])
+      setGlobalConfig(botData.globalConfig ?? {})
       setFlows(f as FlowData[])
       setWaState((s as { state: 'open' | 'connecting' | 'close' }).state)
     })
@@ -191,6 +204,11 @@ export function BotConfig() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">{t('conversationFlows')}</h2>
           <div className="flex items-center gap-2">
+            <button onClick={() => navigate(`/bots/${botId}/events`)}
+              className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <Activity size={14} />
+              Eventos
+            </button>
             <button onClick={() => navigate(`/bots/${botId}/leads`)}
               className="flex items-center gap-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
               <Users size={14} />
@@ -235,6 +253,74 @@ export function BotConfig() {
               </GlassCard>
             )
           })}
+        </div>
+
+        {/* Global Config */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <Settings2 size={16} className="text-brand-400" /> Configuração Global
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">Valores padrão usados pelos nós do fluxo. Evitam reconfigurar em cada nó.</p>
+            </div>
+          </div>
+          <div className="glass p-5 space-y-4 rounded-2xl border border-glass-border">
+            <div className="grid grid-cols-2 gap-4">
+              <ConfigField label="Chave Pix padrão" value={globalConfig.defaultPixKey ?? ''} onChange={v => setGlobalConfig(c => ({ ...c, defaultPixKey: v }))}
+                placeholder="email@exemplo.com ou CPF" />
+              <ConfigField label="Nome do favorecido padrão" value={globalConfig.defaultReceiverName ?? ''} onChange={v => setGlobalConfig(c => ({ ...c, defaultReceiverName: v }))}
+                placeholder="João Silva" />
+              <ConfigField label="Telefone do dono do bot" value={globalConfig.ownerPhone ?? ''} onChange={v => setGlobalConfig(c => ({ ...c, ownerPhone: v }))}
+                placeholder="5511999999999" />
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Fluxo de suporte pós-compra</label>
+                <select
+                  value={globalConfig.supportFlowId ?? ''}
+                  onChange={e => setGlobalConfig(c => ({ ...c, supportFlowId: e.target.value || undefined }))}
+                  className="w-full bg-glass-100 border border-glass-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500/50 transition-all"
+                >
+                  <option value="" className="bg-slate-900">Nenhum</option>
+                  {flows.map(f => <option key={f.id} value={f.id} className="bg-slate-900">{f.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Moeda padrão</label>
+                <select
+                  value={globalConfig.defaultCurrency ?? 'BRL'}
+                  onChange={e => setGlobalConfig(c => ({ ...c, defaultCurrency: e.target.value }))}
+                  className="w-full bg-glass-100 border border-glass-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500/50 transition-all"
+                >
+                  <option value="BRL" className="bg-slate-900">BRL (Real)</option>
+                  <option value="USD" className="bg-slate-900">USD (Dólar)</option>
+                  <option value="EUR" className="bg-slate-900">EUR (Euro)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Expiração de pagamento (minutos)</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={1440}
+                  value={globalConfig.defaultPaymentExpirationMinutes ?? 60}
+                  onChange={e => setGlobalConfig(c => ({ ...c, defaultPaymentExpirationMinutes: Number(e.target.value) }))}
+                  className="w-full bg-glass-100 border border-glass-border rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-brand-500/50 transition-all"
+                />
+              </div>
+            </div>
+            <button
+              disabled={configSaving}
+              onClick={async () => {
+                if (!botId) return
+                setConfigSaving(true)
+                try { await api.bots.updateConfig(botId, globalConfig as Record<string, unknown>) } finally { setConfigSaving(false) }
+              }}
+              className="flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-5 py-2 rounded-xl transition-all disabled:opacity-50"
+            >
+              {configSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+              Salvar configuração
+            </button>
+          </div>
         </div>
 
         {/* Routing Rules */}
@@ -311,6 +397,21 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between">
       <span className="text-slate-400">{label}</span>
       <span className="text-white font-medium">{value}</span>
+    </div>
+  )
+}
+
+function ConfigField({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-300 mb-1.5">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full bg-glass-100 border border-glass-border rounded-xl px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-brand-500/50 transition-all"
+      />
     </div>
   )
 }

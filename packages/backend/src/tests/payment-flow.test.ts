@@ -65,9 +65,12 @@ class InMemFlowRepo implements FlowRepository {
 
 class InMemMessaging implements MessagingPort {
   sent: Array<{ phoneNumber: string; message: string }> = []
-  async sendMessage(p: { phoneNumber: string; message: string }) {
-    this.sent.push(p)
-  }
+  async sendMessage(p: { phoneNumber: string; message: string }) { this.sent.push(p) }
+  async getInstanceStatus() { return { instanceName: 'test', state: 'open' as const } }
+  async createInstance() { return { qrCode: '' } }
+  async deleteInstance() {}
+  async setWebhook() {}
+  async connectInstance() { return { qrCode: '' } }
 }
 
 class InMemEventRepo implements ConversationEventRepository {

@@ -54,9 +54,11 @@ export interface PixelNodeData extends NodeData {
 
 export interface PixNodeData extends NodeData {
   pixKey: string
-  amount?: string
+  amount?: string           // BRL format: "15,00" / "R$ 15,00" / centavos: "1500"
   description?: string
-  recipientName?: string
+  recipientName?: string    // receiver name shown in message
+  expiresInMinutes?: number // PaymentIntent TTL (default 60)
+  outputVariable?: string   // conversation variable to save paymentIntentId (default: paymentIntentId)
 }
 
 export interface LabelNodeData extends NodeData {
@@ -95,8 +97,10 @@ export interface CaptureNodeData extends NodeData {
   errorMessage?: string
   timeoutMinutes?: number
   timeoutMessage?: string
-  suspendedReason?: string  // e.g. "awaiting_pix_receipt" — shown in analytics + used for recovery
-  recoveryHints?: string[]  // e.g. ["comprovante", "enviei", "pix"] — operator-configured hints
+  suspendedReason?: string
+  recoveryHints?: string[]
+  expectedInputType?: 'text' | 'image' | 'document' | 'audio' | 'any'
+  timeoutBehavior?: 'suspend' | 'followup' | 'end'
 }
 
 export interface WebhookNodeData extends NodeData {

@@ -7,6 +7,13 @@ export type ConversationEventType =
   | 'tag_added'
   | 'tag_removed'
   | 'handoff_triggered'
+  | 'payment_requested'
+  | 'receipt_received'
+  | 'receipt_validated'
+  | 'payment_approved'
+  | 'payment_rejected'
+  | 'payment_expired'
+  | 'post_purchase_support_started'
 
 export interface ConversationEvent {
   botId: string

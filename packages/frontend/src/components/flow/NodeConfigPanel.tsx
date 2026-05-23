@@ -138,6 +138,14 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
           <>
             <Field label="Pergunta / Prompt" value={String(node.data.label ?? '')} onChange={v => set('label', v)} textarea />
             <Field label="Salvar resposta como variável" value={String(node.data.variableName ?? '')} onChange={v => set('variableName', v)} placeholder="ex: nome_usuario" />
+            <Select label="Tipo de entrada esperado" value={String(node.data.expectedInputType ?? 'any')} onChange={v => set('expectedInputType', v)}
+              options={[
+                { value: 'any', label: 'Qualquer' },
+                { value: 'text', label: 'Texto' },
+                { value: 'image', label: 'Imagem' },
+                { value: 'document', label: 'Documento' },
+                { value: 'audio', label: 'Áudio' },
+              ]} />
             <Field label="Regex de validação (opcional)" value={String(node.data.validationRegex ?? '')} onChange={v => set('validationRegex', v)} placeholder="^\d+$" />
             <Field label="Mensagem de erro" value={String(node.data.errorMessage ?? '')} onChange={v => set('errorMessage', v)} placeholder="Resposta inválida, tente novamente." />
             <div className="border-t border-white/5 pt-3 mt-1">
@@ -146,9 +154,25 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
               {Number(node.data.timeoutMinutes ?? 0) > 0 && (
                 <>
                   <Field label="Mensagem ao expirar (opcional)" value={String(node.data.timeoutMessage ?? '')} onChange={v => set('timeoutMessage', v)} placeholder="Ainda está aí? 👋" />
+                  <Select label="Comportamento ao expirar" value={String(node.data.timeoutBehavior ?? 'suspend')} onChange={v => set('timeoutBehavior', v)}
+                    options={[
+                      { value: 'suspend', label: 'Suspender (recuperável)' },
+                      { value: 'followup', label: 'Seguir pelo handle timeout' },
+                      { value: 'end', label: 'Encerrar conversa' },
+                    ]} />
                   <p className="text-xs text-slate-500 mt-1">Conecte o handle <span className="text-amber-400">âmbar</span> ao caminho de "sem resposta".</p>
                 </>
               )}
+            </div>
+            <div className="border-t border-white/5 pt-3 mt-1">
+              <p className="text-xs font-semibold text-brand-400 mb-2">🔁 Recovery (suspensão inteligente)</p>
+              <Field label="Motivo da suspensão (analytics)" value={String(node.data.suspendedReason ?? '')} onChange={v => set('suspendedReason', v)}
+                placeholder="awaiting_pix_receipt"
+                hint="Identificador para analytics e recuperação automática." />
+              <Field label="Hints de recuperação (vírgula)" value={String((node.data.recoveryHints as string[] ?? []).join(', '))}
+                onChange={v => set('recoveryHints', v.split(',').map((h: string) => h.trim()).filter(Boolean))}
+                placeholder="comprovante, enviei, pix, foto"
+                hint="Palavras-chave que disparam recuperação automática da conversa suspensa." />
             </div>
           </>
         )}
@@ -190,11 +214,20 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
         {node.type === 'pix' && (
           <>
             <Field label="Chave Pix" value={String(node.data.pixKey ?? '')} onChange={v => set('pixKey', v)}
-              placeholder="email@exemplo.com / CPF / CNPJ / chave aleatória" />
-            <Field label="Valor (opcional)" value={String(node.data.amount ?? '')} onChange={v => set('amount', v)}
-              placeholder="15.00 ou {{valor}}" hint="Deixe vazio para valor livre." />
-            <Field label="Descrição" value={String(node.data.description ?? '')} onChange={v => set('description', v)} placeholder="Plano de receitas fitt" />
+              placeholder="email@exemplo.com / CPF / CNPJ / aleatória" />
             <Field label="Nome do favorecido" value={String(node.data.recipientName ?? '')} onChange={v => set('recipientName', v)} placeholder="João Silva" />
+            <Field label="Valor (R$)" value={String(node.data.amount ?? '')} onChange={v => set('amount', v)}
+              placeholder="15,00 ou R$ 15,00 ou 1500 centavos"
+              hint="Formatos: '15,00', 'R$ 15,00', '1500' (centavos). Suporta {{variavel}}." />
+            <Field label="Descrição" value={String(node.data.description ?? '')} onChange={v => set('description', v)} placeholder="Plano de receitas fit" />
+            <div className="border-t border-white/5 pt-3 mt-1">
+              <p className="text-xs font-semibold text-emerald-400 mb-2">💳 PaymentIntent (antifraude)</p>
+              <NumberField label="Expirar em (minutos, 0 = 60min padrão)" value={Number(node.data.expiresInMinutes ?? 0)} onChange={v => set('expiresInMinutes', v || undefined)} min={0} max={1440} />
+              <Field label="Salvar ID do pagamento como variável" value={String(node.data.outputVariable ?? '')} onChange={v => set('outputVariable', v || undefined)}
+                placeholder="paymentIntentId"
+                hint="Variável usada pelo nó 'Validar Comprovante' para verificar o pagamento." />
+              <p className="text-xs text-slate-500 mt-1">Requer chave Pix + valor para criar o PaymentIntent automaticamente.</p>
+            </div>
           </>
         )}
 
@@ -238,6 +271,43 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
               <Field label="Keywords (comma-separated)" value={String((node.data.keywords as string[] ?? []).join(', '))}
                 onChange={v => set('keywords', v.split(',').map(k => k.trim()).filter(Boolean))} placeholder="hi, hello, start" />
             )}
+          </>
+        )}
+
+        {node.type === 'ai_validate_receipt' && (
+          <>
+            <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 mb-2">
+              <p className="text-xs text-emerald-400 font-semibold mb-1">Validar Comprovante Pix</p>
+              <p className="text-xs text-slate-400">Extrai dados da imagem com IA e valida contra o PaymentIntent criado pelo nó Pix (11 regras antifraude).</p>
+            </div>
+            <Field
+              label="Variável com paymentIntentId"
+              value={String(node.data.paymentIntentVariable ?? 'paymentIntentId')}
+              onChange={v => set('paymentIntentVariable', v)}
+              placeholder="paymentIntentId"
+              hint="Deve ser a mesma variável configurada no nó Pix → 'Salvar ID como variável'."
+            />
+            <div className="space-y-1 mt-2">
+              <p className="text-xs font-medium text-slate-300">Saídas:</p>
+              <p className="text-xs text-slate-500"><span className="text-emerald-400 font-mono">approved</span> — pagamento válido → confirmar compra</p>
+              <p className="text-xs text-slate-500"><span className="text-red-400 font-mono">rejected</span> — inválido / suspeito → pedir novo comprovante</p>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Variáveis geradas: <span className="font-mono text-slate-400">__validation_reason</span>, <span className="font-mono text-slate-400">__validation_approved</span></p>
+          </>
+        )}
+
+        {node.type === 'payment_confirmed' && (
+          <>
+            <div className="p-3 rounded-xl bg-brand-500/5 border border-brand-500/20 mb-2">
+              <p className="text-xs text-brand-400 font-semibold mb-1">Confirmação de Pagamento</p>
+              <p className="text-xs text-slate-400">Marca o lead como comprador, seta fase post_purchase_support e envia as mensagens de confirmação.</p>
+            </div>
+            <Field label="Mensagem de confirmação" value={String(node.data.confirmationMessage ?? '')} onChange={v => set('confirmationMessage', v)} textarea
+              placeholder="✅ Pagamento confirmado! Obrigado pela sua compra, {{name}}!"
+              hint="Enviada imediatamente após aprovação. Suporta {{phone}}, {{name}}, variáveis." />
+            <Field label="Mensagem de entrega / pós-compra" value={String(node.data.postPurchaseMessage ?? '')} onChange={v => set('postPurchaseMessage', v)} textarea
+              placeholder="🎉 Aqui está seu material: [link]. Em que posso te ajudar?"
+              hint="Enviada logo após a confirmação. Coloque o link do produto aqui." />
           </>
         )}
 

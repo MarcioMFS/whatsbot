@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { BotRepository, FlowRepository, MessagingPort } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, ConversationEventRepository, BotGlobalConfig } from '@whatsbot/core'
 import type { BotService } from '../services/BotService.js'
 
 const CreateBotSchema = z.object({
@@ -30,6 +30,7 @@ interface BotCtx {
   flowRepo: FlowRepository
   messaging: MessagingPort
   botService: BotService
+  eventRepo?: ConversationEventRepository
 }
 
 export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
@@ -114,6 +115,29 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
       bot.setRoutingRules(req.body.rules ?? [])
       await ctx.botRepo.save(bot)
       return bot.toJSON()
+    }
+  )
+
+  app.patch<{ Params: { id: string } }>('/:id/config', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+    bot.updateGlobalConfig(req.body as Partial<BotGlobalConfig>)
+    await ctx.botRepo.save(bot)
+    return bot.toJSON()
+  })
+
+  app.get<{ Params: { id: string }; Querystring: { limit?: string; type?: string } }>(
+    '/:id/events',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.id)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const limit = Math.min(parseInt(req.query.limit ?? '200', 10), 500)
+      const events = await ctx.eventRepo?.findByBot(req.params.id, limit) ?? []
+      return { events }
     }
   )
 

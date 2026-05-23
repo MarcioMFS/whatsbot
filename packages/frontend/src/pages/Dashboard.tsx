@@ -34,8 +34,8 @@ export function Dashboard() {
     }
   }, [])
 
-  const handleBotCreated = (bot: BotData) => {
-    setBots(prev => [bot, ...prev])
+  const handleBotCreated = (bot: unknown) => {
+    setBots(prev => [bot as BotData, ...prev])
     setShowCreate(false)
   }
 

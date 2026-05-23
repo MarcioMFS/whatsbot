@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard.tsx'
 import { BotConfig } from './pages/BotConfig.tsx'
 import { FlowBuilder } from './pages/FlowBuilder.tsx'
 import { Leads } from './pages/Leads.tsx'
+import { Events } from './pages/Events.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/bots/:botId/config" element={<ProtectedRoute><BotConfig /></ProtectedRoute>} />
       <Route path="/bots/:botId/flow/:flowId" element={<ProtectedRoute><FlowBuilder /></ProtectedRoute>} />
       <Route path="/bots/:botId/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+      <Route path="/bots/:botId/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
     </Routes>
   )
 }

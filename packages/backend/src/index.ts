@@ -24,6 +24,7 @@ import { TimeoutService } from './services/TimeoutService.js'
 import { startMessageWorker } from './queue/messageWorker.js'
 import { PostgreSQLLeadRepository } from './adapters/PostgreSQLLeadRepository.js'
 import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConversationEventRepository.js'
+import { PostgreSQLPaymentIntentRepository } from './adapters/PostgreSQLPaymentIntentRepository.js'
 import { leadRoutes } from './routes/leads.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
@@ -41,12 +42,11 @@ const flowRepo = new PostgreSQLFlowRepository(db)
 const conversationRepo = new RedisConversationRepository(redis, db)
 const leadRepo = new PostgreSQLLeadRepository(db)
 const eventRepo = new PostgreSQLConversationEventRepository(db)
+const paymentIntentRepo = new PostgreSQLPaymentIntentRepository(db)
 
 const messaging = new EvolutionAPIAdapter(
   process.env.EVOLUTION_URL!,
   process.env.EVOLUTION_API_KEY!,
-  process.env.PROXY_HOST,
-  process.env.PROXY_PORT,
 )
 
 const aiProviders = {
@@ -55,7 +55,7 @@ const aiProviders = {
 }
 
 const aiService = new AIGenerationService(aiProviders)
-const flowExecService = new FlowExecutionService(flowRepo, conversationRepo, leadRepo, messaging, aiService, eventRepo)
+const flowExecService = new FlowExecutionService(flowRepo, conversationRepo, leadRepo, messaging, aiService, eventRepo, undefined, paymentIntentRepo)
 const botService = new BotService(botRepo, flowRepo, messaging)
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, eventRepo)
 timeoutService.start()
@@ -64,7 +64,7 @@ await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
 await app.register(jwt, { secret: process.env.JWT_SECRET! })
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
-const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExecService, messaging, redis }
+const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExecService, messaging, redis, eventRepo }
 
 await app.register(authRoutes, { prefix: '/api/auth', db })
 await app.register(aiRoutes, { prefix: '/api/ai', aiService })

@@ -2,10 +2,13 @@ import {
   Conversation,
   Lead,
   Flow,
+  PaymentIntent,
+  parseCurrencyToCentavos,
   type FlowRepository,
   type ConversationRepository,
   type LeadRepository,
   type ConversationEventRepository,
+  type PaymentIntentRepository,
   type MessagingPort,
   type FlowNode,
   type AIResponseNodeData,
@@ -40,6 +43,7 @@ export class FlowExecutionService {
     private aiService: AIGenerationService,
     private eventRepo?: ConversationEventRepository,
     private paymentOrchestrator?: PaymentOrchestrator,
+    private paymentIntentRepo?: PaymentIntentRepository,
   ) {}
 
   private emit(botId: string, convId: string, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
@@ -359,12 +363,44 @@ export class FlowExecutionService {
 
       case 'pix': {
         const data = node.data as PixNodeData
-        const amount = data.amount ? this.interpolate(String(data.amount), conversation.variables) : ''
+        const rawAmount = data.amount ? this.interpolate(String(data.amount), conversation.variables) : ''
         const desc = data.description ? this.interpolate(data.description, conversation.variables) : ''
-        const lines = [`💳 *Chave Pix para pagamento*`, ``, `\`${data.pixKey}\``]
-        if (amount) lines.push(``, `Valor: *R$ ${amount}*`)
+        const receiverKey = data.pixKey ?? ''
+        const receiverName = data.recipientName ?? ''
+
+        let displayAmount = rawAmount
+        const centavos = this.parseAmountToCentavos(rawAmount)
+
+        if (centavos && centavos > 0 && receiverKey && this.paymentIntentRepo) {
+          try {
+            const expiresAt = data.expiresInMinutes
+              ? new Date(Date.now() + data.expiresInMinutes * 60 * 1000)
+              : new Date(Date.now() + 60 * 60 * 1000) // default 60min
+            const intent = PaymentIntent.create({
+              botId: bot.id,
+              leadId: lead?.id ?? conversation.phoneNumber,
+              conversationId: conversation.id,
+              amount: centavos,
+              receiverKey,
+              receiverName,
+              expiresAt,
+            })
+            await this.paymentIntentRepo.save(intent)
+            const outputVar = data.outputVariable ?? 'paymentIntentId'
+            conversation.setVariable(outputVar, intent.id)
+            this.emit(bot.id, conversation.id, conversation.phoneNumber, 'payment_requested', {
+              paymentIntentId: intent.id, amount: centavos, receiverKey,
+            })
+            displayAmount = `${(centavos / 100).toFixed(2).replace('.', ',')}`
+          } catch (err) {
+            console.error('[pix] PaymentIntent creation failed:', err)
+          }
+        }
+
+        const lines = [`💳 *Chave Pix para pagamento*`, ``, `\`${receiverKey}\``]
+        if (displayAmount) lines.push(``, `Valor: *R$ ${displayAmount}*`)
         if (desc) lines.push(`Descrição: ${desc}`)
-        if (data.recipientName) lines.push(`Favorecido: ${data.recipientName}`)
+        if (receiverName) lines.push(`Favorecido: ${receiverName}`)
         lines.push(``, `_Copie a chave acima e pague pelo seu banco._`)
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: lines.join('\n') })
         const nexts = flow.getNextNodes(node.id)
@@ -539,5 +575,12 @@ export class FlowExecutionService {
 
   private interpolate(template: string, variables: Record<string, string>): string {
     return template.replace(/{{(\w+)}}/g, (_, key) => variables[key] ?? `{{${key}}}`)
+  }
+
+  private parseAmountToCentavos(raw: string): number | null {
+    if (!raw) return null
+    const cleaned = raw.trim()
+    if (/^\d+$/.test(cleaned)) return parseInt(cleaned, 10)
+    return parseCurrencyToCentavos(cleaned)
   }
 }

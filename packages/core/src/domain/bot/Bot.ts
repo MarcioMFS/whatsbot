@@ -25,8 +25,17 @@ export interface BotEvolutionConfig {
 }
 
 export interface FlowRoutingRule {
-  tag: string      // if lead has this tag...
-  flowId: string   // ...use this flow
+  tag: string
+  flowId: string
+}
+
+export interface BotGlobalConfig {
+  defaultPixKey?: string
+  defaultReceiverName?: string
+  ownerPhone?: string
+  supportFlowId?: string
+  defaultCurrency?: string
+  defaultPaymentExpirationMinutes?: number
 }
 
 export interface BotProps {
@@ -37,6 +46,7 @@ export interface BotProps {
   evolutionConfig: BotEvolutionConfig
   activeFlowId: string | null
   routingRules: FlowRoutingRule[]
+  globalConfig?: BotGlobalConfig
   isActive: boolean
   webhookSecret: string
   ownerId: string
@@ -70,6 +80,7 @@ export class Bot {
       evolutionConfig: params.evolutionConfig,
       activeFlowId: null,
       routingRules: [],
+      globalConfig: {},
       isActive: false,
       webhookSecret: randomUUID().replace(/-/g, ''),
       ownerId: params.ownerId,
@@ -79,7 +90,7 @@ export class Bot {
   }
 
   static reconstitute(props: BotProps): Bot {
-    return new Bot({ ...props, routingRules: props.routingRules ?? [] })
+    return new Bot({ ...props, routingRules: props.routingRules ?? [], globalConfig: props.globalConfig ?? {} })
   }
 
   activate(flowId: string): void {
@@ -114,6 +125,11 @@ export class Bot {
     this.props.updatedAt = new Date()
   }
 
+  updateGlobalConfig(config: Partial<BotGlobalConfig>): void {
+    this.props.globalConfig = { ...this.props.globalConfig, ...config }
+    this.props.updatedAt = new Date()
+  }
+
   resolveFlowId(leadTags: string[]): string | null {
     for (const rule of this.props.routingRules) {
       if (leadTags.includes(rule.tag.toLowerCase())) return rule.flowId
@@ -138,6 +154,7 @@ export class Bot {
   get evolutionConfig() { return this.props.evolutionConfig }
   get activeFlowId() { return this.props.activeFlowId }
   get routingRules() { return [...this.props.routingRules] }
+  get globalConfig() { return { ...this.props.globalConfig } }
   get isActive() { return this.props.isActive }
   get webhookSecret() { return this.props.webhookSecret }
   get ownerId() { return this.props.ownerId }

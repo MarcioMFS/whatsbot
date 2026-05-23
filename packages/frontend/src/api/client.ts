@@ -58,6 +58,10 @@ export const api = {
     delete: (id: string) => request<void>(`/bots/${id}`, { method: 'DELETE' }),
     updateRoutingRules: (id: string, rules: { tag: string; flowId: string }[]) =>
       request<unknown>(`/bots/${id}/routing-rules`, { method: 'PATCH', body: JSON.stringify({ rules }) }),
+    updateConfig: (id: string, config: Record<string, unknown>) =>
+      request<unknown>(`/bots/${id}/config`, { method: 'PATCH', body: JSON.stringify(config) }),
+    events: (id: string, limit?: number) =>
+      request<{ events: unknown[] }>(`/bots/${id}/events${limit ? `?limit=${limit}` : ''}`),
   },
   flows: {
     list: (botId: string) => request<unknown[]>(`/flows/bot/${botId}`),

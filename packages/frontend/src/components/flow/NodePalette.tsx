@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
-import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag } from 'lucide-react'
+import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag, ShieldCheck, CheckCircle2 } from 'lucide-react'
 
 const NODE_TYPES = [
   { type: 'text_message', label: 'Mensagem', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
@@ -10,6 +10,8 @@ const NODE_TYPES = [
   { type: 'condition', label: 'Condição', icon: GitBranch, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
   { type: 'notification', label: 'Notificação', icon: Bell, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
   { type: 'pix', label: 'Botão Pix', icon: QrCode, color: 'text-emerald-300', bg: 'bg-emerald-400/10 border-emerald-400/20' },
+  { type: 'ai_validate_receipt', label: 'Validar Comprov.', icon: ShieldCheck, color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20' },
+  { type: 'payment_confirmed', label: 'Pagto Confirmado', icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
   { type: 'pixel', label: 'Pixel', icon: BarChart2, color: 'text-blue-300', bg: 'bg-blue-400/10 border-blue-400/20' },
   { type: 'label', label: 'Etiqueta WA', icon: Tag, color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
   { type: 'tag_lead', label: 'Tag Lead', icon: Tag, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/20' },
