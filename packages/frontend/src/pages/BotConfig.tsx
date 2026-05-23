@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2 } from 'lucide-react'
 import { Layout } from '../components/ui/Layout.tsx'
 import { GlassCard } from '../components/ui/GlassCard.tsx'
 import { api } from '../api/client.ts'
 import { useUIStore } from '../stores/uiStore.ts'
+
+interface RoutingRule { tag: string; flowId: string }
 
 interface BotData {
   id: string
   name: string
   isActive: boolean
   activeFlowId: string | null
+  routingRules: RoutingRule[]
   productInfo: { name: string; description: string; persona: string; language: string }
   aiConfig: { provider: string; model: string; temperature: number }
   evolutionConfig: { instanceName: string }
@@ -34,13 +37,17 @@ export function BotConfig() {
   const [qrLoading, setQrLoading] = useState(false)
   const [qrError, setQrError] = useState('')
   const [waState, setWaState] = useState<'open' | 'connecting' | 'close' | null>(null)
+  const [routingRules, setRoutingRules] = useState<RoutingRule[]>([])
+  const [routingSaving, setRoutingSaving] = useState(false)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const { t } = useUIStore()
 
   useEffect(() => {
     if (!botId) return
     Promise.all([api.bots.get(botId), api.flows.list(botId), api.bots.connectionStatus(botId)]).then(([b, f, s]) => {
-      setBot(b as BotData)
+      const botData = b as BotData
+      setBot(botData)
+      setRoutingRules(botData.routingRules ?? [])
       setFlows(f as FlowData[])
       setWaState((s as { state: 'open' | 'connecting' | 'close' }).state)
     })
@@ -183,11 +190,18 @@ export function BotConfig() {
 
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-white">{t('conversationFlows')}</h2>
-          <button onClick={createFlow}
+          <div className="flex items-center gap-2">
+            <button onClick={() => navigate(`/bots/${botId}/leads`)}
+              className="flex items-center gap-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <Users size={14} />
+              Leads
+            </button>
+            <button onClick={createFlow}
             className="flex items-center gap-2 bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
             <Plus size={14} />
             {t('newFlow')}
           </button>
+          </div>
         </div>
 
         <div className="space-y-3">
@@ -221,6 +235,71 @@ export function BotConfig() {
               </GlassCard>
             )
           })}
+        </div>
+
+        {/* Routing Rules */}
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                <GitBranch size={16} className="text-brand-400" /> Roteamento por Tag
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">Se o lead tiver a tag → usar esse fluxo. Ordem importa. Sem match → fluxo padrão.</p>
+            </div>
+            <button
+              onClick={() => setRoutingRules(r => [...r, { tag: '', flowId: '' }])}
+              className="flex items-center gap-2 bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-400 text-sm font-medium px-4 py-2 rounded-xl transition-all"
+            >
+              <Plus size={14} /> Regra
+            </button>
+          </div>
+
+          <div className="space-y-2">
+            {routingRules.length === 0 && (
+              <p className="text-slate-500 text-sm py-4 text-center glass">Nenhuma regra. Sempre usa o fluxo padrão.</p>
+            )}
+            {routingRules.map((rule, i) => (
+              <div key={i} className="glass p-3 flex items-center gap-3">
+                <span className="text-xs text-slate-500 w-5 text-center">{i + 1}</span>
+                <div className="flex items-center gap-2 flex-1">
+                  <span className="text-xs text-slate-400 shrink-0">Tag</span>
+                  <input
+                    value={rule.tag}
+                    onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, tag: e.target.value } : x))}
+                    placeholder="comprou"
+                    className="bg-slate-800/60 border border-slate-700/50 text-slate-200 text-sm rounded-lg px-2 py-1 outline-none w-32"
+                  />
+                  <span className="text-xs text-slate-400 shrink-0">→ Fluxo</span>
+                  <select
+                    value={rule.flowId}
+                    onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, flowId: e.target.value } : x))}
+                    className="bg-slate-800/60 border border-slate-700/50 text-slate-300 text-sm rounded-lg px-2 py-1 outline-none flex-1"
+                  >
+                    <option value="">Selecionar...</option>
+                    {flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                  </select>
+                </div>
+                <button onClick={() => setRoutingRules(r => r.filter((_, j) => j !== i))} className="text-slate-600 hover:text-red-400 transition-colors">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+
+          {routingRules.length > 0 && (
+            <button
+              disabled={routingSaving}
+              onClick={async () => {
+                if (!botId) return
+                setRoutingSaving(true)
+                try { await api.bots.updateRoutingRules(botId, routingRules) } finally { setRoutingSaving(false) }
+              }}
+              className="mt-3 flex items-center gap-2 bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium px-5 py-2 rounded-xl transition-all disabled:opacity-50"
+            >
+              {routingSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+              Salvar regras
+            </button>
+          )}
         </div>
       </div>
     </Layout>

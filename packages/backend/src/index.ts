@@ -22,6 +22,9 @@ import { FlowExecutionService } from './services/FlowExecutionService.js'
 import { AIGenerationService } from './services/AIGenerationService.js'
 import { TimeoutService } from './services/TimeoutService.js'
 import { startMessageWorker } from './queue/messageWorker.js'
+import { PostgreSQLLeadRepository } from './adapters/PostgreSQLLeadRepository.js'
+import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConversationEventRepository.js'
+import { leadRoutes } from './routes/leads.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -36,6 +39,8 @@ const redis = new Redis(process.env.REDIS_URL!)
 const botRepo = new PostgreSQLBotRepository(db)
 const flowRepo = new PostgreSQLFlowRepository(db)
 const conversationRepo = new RedisConversationRepository(redis, db)
+const leadRepo = new PostgreSQLLeadRepository(db)
+const eventRepo = new PostgreSQLConversationEventRepository(db)
 
 const messaging = new EvolutionAPIAdapter(
   process.env.EVOLUTION_URL!,
@@ -50,22 +55,23 @@ const aiProviders = {
 }
 
 const aiService = new AIGenerationService(aiProviders)
-const flowExecService = new FlowExecutionService(flowRepo, conversationRepo, messaging, aiService)
+const flowExecService = new FlowExecutionService(flowRepo, conversationRepo, leadRepo, messaging, aiService, eventRepo)
 const botService = new BotService(botRepo, flowRepo, messaging)
-const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService)
+const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, eventRepo)
 timeoutService.start()
 
 await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
 await app.register(jwt, { secret: process.env.JWT_SECRET! })
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
-const ctx = { botRepo, flowRepo, conversationRepo, botService, flowExecService, messaging, redis }
+const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExecService, messaging, redis }
 
 await app.register(authRoutes, { prefix: '/api/auth', db })
 await app.register(aiRoutes, { prefix: '/api/ai', aiService })
 await app.register(botRoutes, { prefix: '/api/bots', ...ctx })
 await app.register(flowRoutes, { prefix: '/api/flows', ...ctx })
 await app.register(conversationRoutes, { prefix: '/api/conversations', ...ctx })
+await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)

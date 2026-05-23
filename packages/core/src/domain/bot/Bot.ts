@@ -24,6 +24,11 @@ export interface BotEvolutionConfig {
   phoneNumber?: string
 }
 
+export interface FlowRoutingRule {
+  tag: string      // if lead has this tag...
+  flowId: string   // ...use this flow
+}
+
 export interface BotProps {
   id: string
   name: string
@@ -31,6 +36,7 @@ export interface BotProps {
   aiConfig: BotAIConfig
   evolutionConfig: BotEvolutionConfig
   activeFlowId: string | null
+  routingRules: FlowRoutingRule[]
   isActive: boolean
   webhookSecret: string
   ownerId: string
@@ -63,6 +69,7 @@ export class Bot {
       aiConfig: params.aiConfig,
       evolutionConfig: params.evolutionConfig,
       activeFlowId: null,
+      routingRules: [],
       isActive: false,
       webhookSecret: randomUUID().replace(/-/g, ''),
       ownerId: params.ownerId,
@@ -72,7 +79,7 @@ export class Bot {
   }
 
   static reconstitute(props: BotProps): Bot {
-    return new Bot(props)
+    return new Bot({ ...props, routingRules: props.routingRules ?? [] })
   }
 
   activate(flowId: string): void {
@@ -102,6 +109,18 @@ export class Bot {
     this.props.updatedAt = new Date()
   }
 
+  setRoutingRules(rules: FlowRoutingRule[]): void {
+    this.props.routingRules = rules
+    this.props.updatedAt = new Date()
+  }
+
+  resolveFlowId(leadTags: string[]): string | null {
+    for (const rule of this.props.routingRules) {
+      if (leadTags.includes(rule.tag.toLowerCase())) return rule.flowId
+    }
+    return this.props.activeFlowId
+  }
+
   buildSystemPrompt(): string {
     const { productInfo, aiConfig } = this.props
     return aiConfig.systemPromptTemplate
@@ -118,6 +137,7 @@ export class Bot {
   get aiConfig() { return this.props.aiConfig }
   get evolutionConfig() { return this.props.evolutionConfig }
   get activeFlowId() { return this.props.activeFlowId }
+  get routingRules() { return [...this.props.routingRules] }
   get isActive() { return this.props.isActive }
   get webhookSecret() { return this.props.webhookSecret }
   get ownerId() { return this.props.ownerId }

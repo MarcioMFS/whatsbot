@@ -1,4 +1,4 @@
-import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository } from '@whatsbot/core'
 import type { CaptureNodeData } from '@whatsbot/core'
 import type { RedisConversationRepository } from '../adapters/RedisConversationRepository.js'
 import type { FlowExecutionService } from './FlowExecutionService.js'
@@ -10,6 +10,7 @@ export class TimeoutService {
     private flowRepo: FlowRepository,
     private messaging: MessagingPort,
     private flowExec: FlowExecutionService,
+    private eventRepo?: ConversationEventRepository,
   ) {}
 
   start(): void {
@@ -49,8 +50,26 @@ export class TimeoutService {
 
     const timeoutNext = flow.getNextNodes(captureNode.id, 'timeout')
     if (timeoutNext.length === 0) {
-      conversation.end()
+      const reason = data.suspendedReason ?? `capture:${data.variableName}`
+      console.warn(
+        `[TimeoutService] WARN: capture node "${captureNode.id}" (${data.variableName}) in flow "${conversation.flowId}" has no timeout edge — suspending as "${reason}". Connect the timeout handle to stop this warning.`,
+      )
+      conversation.suspend(captureNode.id, {
+        snapshotVersion: 1,
+        suspendedReason: reason,
+        pendingAction: `capture:${captureNode.id}`,
+        lastQuestion: data.timeoutMessage,
+        recoveryHints: data.recoveryHints ?? [],
+      })
       await this.convRepo.save(conversation)
+      this.eventRepo?.emit({
+        botId: conversation.botId,
+        conversationId: conversation.id,
+        phoneNumber: conversation.phoneNumber,
+        eventType: 'conversation_suspended',
+        payload: { reason, nodeId: captureNode.id, variableName: data.variableName },
+        occurredAt: new Date(),
+      }).catch(() => {})
       return
     }
 

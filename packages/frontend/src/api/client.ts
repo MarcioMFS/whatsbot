@@ -56,6 +56,8 @@ export const api = {
     qrcode: (id: string) => request<{ qrCode: string }>(`/bots/${id}/qrcode`),
     connectionStatus: (id: string) => request<{ state: string }>(`/bots/${id}/connection-status`),
     delete: (id: string) => request<void>(`/bots/${id}`, { method: 'DELETE' }),
+    updateRoutingRules: (id: string, rules: { tag: string; flowId: string }[]) =>
+      request<unknown>(`/bots/${id}/routing-rules`, { method: 'PATCH', body: JSON.stringify({ rules }) }),
   },
   flows: {
     list: (botId: string) => request<unknown[]>(`/flows/bot/${botId}`),
@@ -68,5 +70,16 @@ export const api = {
   conversations: {
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
+  },
+  leads: {
+    list: (botId: string, tag?: string) =>
+      request<{ leads: unknown[]; total: number }>(
+        `/leads/bot/${botId}${tag ? `?tag=${encodeURIComponent(tag)}` : ''}`
+      ),
+    updateTags: (botId: string, phone: string, body: { add?: string[]; remove?: string[] }) =>
+      request<unknown>(`/leads/bot/${botId}/phone/${encodeURIComponent(phone)}/tags`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
   },
 }

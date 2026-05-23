@@ -13,6 +13,9 @@ export type NodeType =
   | 'pixel'
   | 'pix'
   | 'label'
+  | 'tag_lead'
+  | 'payment_confirmed'
+  | 'ai_validate_receipt'  // extract + deterministic validate — outputs: approved | rejected
   | 'end'
 
 export interface NodeData {
@@ -60,6 +63,21 @@ export interface LabelNodeData extends NodeData {
   labelName: string
 }
 
+export interface TagLeadNodeData extends NodeData {
+  add?: string[]    // tags to add
+  remove?: string[] // tags to remove
+}
+
+export interface PaymentConfirmedNodeData extends NodeData {
+  confirmationMessage?: string  // sent to buyer: "Pagamento confirmado! 🎉"
+  postPurchaseMessage?: string  // follow-up: "Em que posso te ajudar agora?"
+}
+
+export interface AIValidateReceiptNodeData extends NodeData {
+  paymentIntentVariable: string  // conversation variable holding the paymentIntentId
+  // handles: 'approved' | 'rejected'
+}
+
 export interface TextNodeData extends NodeData {
   message: string
   variables?: string[]
@@ -77,6 +95,8 @@ export interface CaptureNodeData extends NodeData {
   errorMessage?: string
   timeoutMinutes?: number
   timeoutMessage?: string
+  suspendedReason?: string  // e.g. "awaiting_pix_receipt" — shown in analytics + used for recovery
+  recoveryHints?: string[]  // e.g. ["comprovante", "enviei", "pix"] — operator-configured hints
 }
 
 export interface WebhookNodeData extends NodeData {

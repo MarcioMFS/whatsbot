@@ -104,6 +104,19 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     return { state: status.state }
   })
 
+  app.patch<{ Params: { id: string }; Body: { rules: { tag: string; flowId: string }[] } }>(
+    '/:id/routing-rules',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.id)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      bot.setRoutingRules(req.body.rules ?? [])
+      await ctx.botRepo.save(bot)
+      return bot.toJSON()
+    }
+  )
+
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const user = req.user as { id: string }
     const bot = await ctx.botRepo.findById(req.params.id)

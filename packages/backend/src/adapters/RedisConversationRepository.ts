@@ -3,7 +3,8 @@ import type { Pool } from 'pg'
 import { Conversation } from '@whatsbot/core'
 import type { ConversationRepository } from '@whatsbot/core'
 
-const TTL = 60 * 60 * 24 // 24 hours active session
+const TTL_ACTIVE = 60 * 60 * 24      // 24h for active/waiting
+const TTL_SUSPENDED = 60 * 60 * 24 * 7 // 7 days for suspended (intent preserved)
 const TIMEOUT_INDEX = 'conv:timeout_queue'
 
 export class RedisConversationRepository implements ConversationRepository {
@@ -59,8 +60,14 @@ export class RedisConversationRepository implements ConversationRepository {
          ON CONFLICT (id) DO UPDATE SET data=$4, ended_at=NOW()`,
         [data.id, data.botId, data.phoneNumber, JSON.stringify(data)]
       )
+    } else if (data.status === 'suspended') {
+      await this.redis.setex(key, TTL_SUSPENDED, JSON.stringify(data))
+      await this.redis.zrem(TIMEOUT_INDEX, member) // no timeout polling for suspended
+    } else if (data.status === 'handoff') {
+      await this.redis.setex(key, TTL_ACTIVE, JSON.stringify(data))
+      await this.redis.zrem(TIMEOUT_INDEX, member)
     } else {
-      await this.redis.setex(key, TTL, JSON.stringify(data))
+      await this.redis.setex(key, TTL_ACTIVE, JSON.stringify(data))
       if (data.timeoutAt) {
         await this.redis.zadd(TIMEOUT_INDEX, new Date(data.timeoutAt).getTime(), member)
       } else {

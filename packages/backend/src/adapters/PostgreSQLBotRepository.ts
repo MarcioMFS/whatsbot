@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import { Bot } from '@whatsbot/core'
+import { Bot, type FlowRoutingRule } from '@whatsbot/core'
 import type { BotRepository } from '@whatsbot/core'
 
 export class PostgreSQLBotRepository implements BotRepository {
@@ -26,17 +26,18 @@ export class PostgreSQLBotRepository implements BotRepository {
   async save(bot: Bot): Promise<void> {
     const data = bot.toJSON()
     await this.db.query(
-      `INSERT INTO bots (id, name, product_info, ai_config, evolution_config, active_flow_id, is_active, webhook_secret, owner_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      `INSERT INTO bots (id, name, product_info, ai_config, evolution_config, active_flow_id, routing_rules, is_active, webhook_secret, owner_id, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE SET
          name=$2, product_info=$3, ai_config=$4, evolution_config=$5,
-         active_flow_id=$6, is_active=$7, webhook_secret=$8, updated_at=$11`,
+         active_flow_id=$6, routing_rules=$7, is_active=$8, webhook_secret=$9, updated_at=$12`,
       [
         data.id, data.name,
         JSON.stringify(data.productInfo),
         JSON.stringify(data.aiConfig),
         JSON.stringify(data.evolutionConfig),
         data.activeFlowId,
+        JSON.stringify(data.routingRules),
         data.isActive,
         data.webhookSecret,
         data.ownerId,
@@ -58,6 +59,7 @@ export class PostgreSQLBotRepository implements BotRepository {
       aiConfig: row.ai_config as ReturnType<Bot['toJSON']>['aiConfig'],
       evolutionConfig: row.evolution_config as ReturnType<Bot['toJSON']>['evolutionConfig'],
       activeFlowId: row.active_flow_id as string | null,
+      routingRules: (row.routing_rules as FlowRoutingRule[]) ?? [],
       isActive: row.is_active as boolean,
       webhookSecret: row.webhook_secret as string,
       ownerId: row.owner_id as string,

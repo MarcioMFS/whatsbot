@@ -6,7 +6,23 @@ export interface Message {
   timestamp: Date
 }
 
-export type ConversationStatus = 'active' | 'waiting' | 'ended'
+export type ConversationStatus = 'active' | 'waiting' | 'suspended' | 'ended' | 'handoff'
+
+export type ConversationPhase =
+  | 'pre_sale'
+  | 'awaiting_payment'
+  | 'payment_confirmed'
+  | 'delivery_pending'
+  | 'post_purchase_support'
+  | 'closed'
+
+export interface ConversationSnapshot {
+  snapshotVersion: 1
+  suspendedReason?: string   // e.g. "awaiting_pix_receipt" — for analytics + recovery routing
+  lastQuestion?: string
+  pendingAction?: string
+  recoveryHints?: string[]
+}
 
 export interface ConversationProps {
   id: string
@@ -17,7 +33,9 @@ export interface ConversationProps {
   variables: Record<string, string>
   history: Message[]
   status: ConversationStatus
+  phase: ConversationPhase
   timeoutAt: Date | null
+  snapshot: ConversationSnapshot | null
   startedAt: Date
   updatedAt: Date
 }
@@ -44,14 +62,21 @@ export class Conversation {
       variables: {},
       history: [],
       status: 'active',
+      phase: 'pre_sale',
       timeoutAt: null,
+      snapshot: null,
       startedAt: new Date(),
       updatedAt: new Date(),
     })
   }
 
   static reconstitute(props: ConversationProps): Conversation {
-    return new Conversation({ ...props, timeoutAt: props.timeoutAt ?? null })
+    return new Conversation({
+      ...props,
+      phase: props.phase ?? 'pre_sale', // backward compat with persisted conversations
+      timeoutAt: props.timeoutAt ?? null,
+      snapshot: props.snapshot ?? null,
+    })
   }
 
   addUserMessage(content: string): void {
@@ -83,9 +108,35 @@ export class Conversation {
     this.props.updatedAt = new Date()
   }
 
+  setPhase(phase: ConversationPhase): void {
+    this.props.phase = phase
+    this.props.updatedAt = new Date()
+  }
+
+  suspend(nodeId: string, snapshot?: ConversationSnapshot): void {
+    this.props.currentNodeId = nodeId
+    this.props.status = 'suspended'
+    this.props.timeoutAt = null
+    this.props.snapshot = snapshot ?? this.props.snapshot
+    this.props.updatedAt = new Date()
+  }
+
+  resume(): void {
+    this.props.status = 'waiting'
+    this.props.snapshot = null
+    this.props.updatedAt = new Date()
+  }
+
+  handoff(): void {
+    this.props.status = 'handoff'
+    this.props.timeoutAt = null
+    this.props.updatedAt = new Date()
+  }
+
   end(): void {
     this.props.status = 'ended'
     this.props.timeoutAt = null
+    this.props.snapshot = null
     this.props.updatedAt = new Date()
   }
 
@@ -102,7 +153,9 @@ export class Conversation {
   get variables() { return { ...this.props.variables } }
   get history() { return [...this.props.history] }
   get status() { return this.props.status }
+  get phase() { return this.props.phase }
   get timeoutAt() { return this.props.timeoutAt }
+  get snapshot() { return this.props.snapshot }
   get startedAt() { return this.props.startedAt }
   get updatedAt() { return this.props.updatedAt }
 

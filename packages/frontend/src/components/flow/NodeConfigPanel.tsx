@@ -203,6 +203,18 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
             placeholder="lead-quente" hint="Etiqueta importada do WhatsApp Business para marcar o contato." />
         )}
 
+        {node.type === 'tag_lead' && (
+          <>
+            <Field label="Adicionar tags (vírgula)" value={String((node.data.add as string[] ?? []).join(', '))}
+              onChange={v => set('add', v.split(',').map(t => t.trim()).filter(Boolean))}
+              placeholder="quente, interessado"
+              hint="Tags adicionadas ao perfil permanente do lead." />
+            <Field label="Remover tags (vírgula)" value={String((node.data.remove as string[] ?? []).join(', '))}
+              onChange={v => set('remove', v.split(',').map(t => t.trim()).filter(Boolean))}
+              placeholder="frio, lead-negativo" />
+          </>
+        )}
+
         {node.type === 'webhook' && (
           <>
             <Field label="URL" value={String(node.data.url ?? '')} onChange={v => set('url', v)} placeholder="https://..." />
