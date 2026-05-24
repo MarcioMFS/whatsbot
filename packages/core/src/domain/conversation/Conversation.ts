@@ -10,10 +10,16 @@ export type ConversationStatus = 'active' | 'waiting' | 'suspended' | 'ended' | 
 
 export type ConversationPhase =
   | 'pre_sale'
+  | 'browsing_catalog'
+  | 'building_cart'
+  | 'checkout_started'
   | 'awaiting_payment'
+  | 'payment_review'
   | 'payment_confirmed'
   | 'delivery_pending'
+  | 'post_purchase'
   | 'post_purchase_support'
+  | 'awaiting_human_intermediation'
   | 'closed'
 
 export interface ConversationSnapshot {

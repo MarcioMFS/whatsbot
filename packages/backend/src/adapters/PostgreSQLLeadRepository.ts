@@ -37,20 +37,56 @@ export class PostgreSQLLeadRepository implements LeadRepository {
     return parseInt(rows[0].count, 10)
   }
 
+  async findAbandonedPix(botId: string, idleThresholdMs: number, maxCount = 50): Promise<Lead[]> {
+    const cutoff = new Date(Date.now() - idleThresholdMs)
+    const { rows } = await this.db.query(
+      `SELECT * FROM leads
+       WHERE bot_id = $1
+         AND 'pix_generated' = ANY(tags)
+         AND NOT ('buyer' = ANY(tags))
+         AND NOT ('lost' = ANY(tags))
+         AND last_seen_at < $2
+       ORDER BY last_seen_at ASC
+       LIMIT $3`,
+      [botId, cutoff, maxCount]
+    )
+    return rows.map(r => this.toDomain(r))
+  }
+
   async save(lead: Lead): Promise<void> {
     const d = lead.toJSON()
     await this.db.query(
-      `INSERT INTO leads (id, bot_id, phone_number, name, tags, variables, total_sessions, last_seen_at, last_payment_confirmed_at, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      `INSERT INTO leads (
+         id, bot_id, phone_number, name, tags, variables, total_sessions,
+         last_seen_at, last_payment_confirmed_at, created_at,
+         lead_temperature, purchased_titles, preferred_genres, objections,
+         abandoned_pix_count, last_state, context_summary, recovery_sent_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (bot_id, phone_number) DO UPDATE SET
-         name = COALESCE(EXCLUDED.name, leads.name),
-         tags = EXCLUDED.tags,
-         variables = EXCLUDED.variables,
-         total_sessions = EXCLUDED.total_sessions,
-         last_seen_at = EXCLUDED.last_seen_at,
-         last_payment_confirmed_at = COALESCE(EXCLUDED.last_payment_confirmed_at, leads.last_payment_confirmed_at)`,
-      [d.id, d.botId, d.phoneNumber, d.name, d.tags, JSON.stringify(d.variables),
-       d.totalSessions, d.lastSeenAt, d.lastPaymentConfirmedAt, d.createdAt]
+         name                      = COALESCE(EXCLUDED.name, leads.name),
+         tags                      = EXCLUDED.tags,
+         variables                 = EXCLUDED.variables,
+         total_sessions            = EXCLUDED.total_sessions,
+         last_seen_at              = EXCLUDED.last_seen_at,
+         last_payment_confirmed_at = COALESCE(EXCLUDED.last_payment_confirmed_at, leads.last_payment_confirmed_at),
+         lead_temperature          = EXCLUDED.lead_temperature,
+         purchased_titles          = EXCLUDED.purchased_titles,
+         preferred_genres          = EXCLUDED.preferred_genres,
+         objections                = EXCLUDED.objections,
+         abandoned_pix_count       = EXCLUDED.abandoned_pix_count,
+         last_state                = EXCLUDED.last_state,
+         context_summary           = COALESCE(EXCLUDED.context_summary, leads.context_summary),
+         recovery_sent_at          = EXCLUDED.recovery_sent_at`,
+      [
+        d.id, d.botId, d.phoneNumber, d.name, d.tags,
+        JSON.stringify(d.variables), d.totalSessions,
+        d.lastSeenAt, d.lastPaymentConfirmedAt, d.createdAt,
+        d.leadTemperature,
+        JSON.stringify(d.purchasedTitles),
+        JSON.stringify(d.preferredGenres),
+        JSON.stringify(d.objections),
+        d.abandonedPixCount, d.lastState, d.contextSummary, d.recoverySentAt,
+      ]
     )
   }
 
@@ -66,6 +102,14 @@ export class PostgreSQLLeadRepository implements LeadRepository {
       lastSeenAt: new Date(row.last_seen_at as string),
       lastPaymentConfirmedAt: row.last_payment_confirmed_at ? new Date(row.last_payment_confirmed_at as string) : null,
       createdAt: new Date(row.created_at as string),
+      leadTemperature: (row.lead_temperature as 'cold' | 'warm' | 'hot' | 'vip') ?? 'cold',
+      purchasedTitles: (row.purchased_titles as string[]) ?? [],
+      preferredGenres: (row.preferred_genres as string[]) ?? [],
+      objections: (row.objections as string[]) ?? [],
+      abandonedPixCount: (row.abandoned_pix_count as number) ?? 0,
+      lastState: (row.last_state as string | null) ?? null,
+      contextSummary: (row.context_summary as string | null) ?? null,
+      recoverySentAt: row.recovery_sent_at ? new Date(row.recovery_sent_at as string) : null,
     })
   }
 }

@@ -14,6 +14,14 @@ export type ConversationEventType =
   | 'payment_rejected'
   | 'payment_expired'
   | 'post_purchase_support_started'
+  | 'catalog_searched'
+  | 'product_not_found'
+  | 'product_added_to_cart'
+  | 'cart_cleared'
+  | 'checkout_initiated'
+  | 'order_created'
+  | 'delivery_sent'
+  | 'delivery_pending'
 
 export interface ConversationEvent {
   botId: string

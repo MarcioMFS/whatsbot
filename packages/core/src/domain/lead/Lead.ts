@@ -1,6 +1,5 @@
 import { randomUUID } from 'crypto'
 
-// Controlled ontology — AI and flow nodes may only use these tags (prevents semantic entropy)
 export const LEAD_TAG_ONTOLOGY = [
   'warm_lead',
   'cold_lead',
@@ -12,12 +11,25 @@ export const LEAD_TAG_ONTOLOGY = [
   'asked_price',
   'ignored_offer',
   'requested_support',
-  'buyer',        // confirmed payment — drives post-purchase routing
+  'buyer',
   'conversion',
   'lost',
+  // new
+  'new_lead',
+  'asked_catalog',
+  'pix_generated',
+  'pix_pending',
+  'payment_failed',
+  'needs_human',
+  'series_not_found',
+  'vip',
+  'upsell_candidate',
+  'objection_price',
+  'objection_trust',
 ] as const
 
 export type OntologyTag = typeof LEAD_TAG_ONTOLOGY[number]
+export type LeadTemperature = 'cold' | 'warm' | 'hot' | 'vip'
 
 export interface LeadProps {
   id: string
@@ -30,6 +42,15 @@ export interface LeadProps {
   lastSeenAt: Date
   lastPaymentConfirmedAt: Date | null
   createdAt: Date
+  // Memory expansion (P2)
+  leadTemperature: LeadTemperature
+  purchasedTitles: string[]
+  preferredGenres: string[]
+  objections: string[]
+  abandonedPixCount: number
+  lastState: string | null
+  contextSummary: string | null
+  recoverySentAt: Date | null
 }
 
 export class Lead {
@@ -51,11 +72,30 @@ export class Lead {
       lastSeenAt: new Date(),
       lastPaymentConfirmedAt: null,
       createdAt: new Date(),
+      leadTemperature: 'cold',
+      purchasedTitles: [],
+      preferredGenres: [],
+      objections: [],
+      abandonedPixCount: 0,
+      lastState: null,
+      contextSummary: null,
+      recoverySentAt: null,
     })
   }
 
   static reconstitute(props: LeadProps): Lead {
-    return new Lead({ ...props, lastPaymentConfirmedAt: props.lastPaymentConfirmedAt ?? null })
+    return new Lead({
+      ...props,
+      lastPaymentConfirmedAt: props.lastPaymentConfirmedAt ?? null,
+      leadTemperature: props.leadTemperature ?? 'cold',
+      purchasedTitles: props.purchasedTitles ?? [],
+      preferredGenres: props.preferredGenres ?? [],
+      objections: props.objections ?? [],
+      abandonedPixCount: props.abandonedPixCount ?? 0,
+      lastState: props.lastState ?? null,
+      contextSummary: props.contextSummary ?? null,
+      recoverySentAt: props.recoverySentAt ?? null,
+    })
   }
 
   addTag(tag: string): void {
@@ -75,7 +115,6 @@ export class Lead {
   }
 
   mergeVariables(vars: Record<string, string>): void {
-    // only persist non-system variables (no __ prefix)
     for (const [k, v] of Object.entries(vars)) {
       if (!k.startsWith('__')) this.props.variables[k] = v
     }
@@ -95,6 +134,8 @@ export class Lead {
     this.props.lastSeenAt = new Date()
     this.addTag('buyer')
     this.addTag('sent_pix')
+    this.setTemperature('vip')
+    this.props.abandonedPixCount = 0
   }
 
   isRecentBuyer(withinMs = 86_400_000): boolean {
@@ -104,6 +145,56 @@ export class Lead {
 
   touch(): void {
     this.props.lastSeenAt = new Date()
+  }
+
+  setTemperature(temp: LeadTemperature): void {
+    // temperature only escalates, never downgrades (except to vip)
+    const order: LeadTemperature[] = ['cold', 'warm', 'hot', 'vip']
+    if (temp === 'vip' || order.indexOf(temp) > order.indexOf(this.props.leadTemperature)) {
+      this.props.leadTemperature = temp
+    }
+  }
+
+  addPurchasedTitle(title: string): void {
+    if (title && !this.props.purchasedTitles.includes(title)) {
+      this.props.purchasedTitles = [...this.props.purchasedTitles, title]
+    }
+  }
+
+  addPreferredGenre(genre: string): void {
+    const g = genre.trim().toLowerCase()
+    if (g && !this.props.preferredGenres.includes(g)) {
+      this.props.preferredGenres = [...this.props.preferredGenres, g]
+    }
+  }
+
+  addObjection(objection: string): void {
+    const o = objection.trim().toLowerCase()
+    if (o && !this.props.objections.includes(o)) {
+      this.props.objections = [...this.props.objections, o]
+    }
+  }
+
+  incrementAbandonedPix(): void {
+    this.props.abandonedPixCount += 1
+  }
+
+  setLastState(state: string): void {
+    this.props.lastState = state
+  }
+
+  setContextSummary(summary: string): void {
+    this.props.contextSummary = summary.trim() || null
+  }
+
+  markRecoverySent(): void {
+    this.props.recoverySentAt = new Date()
+    this.props.lastSeenAt = new Date()
+  }
+
+  needsRecovery(minGapMs = 30 * 60 * 1000): boolean {
+    if (!this.props.recoverySentAt) return true
+    return (Date.now() - this.props.recoverySentAt.getTime()) > minGapMs
   }
 
   get id() { return this.props.id }
@@ -116,8 +207,23 @@ export class Lead {
   get lastSeenAt() { return this.props.lastSeenAt }
   get lastPaymentConfirmedAt() { return this.props.lastPaymentConfirmedAt }
   get createdAt() { return this.props.createdAt }
+  get leadTemperature() { return this.props.leadTemperature }
+  get purchasedTitles() { return [...this.props.purchasedTitles] }
+  get preferredGenres() { return [...this.props.preferredGenres] }
+  get objections() { return [...this.props.objections] }
+  get abandonedPixCount() { return this.props.abandonedPixCount }
+  get lastState() { return this.props.lastState }
+  get contextSummary() { return this.props.contextSummary }
+  get recoverySentAt() { return this.props.recoverySentAt }
 
   toJSON(): LeadProps {
-    return { ...this.props, tags: [...this.props.tags], variables: { ...this.props.variables } }
+    return {
+      ...this.props,
+      tags: [...this.props.tags],
+      variables: { ...this.props.variables },
+      purchasedTitles: [...this.props.purchasedTitles],
+      preferredGenres: [...this.props.preferredGenres],
+      objections: [...this.props.objections],
+    }
   }
 }

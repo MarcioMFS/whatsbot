@@ -6,4 +6,5 @@ export interface LeadRepository {
   findByTag(botId: string, tag: string): Promise<Lead[]>
   countByBotId(botId: string): Promise<number>
   save(lead: Lead): Promise<void>
+  findAbandonedPix(botId: string, idleThresholdMs: number, maxCount?: number): Promise<Lead[]>
 }
