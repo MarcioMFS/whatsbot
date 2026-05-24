@@ -200,6 +200,11 @@ export class FlowExecutionService {
       lead.touch()
     }
 
+    // Reconcile temperature: buyer tag → at least 'warm'; confirmed payment → at least 'hot'
+    if (lead.tags.includes('buyer') && lead.leadTemperature === 'cold') {
+      lead.setTemperature(lead.lastPaymentConfirmedAt ? 'hot' : 'warm')
+    }
+
     // inject lead context into conversation variables (P2 — memory layer)
     conversation.setVariable('__lead_tags', lead.tags.join(','))
     conversation.setVariable('__lead_temperature', lead.leadTemperature)

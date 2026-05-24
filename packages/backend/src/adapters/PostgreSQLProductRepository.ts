@@ -34,9 +34,12 @@ export class PostgreSQLProductRepository implements ProductRepository {
          AND (
            normalized_name = $2
            OR normalized_name ILIKE '%' || $2 || '%'
+           OR $2 ILIKE '%' || normalized_name || '%'
+           OR similarity(normalized_name, $2) > 0.3
            OR EXISTS (
              SELECT 1 FROM jsonb_array_elements_text(aliases) alias
              WHERE alias ILIKE '%' || $2 || '%'
+               OR $2 ILIKE '%' || alias || '%'
            )
          )
        ORDER BY sim DESC, name
