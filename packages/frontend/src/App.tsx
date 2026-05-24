@@ -5,6 +5,9 @@ import { BotConfig } from './pages/BotConfig.tsx'
 import { FlowBuilder } from './pages/FlowBuilder.tsx'
 import { Leads } from './pages/Leads.tsx'
 import { Events } from './pages/Events.tsx'
+import { Products } from './pages/Products.tsx'
+import { Orders } from './pages/Orders.tsx'
+import { PackageOffers } from './pages/PackageOffers.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -21,6 +24,9 @@ export default function App() {
       <Route path="/bots/:botId/flow/:flowId" element={<ProtectedRoute><FlowBuilder /></ProtectedRoute>} />
       <Route path="/bots/:botId/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/bots/:botId/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+      <Route path="/bots/:botId/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+      <Route path="/bots/:botId/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+      <Route path="/bots/:botId/package-offers" element={<ProtectedRoute><PackageOffers /></ProtectedRoute>} />
     </Routes>
   )
 }

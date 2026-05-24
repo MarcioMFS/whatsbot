@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import gsap from 'gsap'
-import { ArrowLeft, Save, Play, Square, AlertTriangle, X } from 'lucide-react'
+import { ArrowLeft, Save, Play, Square, AlertTriangle, X, FileDown, FileUp, Copy, Check } from 'lucide-react'
 import { api } from '../api/client.ts'
 import { NodePalette } from '../components/flow/NodePalette.tsx'
 import { NodeConfigPanel } from '../components/flow/NodeConfigPanel.tsx'
@@ -32,6 +32,13 @@ import { NotificationNode } from '../components/flow/nodes/NotificationNode.tsx'
 import { PixelNode } from '../components/flow/nodes/PixelNode.tsx'
 import { PixNode } from '../components/flow/nodes/PixNode.tsx'
 import { LabelNode } from '../components/flow/nodes/LabelNode.tsx'
+import { CatalogSearchNode } from '../components/flow/nodes/CatalogSearchNode.tsx'
+import { CartAddNode } from '../components/flow/nodes/CartAddNode.tsx'
+import { CartSummaryNode } from '../components/flow/nodes/CartSummaryNode.tsx'
+import { CheckoutNode } from '../components/flow/nodes/CheckoutNode.tsx'
+import { PackagePixNode } from '../components/flow/nodes/PackagePixNode.tsx'
+import { ClassifyIntentNode } from '../components/flow/nodes/ClassifyIntentNode.tsx'
+import { DeliverTitleNode } from '../components/flow/nodes/DeliverTitleNode.tsx'
 
 function validateFlow(nodes: Node[], edges: Edge[]): string[] {
   const errors: string[] = []
@@ -83,6 +90,13 @@ const nodeTypes = {
   pixel: PixelNode,
   pix: PixNode,
   label: LabelNode,
+  catalog_search: CatalogSearchNode,
+  cart_add: CartAddNode,
+  cart_summary: CartSummaryNode,
+  checkout: CheckoutNode,
+  package_pix: PackagePixNode,
+  classify_intent: ClassifyIntentNode,
+  deliver_title: DeliverTitleNode,
   end: EndNode,
 }
 
@@ -97,6 +111,10 @@ export function FlowBuilder() {
   const [bot, setBot] = useState<{ isActive: boolean; activeFlowId: string | null } | null>(null)
   const [activateError, setActivateError] = useState<string | null>(null)
   const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [jsonPanel, setJsonPanel] = useState<'export' | 'import' | null>(null)
+  const [jsonText, setJsonText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -200,6 +218,47 @@ export function FlowBuilder() {
 
   const isActive = bot?.isActive && bot?.activeFlowId === flowId
 
+  const openExport = () => {
+    const payload = { name: flowName, nodes, edges }
+    setJsonText(JSON.stringify(payload, null, 2))
+    setJsonPanel('export')
+    setCopied(false)
+  }
+
+  const openImport = () => {
+    setJsonText('')
+    setImportError(null)
+    setJsonPanel('import')
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(jsonText).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
+
+  const handleImport = () => {
+    setImportError(null)
+    try {
+      const parsed = JSON.parse(jsonText)
+      if (!Array.isArray(parsed.nodes) || !Array.isArray(parsed.edges)) {
+        setImportError('JSON inválido — precisa ter "nodes" e "edges".')
+        return
+      }
+      if (parsed.nodes.length > 200) {
+        setImportError(`Fluxo muito grande (${parsed.nodes.length} nós). Máximo recomendado: 200.`)
+        return
+      }
+      if (parsed.name) setFlowName(parsed.name)
+      setNodes(parsed.nodes)
+      setEdges(parsed.edges)
+      setJsonPanel(null)
+    } catch {
+      setImportError('JSON inválido — verifique a sintaxe.')
+    }
+  }
+
   return (
     <div className="h-screen flex flex-col bg-[#020617]">
       {/* Header */}
@@ -218,6 +277,20 @@ export function FlowBuilder() {
             {activateError}
           </span>
         )}
+        <button
+          onClick={openExport}
+          title="Export JSON"
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-glass-100 hover:bg-glass-200 border border-glass-border px-3 py-2 rounded-xl transition-all"
+        >
+          <FileDown size={14} /> Export
+        </button>
+        <button
+          onClick={openImport}
+          title="Import JSON"
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-glass-100 hover:bg-glass-200 border border-glass-border px-3 py-2 rounded-xl transition-all"
+        >
+          <FileUp size={14} /> Import
+        </button>
         <button
           onClick={toggleActive}
           className={`flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-xl transition-all duration-200 ${
@@ -285,6 +358,68 @@ export function FlowBuilder() {
           />
         )}
       </div>
+
+      {/* JSON Drawer */}
+      {jsonPanel && (
+        <div className="fixed inset-x-0 bottom-0 z-50 flex flex-col glass border-t border-glass-border"
+          style={{ height: '42vh' }}>
+          {/* Drawer header */}
+          <div className="flex items-center gap-3 px-4 py-2.5 border-b border-glass-border shrink-0">
+            {jsonPanel === 'export' ? (
+              <FileDown size={15} className="text-brand-400" />
+            ) : (
+              <FileUp size={15} className="text-emerald-400" />
+            )}
+            <span className="text-sm font-semibold text-white">
+              {jsonPanel === 'export'
+                ? `Export JSON — ${nodes.length} nós, ${edges.length} edges`
+                : 'Import JSON — cole o conteúdo abaixo'}
+            </span>
+            <div className="flex-1" />
+            {jsonPanel === 'export' && (
+              <button
+                onClick={handleCopy}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                  copied
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                    : 'bg-glass-200 text-slate-300 border-glass-border hover:text-white'
+                }`}
+              >
+                {copied ? <><Check size={12} /> Copiado!</> : <><Copy size={12} /> Copiar</>}
+              </button>
+            )}
+            {jsonPanel === 'import' && (
+              <button
+                onClick={handleImport}
+                className="flex items-center gap-1.5 text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-lg transition-all"
+              >
+                <FileUp size={12} /> Carregar fluxo
+              </button>
+            )}
+            <button onClick={() => setJsonPanel(null)} className="text-slate-400 hover:text-white ml-1">
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Error */}
+          {importError && (
+            <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-300 shrink-0">
+              {importError}
+            </div>
+          )}
+
+          {/* Textarea */}
+          <textarea
+            value={jsonText}
+            onChange={e => { if (jsonPanel === 'import') { setJsonText(e.target.value); setImportError(null) } }}
+            readOnly={jsonPanel === 'export'}
+            spellCheck={false}
+            placeholder={jsonPanel === 'import' ? '{ "name": "...", "nodes": [...], "edges": [...] }' : ''}
+            className="flex-1 w-full bg-transparent text-slate-300 text-xs font-mono px-4 py-3 resize-none focus:outline-none"
+            style={{ lineHeight: '1.6' }}
+          />
+        </div>
+      )}
     </div>
   )
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2, Settings2, Activity } from 'lucide-react'
+import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2, Settings2, Activity, Package, ShoppingBag, Tag } from 'lucide-react'
 import { Layout } from '../components/ui/Layout.tsx'
 import { GlassCard } from '../components/ui/GlassCard.tsx'
 import { api } from '../api/client.ts'
@@ -213,6 +213,21 @@ export function BotConfig() {
               className="flex items-center gap-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/30 text-purple-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
               <Users size={14} />
               Leads
+            </button>
+            <button onClick={() => navigate(`/bots/${botId}/products`)}
+              className="flex items-center gap-2 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/30 text-indigo-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <Package size={14} />
+              Produtos
+            </button>
+            <button onClick={() => navigate(`/bots/${botId}/orders`)}
+              className="flex items-center gap-2 bg-lime-500/20 hover:bg-lime-500/30 border border-lime-500/30 text-lime-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <ShoppingBag size={14} />
+              Pedidos
+            </button>
+            <button onClick={() => navigate(`/bots/${botId}/package-offers`)}
+              className="flex items-center gap-2 bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <Tag size={14} />
+              Pacotes
             </button>
             <button onClick={createFlow}
             className="flex items-center gap-2 bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">

@@ -16,6 +16,13 @@ export type NodeType =
   | 'tag_lead'
   | 'payment_confirmed'
   | 'ai_validate_receipt'  // extract + deterministic validate — outputs: approved | rejected
+  | 'catalog_search'       // normalize→alias→fuzzy→AI fallback — outputs: found | not_found
+  | 'cart_add'             // batch add from __rt_catalog_found — outputs: success | error
+  | 'cart_summary'         // send cart summary message — 1 output
+  | 'checkout'             // create PaymentIntent + send Pix message — outputs: success | error
+  | 'package_pix'          // quantity-based Pix convenience node — outputs: success | error
+  | 'classify_intent'      // rule-based intent router (no AI) — outputs: quantity|ad_series|catalog|pix_pending|price_issue|doubt|unknown
+  | 'deliver_title'        // deliver found products and track slots — outputs: done|more|partial|error
   | 'end'
 
 export interface NodeData {
@@ -75,9 +82,62 @@ export interface PaymentConfirmedNodeData extends NodeData {
   postPurchaseMessage?: string  // follow-up: "Em que posso te ajudar agora?"
 }
 
+export interface CatalogSearchNodeData extends NodeData {
+  searchFrom?: string       // conversation variable to read query from (default: uses current message)
+  maxResults?: number       // max products to return (default: 5)
+  // handles: 'found' | 'not_found'
+  // sets: __rt_catalog_found (JSON), __rt_search_query, __rt_search_unresolved, __rt_has_unresolved
+}
+
+export interface CartAddNodeData extends NodeData {
+  // reads __rt_catalog_found (JSON array of CartItems)
+  // handles: 'success' | 'error' (guardrail: max 20 items / 10 KB)
+}
+
+export interface CartSummaryNodeData extends NodeData {
+  messageTemplate?: string  // supports {{__rt_cart_summary}}, {{__rt_cart_total}}, {{__rt_cart_count}}
+  // 1 output
+}
+
+export interface CheckoutNodeData extends NodeData {
+  receiverKey?: string       // Pix key (fallback: bot.globalConfig.defaultPixKey)
+  receiverName?: string      // Pix receiver name (fallback: bot.globalConfig.defaultReceiverName)
+  expiresInMinutes?: number  // PaymentIntent TTL (default: 60)
+  pixMessage?: string        // message template to send with Pix key (supports {{amount}}, {{pixKey}})
+  outputVariable?: string    // where to save paymentIntentId (default: __rt_checkout_payment_id)
+  // handles: 'success' | 'error'
+}
+
 export interface AIValidateReceiptNodeData extends NodeData {
   paymentIntentVariable: string  // conversation variable holding the paymentIntentId
   // handles: 'approved' | 'rejected'
+}
+
+export interface ClassifyIntentNodeData extends NodeData {
+  messageVariable?: string  // var to classify (default: last user message)
+  // sets: __rt_intent, __rt_intent_qty, __rt_wants_ad_series
+  // handles: greeting | quantity | ad_series | catalog | pix_pending | price_issue | doubt | unknown
+}
+
+export interface DeliverTitleNodeData extends NodeData {
+  catalogVar?: string             // default: '__rt_catalog_found'
+  remainingSlotsVar?: string      // default: '__rt_remaining_slots'
+  deliveredSlotsVar?: string      // default: '__rt_delivered_slots'
+  deliveredTitlesVar?: string     // default: '__rt_delivered_titles'
+  pendingTitlesVar?: string       // default: '__rt_delivery_pending'
+  messageTemplate?: string        // default: '{{name}}\n\nAcesso: {{accessLink}}'
+  notifyOwnerOnMissingLink?: boolean // default: true
+  // handles: done | more | partial | error
+}
+
+export interface PackagePixNodeData extends NodeData {
+  quantityVariable: string     // variable name that holds the quantity (integer string)
+  unitPriceCentavos?: number   // unit price per item (default: 600 = R$6)
+  outputVariable?: string      // where to save paymentIntentId (default: paymentIntentId)
+  pixKey?: string              // override bot.globalConfig.defaultPixKey
+  recipientName?: string       // override bot.globalConfig.defaultReceiverName
+  expiresInMinutes?: number    // default: 60
+  // handles: 'success' | 'error'
 }
 
 export interface TextNodeData extends NodeData {

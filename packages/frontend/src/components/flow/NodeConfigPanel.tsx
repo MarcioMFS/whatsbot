@@ -311,6 +311,131 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
           </>
         )}
 
+        {node.type === 'catalog_search' && (
+          <>
+            <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20 mb-2">
+              <p className="text-xs text-indigo-400 font-semibold mb-1">Busca no Catálogo</p>
+              <p className="text-xs text-slate-400">Busca produtos por nome, aliases e fuzzy match. IA entra apenas como fallback para mensagens ambíguas.</p>
+            </div>
+            <Field label="Buscar a partir de (variável)" value={String(node.data.searchFrom ?? '')} onChange={v => set('searchFrom', v)}
+              placeholder="deixe vazio para usar a mensagem atual"
+              hint="Nome de variável que contém o texto de busca. Ex: series_pedidas" />
+            <p className="text-xs text-slate-500 mt-1">Saídas: <span className="text-emerald-400 font-mono">found</span> (≥1 produto) · <span className="text-red-400 font-mono">not_found</span></p>
+            <p className="text-xs text-slate-500 mt-1">Variáveis: <span className="font-mono text-slate-400">__rt_catalog_found</span> (JSON), <span className="font-mono text-slate-400">__rt_search_query</span>, <span className="font-mono text-slate-400">__rt_has_unresolved</span></p>
+          </>
+        )}
+
+        {node.type === 'cart_add' && (
+          <>
+            <div className="p-3 rounded-xl bg-lime-500/5 border border-lime-500/20 mb-2">
+              <p className="text-xs text-lime-400 font-semibold mb-1">Adicionar ao Carrinho</p>
+              <p className="text-xs text-slate-400">Lê <span className="font-mono">__rt_catalog_found</span> e adiciona todos os produtos ao carrinho. Guardrail: máx 20 itens / 10 KB.</p>
+            </div>
+            <p className="text-xs text-slate-500">Saídas: <span className="text-emerald-400 font-mono">success</span> · <span className="text-red-400 font-mono">error</span> (guardrail)</p>
+            <p className="text-xs text-slate-500 mt-1">Variáveis atualizadas: <span className="font-mono text-slate-400">__rt_cart</span>, <span className="font-mono text-slate-400">__rt_cart_total</span>, <span className="font-mono text-slate-400">__rt_cart_count</span>, <span className="font-mono text-slate-400">__rt_cart_summary</span></p>
+          </>
+        )}
+
+        {node.type === 'cart_summary' && (
+          <>
+            <Field label="Template da mensagem" value={String(node.data.messageTemplate ?? '')} onChange={v => set('messageTemplate', v)} textarea
+              placeholder="🛒 Seu carrinho:\n\n{{__rt_cart_summary}}\n\nTotal: {{__rt_cart_total}} centavos"
+              hint="Variáveis: {{__rt_cart_summary}}, {{__rt_cart_count}}, {{__rt_cart_total}}" />
+          </>
+        )}
+
+        {node.type === 'checkout' && (
+          <>
+            <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20 mb-2">
+              <p className="text-xs text-amber-400 font-semibold mb-1">Checkout com Pix</p>
+              <p className="text-xs text-slate-400">Cria PaymentIntent com total do carrinho e envia mensagem Pix ao cliente. Substitui o nó Pix em fluxos de carrinho.</p>
+            </div>
+            <Field label="Chave Pix" value={String(node.data.receiverKey ?? '')} onChange={v => set('receiverKey', v)}
+              placeholder="deixe vazio para usar config global do bot"
+              hint="Fallback: bot.globalConfig.defaultPixKey" />
+            <Field label="Favorecido" value={String(node.data.receiverName ?? '')} onChange={v => set('receiverName', v)}
+              placeholder="Nome do favorecido"
+              hint="Fallback: bot.globalConfig.defaultReceiverName" />
+            <NumberField label="Expiração (minutos)" value={Number(node.data.expiresInMinutes ?? 60)} onChange={v => set('expiresInMinutes', v)} min={5} max={1440} />
+            <Field label="Variável de saída" value={String(node.data.outputVariable ?? '')} onChange={v => set('outputVariable', v)}
+              placeholder="__rt_checkout_payment_id"
+              hint="Onde salvar o paymentIntentId" />
+            <p className="text-xs text-slate-500 mt-1">Saídas: <span className="text-emerald-400 font-mono">success</span> (Pix enviado) · <span className="text-red-400 font-mono">error</span></p>
+          </>
+        )}
+
+        {node.type === 'package_pix' && (
+          <>
+            <div className="p-3 rounded-xl bg-orange-400/5 border border-orange-400/20 mb-2">
+              <p className="text-xs text-orange-300 font-semibold mb-1">Package Pix — por quantidade</p>
+              <p className="text-xs text-slate-400">Lê uma variável com a quantidade pedida pelo cliente, aplica o PackageOffer correspondente e gera o Pix com o valor correto. Reutiliza PricingService + PaymentIntentRepository.</p>
+            </div>
+            <Field label="Variável da quantidade *" value={String(node.data.quantityVariable ?? '')} onChange={v => set('quantityVariable', v)}
+              placeholder="ex: qty_pedida"
+              hint='Aceita "2", "quero 3", "só uma" etc.' />
+            <NumberField label="Preço unitário (centavos)" value={Number(node.data.unitPriceCentavos ?? 600)} onChange={v => set('unitPriceCentavos', v)} min={1} max={99999}
+              hint="Padrão: 600 (R$ 6,00 por série)" />
+            <Field label="Chave Pix" value={String(node.data.pixKey ?? '')} onChange={v => set('pixKey', v)}
+              placeholder="deixe vazio para usar config global do bot" />
+            <Field label="Favorecido" value={String(node.data.recipientName ?? '')} onChange={v => set('recipientName', v)}
+              placeholder="deixe vazio para usar config global" />
+            <NumberField label="Expiração (minutos)" value={Number(node.data.expiresInMinutes ?? 60)} onChange={v => set('expiresInMinutes', v)} min={5} max={1440} />
+            <Field label="Variável de saída" value={String(node.data.outputVariable ?? '')} onChange={v => set('outputVariable', v)}
+              placeholder="paymentIntentId"
+              hint="Onde salvar o paymentIntentId" />
+            <p className="text-xs text-slate-500 mt-1">Runtime vars: <span className="text-orange-300 font-mono">__rt_package_quantity</span>, <span className="text-orange-300 font-mono">__rt_checkout_*</span></p>
+            <p className="text-xs text-slate-500 mt-0.5">Saídas: <span className="text-emerald-400 font-mono">success</span> · <span className="text-red-400 font-mono">error</span> (qty inválida)</p>
+          </>
+        )}
+
+        {node.type === 'classify_intent' && (
+          <>
+            <div className="p-3 rounded-xl bg-cyan-400/5 border border-cyan-400/20 mb-2">
+              <p className="text-xs text-cyan-300 font-semibold mb-1">Classify Intent — sem IA</p>
+              <p className="text-xs text-slate-400">Roteamento determinístico por regras. IA só entra no handle <span className="text-slate-300 font-mono">unknown</span>.</p>
+            </div>
+            <Field label="Variável com o texto (opcional)" value={String(node.data.messageVariable ?? '')} onChange={v => set('messageVariable', v)}
+              placeholder="deixe vazio = última mensagem do cliente"
+              hint="Ex: user_initial_message" />
+            <div className="mt-2 space-y-1">
+              <p className="text-xs text-slate-500 font-semibold">Handles de saída:</p>
+              {['quantity','ad_series','catalog','pix_pending','price_issue','doubt','unknown'].map(h => (
+                <p key={h} className="text-xs text-slate-400 font-mono">→ <span className="text-cyan-300">{h}</span></p>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500 mt-2">Runtime vars: <span className="text-cyan-300 font-mono">__rt_intent</span> · <span className="text-cyan-300 font-mono">__rt_intent_qty</span> · <span className="text-cyan-300 font-mono">__rt_wants_ad_series</span></p>
+          </>
+        )}
+
+        {node.type === 'deliver_title' && (
+          <>
+            <div className="p-3 rounded-xl bg-emerald-400/5 border border-emerald-400/20 mb-2">
+              <p className="text-xs text-emerald-300 font-semibold mb-1">Deliver Title — sem IA</p>
+              <p className="text-xs text-slate-400">Entrega os produtos encontrados pelo catalog_search, respeitando os slots comprados. Nunca entrega acima do comprado.</p>
+            </div>
+            <Field label="Template da mensagem" value={String(node.data.messageTemplate ?? '')} onChange={v => set('messageTemplate', v)}
+              placeholder="{'{'}{'{'}}name{'}'}{'}'}\n\nAcesso: {'{'}{'{'}}accessLink{'}'}{'}'}"
+              hint="Vars disponíveis: {{name}} e {{accessLink}}" />
+            <Field label="Var catálogo encontrado" value={String(node.data.catalogVar ?? '')} onChange={v => set('catalogVar', v)}
+              placeholder="__rt_catalog_found" />
+            <Field label="Var slots restantes" value={String(node.data.remainingSlotsVar ?? '')} onChange={v => set('remainingSlotsVar', v)}
+              placeholder="__rt_remaining_slots" />
+            <Field label="Var slots entregues" value={String(node.data.deliveredSlotsVar ?? '')} onChange={v => set('deliveredSlotsVar', v)}
+              placeholder="__rt_delivered_slots" />
+            <Field label="Var títulos entregues" value={String(node.data.deliveredTitlesVar ?? '')} onChange={v => set('deliveredTitlesVar', v)}
+              placeholder="__rt_delivered_titles" />
+            <Field label="Var pendências" value={String(node.data.pendingTitlesVar ?? '')} onChange={v => set('pendingTitlesVar', v)}
+              placeholder="__rt_delivery_pending" />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={node.data.notifyOwnerOnMissingLink !== false}
+                onChange={e => set('notifyOwnerOnMissingLink', e.target.checked)}
+                className="rounded" />
+              <span className="text-xs text-slate-300">Notificar owner se produto sem accessLink</span>
+            </label>
+            <p className="text-xs text-slate-500 mt-2">Handles: <span className="text-emerald-400 font-mono">done</span> · <span className="text-blue-400 font-mono">more</span> · <span className="text-yellow-400 font-mono">partial</span> · <span className="text-red-400 font-mono">error</span></p>
+          </>
+        )}
+
         {node.type === 'delay' && (
           <NumberField
             label="Delay (segundos)"

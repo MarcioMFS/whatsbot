@@ -86,4 +86,31 @@ export const api = {
         body: JSON.stringify(body),
       }),
   },
+  products: {
+    list: (botId: string, includeUnavailable = false) =>
+      request<unknown[]>(`/products/bot/${botId}${includeUnavailable ? '?includeUnavailable=true' : ''}`),
+    get: (id: string) => request<unknown>(`/products/${id}`),
+    create: (botId: string, data: unknown) =>
+      request<unknown>(`/products/bot/${botId}`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: unknown) =>
+      request<unknown>(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    delete: (id: string) => request<void>(`/products/${id}`, { method: 'DELETE' }),
+  },
+  orders: {
+    list: (botId: string, limit?: number) =>
+      request<unknown[]>(`/orders/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
+    get: (id: string) => request<unknown>(`/orders/${id}`),
+  },
+  packageOffers: {
+    list: (botId: string, includeInactive = false) =>
+      request<unknown[]>(`/package-offers/bot/${botId}${includeInactive ? '?includeInactive=true' : ''}`),
+    create: (botId: string, data: unknown) =>
+      request<unknown>(`/package-offers/bot/${botId}`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: unknown) =>
+      request<unknown>(`/package-offers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    toggle: (id: string) =>
+      request<unknown>(`/package-offers/${id}/toggle`, { method: 'PATCH', body: '{}' }),
+    delete: (id: string) =>
+      request<void>(`/package-offers/${id}`, { method: 'DELETE' }),
+  },
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
-import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag, ShieldCheck, CheckCircle2 } from 'lucide-react'
+import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag, ShieldCheck, CheckCircle2, Search, ShoppingCart, Receipt, CreditCard, Package, Send } from 'lucide-react'
 
 const NODE_TYPES = [
   { type: 'text_message', label: 'Mensagem', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
@@ -9,6 +9,13 @@ const NODE_TYPES = [
   { type: 'capture', label: 'Aguardar Resp.', icon: Clipboard, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   { type: 'condition', label: 'Condição', icon: GitBranch, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
   { type: 'notification', label: 'Notificação', icon: Bell, color: 'text-yellow-400', bg: 'bg-yellow-500/10 border-yellow-500/20' },
+  { type: 'catalog_search', label: 'Buscar Produto', icon: Search, color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
+  { type: 'cart_add', label: 'Add Carrinho', icon: ShoppingCart, color: 'text-lime-400', bg: 'bg-lime-500/10 border-lime-500/20' },
+  { type: 'cart_summary', label: 'Resumo Carrinho', icon: Receipt, color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20' },
+  { type: 'checkout', label: 'Checkout', icon: CreditCard, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+  { type: 'classify_intent', label: 'Classify Intent', icon: Zap, color: 'text-cyan-300', bg: 'bg-cyan-400/10 border-cyan-400/20' },
+  { type: 'deliver_title', label: 'Entregar Título', icon: Send, color: 'text-emerald-300', bg: 'bg-emerald-400/10 border-emerald-400/20' },
+  { type: 'package_pix', label: 'Package Pix', icon: Package, color: 'text-orange-300', bg: 'bg-orange-400/10 border-orange-400/20' },
   { type: 'pix', label: 'Botão Pix', icon: QrCode, color: 'text-emerald-300', bg: 'bg-emerald-400/10 border-emerald-400/20' },
   { type: 'ai_validate_receipt', label: 'Validar Comprov.', icon: ShieldCheck, color: 'text-teal-400', bg: 'bg-teal-500/10 border-teal-500/20' },
   { type: 'payment_confirmed', label: 'Pagto Confirmado', icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-500/10 border-green-500/20' },
