@@ -71,10 +71,12 @@ export function startMessageWorker(
   const worker = new Worker(
     'messages',
     async (job) => {
-      const { botId, phoneNumber, message, imageMeta } = job.data as {
+      const { botId, phoneNumber, message, msgId, hasImage, imageMeta } = job.data as {
         botId: string
         phoneNumber: string
         message: string
+        msgId?: string
+        hasImage?: boolean
         imageMeta?: { imgMsg: Record<string, unknown> }
       }
 
@@ -87,7 +89,7 @@ export function startMessageWorker(
         console.log(`[worker] image decrypt: ${imageBase64 ? `OK (${imageBase64.length} chars)` : 'FAILED'}`)
       }
 
-      await flowExecService.handleIncomingMessage(bot, phoneNumber, message, imageBase64)
+      await flowExecService.handleIncomingMessage(bot, phoneNumber, message, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
     },
     {
       connection: { ...redis.options, maxRetriesPerRequest: null },

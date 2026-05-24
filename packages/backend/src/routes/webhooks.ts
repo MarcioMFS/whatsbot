@@ -84,6 +84,8 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         botId: bot.id,
         phoneNumber,
         message,
+        msgId: msgId || undefined,
+        hasImage,
         imageMeta: imageMeta || undefined,
       })
       return reply.code(200).send({ ok: true })

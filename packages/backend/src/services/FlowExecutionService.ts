@@ -114,13 +114,20 @@ export class FlowExecutionService {
     return score >= RECOVERY_THRESHOLD
   }
 
-  async handleIncomingMessage(bot: Bot, phoneNumber: string, message: string, imageBase64?: string): Promise<void> {
+  async handleIncomingMessage(
+    bot: Bot,
+    phoneNumber: string,
+    message: string,
+    imageBase64?: string,
+    inbound?: { msgId?: string; hasImage?: boolean },
+  ): Promise<void> {
     if (!bot.isActive || !bot.activeFlowId) return
+
+    const msgId = inbound?.msgId
+    const hasImage = inbound?.hasImage ?? !!imageBase64
 
     let conversation = await this.convRepo.findActiveByPhone(bot.id, phoneNumber)
     let lead = await this.leadRepo.findByPhone(bot.id, phoneNumber)
-
-    const hasImage = !!imageBase64
 
     // Recovery: suspended conversation takes priority over starting a new flow
     if (conversation && this.canRecover(conversation, message, hasImage)) {
@@ -202,23 +209,69 @@ export class FlowExecutionService {
     if (lead.name) conversation.setVariable('__lead_name', lead.name)
     if (lead.contextSummary) conversation.setVariable('__lead_context', lead.contextSummary)
 
-    conversation.addUserMessage(message)
+    conversation.addUserMessage(message, { msgId, sender: phoneNumber })
     if (imageBase64) conversation.setVariable('__imageBase64', imageBase64)
 
     if (conversation.status === 'waiting') {
       const currentNode = flow.getNodeById(conversation.currentNodeId)
       if (currentNode?.type === 'capture') {
         const data = currentNode.data as CaptureNodeData
-        if (data.validationRegex && !new RegExp(data.validationRegex).test(message)) {
+        const instance = bot.evolutionConfig.instanceName
+        const instanceId = bot.evolutionConfig.instanceId
+
+        // ── expectedInputType enforcement ──────────────────────────────────
+        // capture_receipt (and any image-only node) must reject text/audio
+        if (data.expectedInputType === 'image' && !hasImage) {
+          console.warn(
+            `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
+            `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=expected_image_got_text ` +
+            `msg="${message.slice(0, 80)}"`
+          )
           await this.messaging.sendMessage({
-            instanceName: bot.evolutionConfig.instanceName,
+            instanceName: instance,
+            instanceId,
             phoneNumber,
-            message: data.errorMessage ?? 'Invalid input. Please try again.',
+            message: data.errorMessage ?? '📎 Por favor, envie a *imagem do comprovante* (não texto).',
           })
           await this.convRepo.save(conversation)
           return
         }
-        conversation.setVariable(data.variableName, message)
+
+        // ── validationRegex check ──────────────────────────────────────────
+        if (data.validationRegex && !new RegExp(data.validationRegex).test(message)) {
+          console.warn(
+            `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
+            `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=regex_mismatch`
+          )
+          await this.messaging.sendMessage({
+            instanceName: instance,
+            instanceId,
+            phoneNumber,
+            message: data.errorMessage ?? 'Entrada inválida. Tente novamente.',
+          })
+          await this.convRepo.save(conversation)
+          return
+        }
+
+        // ── accept: store value + audit metadata ───────────────────────────
+        const capturedValue = hasImage ? (imageBase64 ? '[image]' : message) : message
+        conversation.setVariable(data.variableName, capturedValue)
+        conversation.setVariable(`__capture_meta_${data.variableName}`, JSON.stringify({
+          msgId: msgId ?? null,
+          direction: 'inbound',
+          sender: phoneNumber,
+          nodeId: currentNode.id,
+          conversationId: conversation.id,
+          hasImage,
+          timestamp: new Date().toISOString(),
+        }))
+
+        console.log(
+          `[FlowExecution] capture_accepted: node=${currentNode.id} conv=${conversation.id} ` +
+          `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} direction=inbound sender=${phoneNumber} ` +
+          `var=${data.variableName} hasImage=${hasImage} value="${capturedValue.slice(0, 60)}"`
+        )
+
         // advance to responded handle; fall back to any outgoing edge
         const next = flow.getNextNodes(currentNode.id, 'responded')[0]
           ?? flow.getNextNodes(currentNode.id)[0]

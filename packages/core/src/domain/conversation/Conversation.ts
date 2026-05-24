@@ -4,6 +4,9 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: Date
+  msgId?: string       // WhatsApp message ID (inbound only)
+  sender?: string      // phone number of the sender (inbound only)
+  direction?: 'inbound' | 'outbound'
 }
 
 export type ConversationStatus = 'active' | 'waiting' | 'suspended' | 'ended' | 'handoff'
@@ -85,13 +88,13 @@ export class Conversation {
     })
   }
 
-  addUserMessage(content: string): void {
-    this.props.history.push({ role: 'user', content, timestamp: new Date() })
+  addUserMessage(content: string, meta?: { msgId?: string; sender?: string }): void {
+    this.props.history.push({ role: 'user', content, timestamp: new Date(), direction: 'inbound', ...meta })
     this.props.updatedAt = new Date()
   }
 
   addAssistantMessage(content: string): void {
-    this.props.history.push({ role: 'assistant', content, timestamp: new Date() })
+    this.props.history.push({ role: 'assistant', content, timestamp: new Date(), direction: 'outbound' })
     this.props.updatedAt = new Date()
   }
 
