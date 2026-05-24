@@ -73,7 +73,7 @@ export class FlowExecutionService {
   ) {}
 
   private emit(botId: string, convId: string, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
-    this.eventRepo?.emit({ botId, conversationId: convId, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(() => {})
+    this.eventRepo?.emit({ botId, conversationId: convId, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
   }
 
   // Scored recovery — returns 0..1, threshold = 0.6
@@ -576,7 +576,7 @@ export class FlowExecutionService {
           const newCount = failCount + 1
           conversation.setVariable('__rt_receipt_fail_count', String(newCount))
           if (newCount >= 2) {
-            this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '' }).catch(() => {})
+            this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '' }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           }
         }
         const handle = result.decision.approved ? 'approved' : 'rejected'
@@ -672,7 +672,7 @@ export class FlowExecutionService {
           conversation.setVariable('__rt_search_unresolved', JSON.stringify(result.unresolved))
           this.emit(bot.id, conversation.id, phone, 'product_not_found', { query, unresolved: result.unresolved })
           // auto-handoff: série não encontrada
-          this.createHandoff({ bot, conversation, lead, reason: 'series_not_found', lastMessage: query }).catch(() => {})
+          this.createHandoff({ bot, conversation, lead, reason: 'series_not_found', lastMessage: query }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
 
@@ -927,7 +927,7 @@ export class FlowExecutionService {
         // auto-handoff for unknown/price_issue intents
         if (handle === 'unknown' || result.intent === 'price_issue') {
           const autoReason: HandoffReason = result.intent === 'price_issue' ? 'price_issue' : 'unknown_intent'
-          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text }).catch(() => {})
+          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
         }
 
         return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
@@ -1037,7 +1037,7 @@ export class FlowExecutionService {
               instanceId: bot.evolutionConfig.instanceId,
               phoneNumber: ownerPhone,
               message: `🤝 *Intervenção solicitada*\nTel: ${conversation.phoneNumber}\nMotivo: ${data.reason}\nÚltima msg: "${conversation.getLastUserMessage() ?? ''}"`,
-            }).catch(() => {})
+            }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           }
         }
         conversation.handoff()
@@ -1083,14 +1083,14 @@ export class FlowExecutionService {
 
   private extractQuantity(input: string): number | null {
     const trimmed = input.trim()
-    // direct integer
+    // direct integer — cap at 99 to reject obvious garbage ("99999", etc.)
     const direct = parseInt(trimmed, 10)
-    if (!isNaN(direct) && direct > 0 && /^\d+$/.test(trimmed)) return direct
+    if (!isNaN(direct) && direct > 0 && direct <= 99 && /^\d+$/.test(trimmed)) return direct
     // number embedded in sentence: "quero 3", "2 séries"
     const match = trimmed.match(/\b(\d+)\b/)
     if (match) {
       const n = parseInt(match[1], 10)
-      if (n > 0) return n
+      if (n > 0 && n <= 99) return n  // cap: garbage like "!!!@@@ 123456" should not match as quantity
     }
     // portuguese words
     const normalized = trimmed.toLowerCase()
