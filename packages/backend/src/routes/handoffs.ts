@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { Handoff } from '@whatsbot/core'
 import type { HandoffRepository } from '@whatsbot/core'
 
 interface HandoffCtx {
@@ -7,6 +8,29 @@ interface HandoffCtx {
 
 export async function handoffRoutes(app: FastifyInstance, ctx: HandoffCtx) {
   app.addHook('preHandler', async (req) => { await req.jwtVerify() })
+
+  // POST /api/handoffs — manual handoff creation
+  app.post<{ Body: { botId: string; phoneNumber: string; reason: string; lastMessage?: string; context?: Record<string, unknown>; leadTemperature?: string; leadTags?: string[] } }>(
+    '/',
+    async (req, reply) => {
+      const { botId, phoneNumber, reason, lastMessage, context, leadTemperature, leadTags } = req.body
+      if (!botId || !phoneNumber || !reason) {
+        return reply.code(400).send({ error: 'botId, phoneNumber and reason are required' })
+      }
+      const handoff = Handoff.create({
+        botId,
+        conversationId: 'manual',
+        phoneNumber,
+        reason: reason as Parameters<typeof Handoff.create>[0]['reason'],
+        lastMessage: lastMessage ?? '',
+        contextSummary: context ? JSON.stringify(context) : null,
+        leadTemperature: leadTemperature ?? 'cold',
+        leadTags: leadTags ?? [],
+      })
+      await ctx.handoffRepo.save(handoff)
+      return reply.code(201).send(handoff.toJSON())
+    }
+  )
 
   // GET /api/handoffs/bot/:botId?status=open&limit=50&offset=0
   app.get<{ Params: { botId: string }; Querystring: { status?: string; limit?: string; offset?: string } }>(
