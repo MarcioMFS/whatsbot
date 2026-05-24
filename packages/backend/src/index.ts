@@ -25,7 +25,15 @@ import { startMessageWorker } from './queue/messageWorker.js'
 import { PostgreSQLLeadRepository } from './adapters/PostgreSQLLeadRepository.js'
 import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConversationEventRepository.js'
 import { PostgreSQLPaymentIntentRepository } from './adapters/PostgreSQLPaymentIntentRepository.js'
+import { PostgreSQLProductRepository } from './adapters/PostgreSQLProductRepository.js'
+import { PostgreSQLOrderRepository } from './adapters/PostgreSQLOrderRepository.js'
+import { PostgreSQLPackageOfferRepository } from './adapters/PostgreSQLPackageOfferRepository.js'
+import { CatalogSearchService } from './services/CatalogSearchService.js'
+import { DeliveryService } from './services/DeliveryService.js'
 import { leadRoutes } from './routes/leads.js'
+import { productRoutes } from './routes/products.js'
+import { orderRoutes } from './routes/orders.js'
+import { packageOfferRoutes } from './routes/packageOffers.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -54,10 +62,20 @@ const aiProviders = {
   groq: process.env.GROQ_API_KEY ? new GroqAdapter(process.env.GROQ_API_KEY) : null,
 }
 
+const productRepo = new PostgreSQLProductRepository(db)
+const orderRepo = new PostgreSQLOrderRepository(db)
+const packageOfferRepo = new PostgreSQLPackageOfferRepository(db)
+
 const aiService = new AIGenerationService(aiProviders)
-const flowExecService = new FlowExecutionService(flowRepo, conversationRepo, leadRepo, messaging, aiService, eventRepo, undefined, paymentIntentRepo)
+const catalogSearchService = new CatalogSearchService(productRepo, aiService)
+const deliveryService = new DeliveryService(messaging, eventRepo)
+const flowExecService = new FlowExecutionService(
+  flowRepo, conversationRepo, leadRepo, messaging, aiService,
+  eventRepo, undefined, paymentIntentRepo,
+  catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo,
+)
 const botService = new BotService(botRepo, flowRepo, messaging)
-const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, eventRepo)
+const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
 timeoutService.start()
 
 await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
@@ -72,6 +90,9 @@ await app.register(botRoutes, { prefix: '/api/bots', ...ctx })
 await app.register(flowRoutes, { prefix: '/api/flows', ...ctx })
 await app.register(conversationRoutes, { prefix: '/api/conversations', ...ctx })
 await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
+await app.register(productRoutes, { prefix: '/api/products', productRepo })
+await app.register(orderRoutes, { prefix: '/api/orders', orderRepo })
+await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageOfferRepo, botRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)

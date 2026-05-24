@@ -15,6 +15,13 @@ export class PostgreSQLBotRepository implements BotRepository {
     return rows.map(r => this.toDomain(r))
   }
 
+  async findAllActive(): Promise<Bot[]> {
+    const { rows } = await this.db.query(
+      'SELECT * FROM bots WHERE is_active = true ORDER BY created_at DESC'
+    )
+    return rows.map(r => this.toDomain(r))
+  }
+
   async findByInstanceName(instanceName: string): Promise<Bot | null> {
     const { rows } = await this.db.query(
       "SELECT * FROM bots WHERE evolution_config->>'instanceName' = $1",

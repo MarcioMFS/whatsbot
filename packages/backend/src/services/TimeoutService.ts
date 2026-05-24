@@ -1,4 +1,4 @@
-import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository, LeadRepository } from '@whatsbot/core'
 import type { CaptureNodeData } from '@whatsbot/core'
 import type { RedisConversationRepository } from '../adapters/RedisConversationRepository.js'
 import type { FlowExecutionService } from './FlowExecutionService.js'
@@ -10,11 +10,14 @@ export class TimeoutService {
     private flowRepo: FlowRepository,
     private messaging: MessagingPort,
     private flowExec: FlowExecutionService,
+    private leadRepo?: LeadRepository,
     private eventRepo?: ConversationEventRepository,
   ) {}
 
   start(): void {
     setInterval(() => this.checkTimeouts(), 30_000)
+    // PIX recovery: check every 15 minutes
+    setInterval(() => this.checkAbandonedPix(), 15 * 60_000)
   }
 
   private async checkTimeouts(): Promise<void> {
@@ -76,4 +79,58 @@ export class TimeoutService {
     conversation.moveToNode(timeoutNext[0].id)
     await this.flowExec.resumeFromNode(bot, flow, conversation)
   }
+
+  private async checkAbandonedPix(): Promise<void> {
+    if (!this.leadRepo) return
+    try {
+      const bots = await this.botRepo.findAllActive()
+      for (const bot of bots) {
+        if (!bot.activeFlowId) continue
+        const { instanceName, instanceId } = bot.evolutionConfig as { instanceName: string; instanceId?: string }
+        await this.checkAbandonedPixForBot(bot.id, instanceName, instanceId).catch(err =>
+          console.error('[TimeoutService] recovery error for bot', bot.id, err)
+        )
+      }
+    } catch (err) {
+      console.error('[TimeoutService] checkAbandonedPix iteration error', err)
+    }
+  }
+
+  async checkAbandonedPixForBot(botId: string, instanceName: string, instanceId?: string): Promise<void> {
+    if (!this.leadRepo) return
+    const IDLE_MS = 30 * 60_000
+    const MAX_ATTEMPTS = 2
+
+    const recoveryMessages = [
+      'Oi 😊 Seu Pix ainda está pendente! Quer que eu gere um novo link?',
+      'Olá! Não vimos seu comprovante ainda. Posso gerar um novo Pix pra você? 🎬',
+      'Ainda dá tempo de finalizar! Me envia o comprovante ou peço um novo Pix 😊',
+    ]
+
+    const abandoned = await this.leadRepo.findAbandonedPix(botId, IDLE_MS)
+    for (const lead of abandoned) {
+      try {
+        if (lead.abandonedPixCount >= MAX_ATTEMPTS) {
+          lead.addTag('lost')
+          lead.setLastState('abandoned_max_attempts')
+          await this.leadRepo.save(lead)
+          continue
+        }
+        if (!lead.needsRecovery(IDLE_MS)) continue
+
+        const msg = recoveryMessages[lead.abandonedPixCount % recoveryMessages.length]
+        await this.messaging.sendMessage({ instanceName, instanceId, phoneNumber: lead.phoneNumber, message: msg })
+
+        lead.incrementAbandonedPix()
+        lead.markRecoverySent()
+        lead.setLastState('recovery_sent')
+        await this.leadRepo.save(lead)
+
+        console.log(`[TimeoutService] recovery_sent to ${lead.phoneNumber} (attempt ${lead.abandonedPixCount})`)
+      } catch (err) {
+        console.error('[TimeoutService] checkAbandonedPix error for', lead.phoneNumber, err)
+      }
+    }
+  }
+
 }
