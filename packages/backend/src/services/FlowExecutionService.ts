@@ -39,6 +39,10 @@ import {
   type PackagePixNodeData,
   type ClassifyIntentNodeData,
   type DeliverTitleNodeData,
+  type HandoffRequestNodeData,
+  Handoff,
+  type HandoffRepository,
+  type HandoffReason,
   type Bot,
   type ConversationSnapshot,
   type CartItem,
@@ -65,6 +69,7 @@ export class FlowExecutionService {
     private orderRepo?: OrderRepository,
     private deliveryService?: DeliveryService,
     private packageOfferRepo?: PackageOfferRepository,
+    private handoffRepo?: HandoffRepository,
   ) {}
 
   private emit(botId: string, convId: string, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
@@ -568,7 +573,11 @@ export class FlowExecutionService {
 
         if (!result.decision.approved) {
           const failCount = parseInt(conversation.variables['__rt_receipt_fail_count'] ?? '0', 10)
-          conversation.setVariable('__rt_receipt_fail_count', String(failCount + 1))
+          const newCount = failCount + 1
+          conversation.setVariable('__rt_receipt_fail_count', String(newCount))
+          if (newCount >= 2) {
+            this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '' }).catch(() => {})
+          }
         }
         const handle = result.decision.approved ? 'approved' : 'rejected'
         const next = flow.getNextNodes(node.id, handle)
@@ -662,6 +671,8 @@ export class FlowExecutionService {
           conversation.setVariable('__rt_has_unresolved', 'true')
           conversation.setVariable('__rt_search_unresolved', JSON.stringify(result.unresolved))
           this.emit(bot.id, conversation.id, phone, 'product_not_found', { query, unresolved: result.unresolved })
+          // auto-handoff: série não encontrada
+          this.createHandoff({ bot, conversation, lead, reason: 'series_not_found', lastMessage: query }).catch(() => {})
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
 
@@ -912,6 +923,13 @@ export class FlowExecutionService {
         }
 
         const handle = this.intentToHandle(result.intent)
+
+        // auto-handoff for unknown/price_issue intents
+        if (handle === 'unknown' || result.intent === 'price_issue') {
+          const autoReason: HandoffReason = result.intent === 'price_issue' ? 'price_issue' : 'unknown_intent'
+          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text }).catch(() => {})
+        }
+
         return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
       }
 
@@ -996,9 +1014,71 @@ export class FlowExecutionService {
         return flow.getNextNodes(node.id, 'done')[0]?.id
       }
 
+      case 'handoff_request': {
+        const data = node.data as HandoffRequestNodeData
+        await this.createHandoff({
+          bot, conversation, lead,
+          reason: data.reason ?? 'user_request',
+          lastMessage: conversation.getLastUserMessage() ?? '',
+        })
+        if (data.userMessage) {
+          await this.messaging.sendMessage({
+            instanceName: bot.evolutionConfig.instanceName,
+            instanceId: bot.evolutionConfig.instanceId,
+            phoneNumber: conversation.phoneNumber,
+            message: data.userMessage,
+          })
+        }
+        if (data.notifyOwner !== false) {
+          const ownerPhone = bot.globalConfig?.ownerPhone
+          if (ownerPhone) {
+            await this.messaging.sendMessage({
+              instanceName: bot.evolutionConfig.instanceName,
+              instanceId: bot.evolutionConfig.instanceId,
+              phoneNumber: ownerPhone,
+              message: `🤝 *Intervenção solicitada*\nTel: ${conversation.phoneNumber}\nMotivo: ${data.reason}\nÚltima msg: "${conversation.getLastUserMessage() ?? ''}"`,
+            }).catch(() => {})
+          }
+        }
+        conversation.handoff()
+        lead?.addTag('needs_human')
+        return flow.getNextNodes(node.id, 'output')[0]?.id ?? flow.getNextNodes(node.id)[0]?.id
+      }
+
       case 'end':
         return undefined
     }
+  }
+
+  async createHandoff(params: {
+    bot: Bot
+    conversation: Conversation
+    lead?: Lead | null
+    reason: HandoffReason
+    lastMessage: string
+  }): Promise<void> {
+    if (!this.handoffRepo) return
+    const existing = await this.handoffRepo.findByConversationId(params.conversation.id)
+    const alreadyOpen = existing.some(h => h.status === 'open' || h.status === 'in_progress')
+    if (alreadyOpen) return  // don't duplicate open handoffs
+
+    const handoff = Handoff.create({
+      botId: params.bot.id,
+      conversationId: params.conversation.id,
+      leadId: params.lead?.id ?? null,
+      phoneNumber: params.conversation.phoneNumber,
+      reason: params.reason,
+      lastMessage: params.lastMessage,
+      contextSummary: params.lead?.contextSummary ?? null,
+      leadTemperature: params.lead?.leadTemperature ?? 'cold',
+      leadTags: params.lead?.tags ?? [],
+    })
+    await this.handoffRepo.save(handoff)
+    this.emit(params.bot.id, params.conversation.id, params.conversation.phoneNumber, 'handoff_requested', {
+      reason: params.reason,
+      handoffId: handoff.id,
+    })
+    console.log(`[FlowExecution] handoff_created for ${params.conversation.phoneNumber} reason=${params.reason}`)
   }
 
   private extractQuantity(input: string): number | null {

@@ -34,6 +34,8 @@ import { leadRoutes } from './routes/leads.js'
 import { productRoutes } from './routes/products.js'
 import { orderRoutes } from './routes/orders.js'
 import { packageOfferRoutes } from './routes/packageOffers.js'
+import { handoffRoutes } from './routes/handoffs.js'
+import { PostgreSQLHandoffRepository } from './adapters/PostgreSQLHandoffRepository.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -65,6 +67,7 @@ const aiProviders = {
 const productRepo = new PostgreSQLProductRepository(db)
 const orderRepo = new PostgreSQLOrderRepository(db)
 const packageOfferRepo = new PostgreSQLPackageOfferRepository(db)
+const handoffRepo = new PostgreSQLHandoffRepository(db)
 
 const aiService = new AIGenerationService(aiProviders)
 const catalogSearchService = new CatalogSearchService(productRepo, aiService)
@@ -72,7 +75,7 @@ const deliveryService = new DeliveryService(messaging, eventRepo)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
   eventRepo, undefined, paymentIntentRepo,
-  catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo,
+  catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
@@ -93,6 +96,7 @@ await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
 await app.register(productRoutes, { prefix: '/api/products', productRepo })
 await app.register(orderRoutes, { prefix: '/api/orders', orderRepo })
 await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageOfferRepo, botRepo })
+await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)

@@ -23,6 +23,7 @@ export type NodeType =
   | 'package_pix'          // quantity-based Pix convenience node — outputs: success | error
   | 'classify_intent'      // rule-based intent router (no AI) — outputs: quantity|ad_series|catalog|pix_pending|price_issue|doubt|unknown
   | 'deliver_title'        // deliver found products and track slots — outputs: done|more|partial|error
+  | 'handoff_request'      // create human intervention request — outputs: output (always continues)
   | 'end'
 
 export interface NodeData {
@@ -138,6 +139,14 @@ export interface PackagePixNodeData extends NodeData {
   recipientName?: string       // override bot.globalConfig.defaultReceiverName
   expiresInMinutes?: number    // default: 60
   // handles: 'success' | 'error'
+}
+
+export interface HandoffRequestNodeData extends NodeData {
+  reason: 'unknown_intent' | 'price_issue' | 'doubt' | 'pix_failed' | 'series_not_found' | 'user_request' | 'escalated' | 'custom'
+  customReason?: string
+  userMessage?: string      // optional message to send user ("Um humano vai te ajudar em breve 😊")
+  notifyOwner?: boolean     // default: true
+  // handles: 'output' — always continues
 }
 
 export interface TextNodeData extends NodeData {
