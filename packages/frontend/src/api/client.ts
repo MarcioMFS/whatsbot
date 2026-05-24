@@ -101,6 +101,18 @@ export const api = {
       request<unknown[]>(`/orders/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
     get: (id: string) => request<unknown>(`/orders/${id}`),
   },
+  handoffs: {
+    list: (botId: string, status?: string) =>
+      request<{ handoffs: unknown[]; total: number; limit: number; offset: number }>(
+        `/handoffs/bot/${botId}${status ? `?status=${status}` : ''}`
+      ),
+    get: (id: string) => request<unknown>(`/handoffs/${id}`),
+    updateStatus: (id: string, status: string, resolvedBy?: string) =>
+      request<unknown>(`/handoffs/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, resolvedBy }),
+      }),
+  },
   packageOffers: {
     list: (botId: string, includeInactive = false) =>
       request<unknown[]>(`/package-offers/bot/${botId}${includeInactive ? '?includeInactive=true' : ''}`),
