@@ -225,8 +225,34 @@ export class FlowExecutionService {
         const instanceId = bot.evolutionConfig.instanceId
 
         // ── expectedInputType enforcement ──────────────────────────────────
-        // capture_receipt (and any image-only node) must reject text/audio
+        // Before rejecting, check if the interceptor can handle this message
         if (data.expectedInputType === 'image' && !hasImage) {
+          if (data.interceptor?.enabled) {
+            const ic = await this.runCaptureInterceptor(data.interceptor, message, conversation, lead, bot)
+
+            if (ic.action === 'answer' && ic.message) {
+              console.log(`[capture_interceptor] inline answer node=${currentNode.id} msg="${message.slice(0, 60)}"`)
+              await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: ic.message })
+              await this.convRepo.save(conversation)
+              return // stay in waiting — still expects the image
+            }
+
+            if (ic.action === 'redirect' && ic.handle) {
+              const target = flow.getNextNodes(currentNode.id, ic.handle)[0]
+              if (target) {
+                console.log(`[capture_interceptor] redirect node=${currentNode.id} handle=${ic.handle} target=${target.id}`)
+                conversation.resume()
+                conversation.moveToNode(target.id)
+                // fall through to executeFlow below
+                await this.executeFlow(bot, flow, conversation, lead)
+                lead.mergeVariables(conversation.variables)
+                await this.leadRepo.save(lead)
+                return
+              }
+            }
+            // action === 'ignore' — fall through to normal rejection
+          }
+
           console.warn(
             `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
             `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=expected_image_got_text ` +
@@ -960,11 +986,13 @@ export class FlowExecutionService {
       case 'classify_intent': {
         const data = node.data as ClassifyIntentNodeData
 
-        // If trigger already pre-classified this message, reuse it (P3 fast path)
+        // P3 fast path — trigger pre-classified, reuse result
         if (conversation.variables['__rt_pre_classified'] === 'true') {
           conversation.setVariable('__rt_pre_classified', 'false')
           const intent = conversation.variables['__rt_intent'] ?? 'unknown'
-          const handle = this.intentToHandle(intent)
+          // Try the exact handle first, then legacy mapping
+          const directEdge = flow.getNextNodes(node.id, intent)[0]
+          const handle = directEdge ? intent : this.intentToHandle(intent)
           return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
         }
 
@@ -972,20 +1000,68 @@ export class FlowExecutionService {
           ? (conversation.variables[data.messageVariable] ?? '')
           : (conversation.getLastUserMessage() ?? '')
 
+        // ── Step 1: run configurable rules from node data ──────────────────
+        const ruleMatch = data.intents?.length
+          ? this.runConfiguredRules(text, data.intents)
+          : null
+
+        if (ruleMatch) {
+          conversation.setVariable('__rt_intent', ruleMatch.handle)
+          conversation.setVariable('__rt_confidence', String(ruleMatch.confidence))
+          if (ruleMatch.quantityDetected !== null)
+            conversation.setVariable('__rt_quantity_detected', String(ruleMatch.quantityDetected))
+          if (ruleMatch.titleDetected)
+            conversation.setVariable('__rt_title_detected', ruleMatch.titleDetected)
+          console.log(`[classify_intent] rule match: "${text.slice(0, 60)}" → ${ruleMatch.handle} (${ruleMatch.confidence})`)
+          return flow.getNextNodes(node.id, ruleMatch.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+        }
+
+        // ── Step 2: AI Agent for unmapped scenarios ────────────────────────
+        if (data.aiAgent?.enabled) {
+          const agentDecision = await this.runIntentAgent(text, conversation, lead, bot, data.aiAgent)
+          conversation.setVariable('__rt_intent', agentDecision.handle ?? 'unknown')
+          if (agentDecision.titleDetected)
+            conversation.setVariable('__rt_title_detected', agentDecision.titleDetected)
+          if (agentDecision.quantityDetected !== null && agentDecision.quantityDetected !== undefined)
+            conversation.setVariable('__rt_quantity_detected', String(agentDecision.quantityDetected))
+
+          if (agentDecision.action === 'respond' && agentDecision.message) {
+            conversation.setVariable('__rt_ai_responded', 'true')
+            await this.messaging.sendMessage({
+              instanceName: bot.evolutionConfig.instanceName,
+              instanceId: bot.evolutionConfig.instanceId,
+              phoneNumber: conversation.phoneNumber,
+              message: agentDecision.message,
+            })
+            console.log(`[classify_intent] AI responded inline for: "${text.slice(0, 60)}"`)
+            return null // stay — wait for next user message
+          }
+
+          if (agentDecision.action === 'handoff') {
+            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
+              .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+            return flow.getNextNodes(node.id, 'unknown')[0]?.id
+          }
+
+          // action === 'route'
+          const handle = agentDecision.handle ?? 'unknown'
+          console.log(`[classify_intent] AI routed: "${text.slice(0, 60)}" → ${handle}`)
+          return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+        }
+
+        // ── Step 3: legacy hardcoded fallback (deprecated — migrate to node.data.intents) ──
         const result = await this.classifyIntentRich(text, lead)
         this.storeIntentResult(conversation, result)
 
-        // Escalation override — routes to unknown so owner gets notified
-        if (result.shouldEscalate) {
+        if (result.shouldEscalate)
           return flow.getNextNodes(node.id, 'unknown')[0]?.id
-        }
 
         const handle = this.intentToHandle(result.intent)
 
-        // auto-handoff for unknown/price_issue intents
         if (handle === 'unknown' || result.intent === 'price_issue') {
           const autoReason: HandoffReason = result.intent === 'price_issue' ? 'price_issue' : 'unknown_intent'
-          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text })
+            .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
         }
 
         return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
@@ -1225,6 +1301,24 @@ export class FlowExecutionService {
     if (greetingPatterns.some(p => n === p || n === p + '!' || n.startsWith(p + ' ')))
       return { intent: 'greeting', confidence: 0.95, quantityDetected: null, titleDetected: null, objectionType: null, sentiment: 'positive' }
 
+    // Availability check — must run BEFORE quantity so "Cavaleiros do Sol, você tem?" is not misclassified
+    const availPatterns = [
+      'voce tem', 'voces tem', 'tem essa', 'tem no catalogo', 'tem disponivel', 'voce teria',
+      'encontro ai', 'encontro nesse', 'tem ai', 'vi uma serie', 'vi uma minisserie',
+      'vi um dorama', 'tem o dorama', 'tem a serie', 'tem a minisserie',
+      'tem essa serie', 'procurando por', 'existe essa', 'voce tem essa',
+    ]
+    const hasAvailSignal = availPatterns.some(p => n.includes(p))
+    if (hasAvailSignal) {
+      // Extract title: strip availability phrase and return the rest as the title
+      const titleRaw = text
+        .replace(/\b(voce[s]? te[mr]|tem essa|tem no catalogo|tem disponivel|tem ai|vi uma? (minisserie|serie|dorama)?|procurando por|existe essa|encontro ai?)\b/gi, '')
+        .replace(/[?!,]/g, '')
+        .trim()
+      const titleDetected = titleRaw.length > 2 ? titleRaw : null
+      return { intent: 'availability_check', confidence: 0.92, quantityDetected: null, titleDetected, objectionType: null, sentiment: 'positive' }
+    }
+
     const qty = this.extractQuantity(text)
     if (qty !== null)
       return { intent: 'quantity', confidence: 0.93, quantityDetected: qty, titleDetected: null, objectionType: null, sentiment: 'positive' }
@@ -1295,7 +1389,7 @@ export class FlowExecutionService {
         const context = lead
           ? `Lead: ${lead.totalSessions} sessões, tags: [${lead.tags.join(', ')}], temperatura: ${lead.leadTemperature}.`
           : ''
-        const prompt = `${context}\nMensagem do cliente: "${text}"\n\nRetorne JSON com exatamente estas chaves:\n{"intent":"greeting|buy_interest|catalog|quantity|title_search|doubt|price_issue|pix_pending|upsell|unknown","confidence":0.0,"quantityDetected":null,"titleDetected":null,"objectionType":null,"sentiment":"positive|neutral|negative","shouldEscalate":false}\n\nRetorne SOMENTE o JSON, sem texto adicional.`
+        const prompt = `${context}\nMensagem do cliente: "${text}"\n\nRetorne JSON com exatamente estas chaves:\n{"intent":"greeting|buy_interest|catalog|quantity|availability_check|title_search|doubt|price_issue|pix_pending|upsell|unknown","confidence":0.0,"quantityDetected":null,"titleDetected":null,"objectionType":null,"sentiment":"positive|neutral|negative","shouldEscalate":false}\n\navailability_check = cliente pergunta se uma série específica está disponível ("você tem X?", "tem essa série?", "vi X, vocês têm?")\ntitleDetected = nome da série mencionada, se houver\n\nRetorne SOMENTE o JSON, sem texto adicional.`
         const r = await this.aiService.generate('groq', { prompt, temperature: 0.1, maxTokens: 120 })
         const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
         const parsed = JSON.parse(raw)
@@ -1348,6 +1442,7 @@ export class FlowExecutionService {
       title_search: 'catalog',
       buy_interest: 'quantity',
       upsell: 'quantity',
+      availability_check: 'availability_check',
     }
     return map[intent] ?? 'unknown'
   }
@@ -1386,5 +1481,159 @@ export class FlowExecutionService {
     if (lead.abandonedPixCount > 0) parts.push(`PIX não finalizado ${lead.abandonedPixCount}x.`)
 
     return parts.join(' ') || 'Lead visitou o bot.'
+  }
+
+  // ─── Configurable intent rules executor ────────────────────────────────────
+
+  private runConfiguredRules(
+    text: string,
+    rules: import('@whatsbot/core').IntentRule[],
+  ): { handle: string; confidence: number; quantityDetected: number | null; titleDetected: string | null } | null {
+    const n = this.normalize(text)
+    let defaultRule: import('@whatsbot/core').IntentRule | null = null
+
+    for (const rule of rules) {
+      if (rule.isDefault) { defaultRule = rule; continue }
+
+      if (rule.extractNumber) {
+        const qty = this.extractQuantity(text)
+        if (qty !== null)
+          return { handle: rule.handle, confidence: 0.93, quantityDetected: qty, titleDetected: null }
+      }
+
+      if (rule.keywords?.length) {
+        if (rule.keywords.every(k => n.includes(this.normalize(k))))
+          return { handle: rule.handle, confidence: 0.90, quantityDetected: null, titleDetected: null }
+      }
+
+      if (rule.patterns?.length) {
+        if (rule.patterns.some(p => n.includes(this.normalize(p))))
+          return { handle: rule.handle, confidence: 0.88, quantityDetected: null, titleDetected: null }
+      }
+    }
+
+    if (defaultRule)
+      return { handle: defaultRule.handle, confidence: 0.60, quantityDetected: null, titleDetected: null }
+
+    return null
+  }
+
+  // ─── AI Agent for classify_intent (unmapped scenarios) ─────────────────────
+
+  private async runIntentAgent(
+    text: string,
+    conversation: Conversation,
+    lead: Lead | undefined,
+    bot: Bot,
+    agentConfig: import('@whatsbot/core').IntentAiAgent,
+  ): Promise<{ action: 'route' | 'respond' | 'handoff'; handle?: string; message?: string; titleDetected?: string; quantityDetected?: number }> {
+    if (!this.aiService) return { action: 'route', handle: 'unknown' }
+
+    const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+    const leadCtx = lead
+      ? `Lead: ${lead.totalSessions} sessões, temperatura ${lead.leadTemperature}, tags [${lead.tags.join(', ')}].`
+      : ''
+    const handlesJson = JSON.stringify(agentConfig.availableHandles ?? [])
+    const canInline = agentConfig.canRespondInline !== false
+
+    const prompt = `${agentConfig.systemPrompt}
+
+${leadCtx}
+Histórico recente:
+${history}
+
+Mensagem do cliente: "${text}"
+
+Handles disponíveis no fluxo:
+${handlesJson}
+
+Decida o que fazer. Retorne SOMENTE JSON válido, sem texto adicional:
+- Rotear para um handle: {"action":"route","handle":"<handle>","titleDetected":"<título ou null>","quantityDetected":<número ou null>}
+${canInline ? '- Responder inline (para dúvidas simples que você pode resolver): {"action":"respond","message":"<sua resposta>"}' : ''}
+- Escalar para humano: {"action":"handoff"}
+
+Regra: só use "respond" se a resposta for factual e curta. Para qualquer ação de compra ou troca, use "route".`
+
+    try {
+      const provider = agentConfig.provider ?? 'groq'
+      const r = await this.aiService.generate(provider, {
+        prompt,
+        temperature: 0.2,
+        maxTokens: 200,
+      })
+      const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
+      const parsed = JSON.parse(raw)
+      return {
+        action: parsed.action ?? 'route',
+        handle: parsed.handle ?? 'unknown',
+        message: parsed.message,
+        titleDetected: parsed.titleDetected ?? undefined,
+        quantityDetected: typeof parsed.quantityDetected === 'number' ? parsed.quantityDetected : undefined,
+      }
+    } catch {
+      return { action: 'route', handle: 'unknown' }
+    }
+  }
+
+  // ─── Capture interceptor (smart side-channel for waiting nodes) ─────────────
+
+  private async runCaptureInterceptor(
+    interceptor: import('@whatsbot/core').CaptureInterceptor,
+    message: string,
+    conversation: Conversation,
+    lead: Lead | undefined,
+    bot: Bot,
+  ): Promise<{ action: 'answer' | 'redirect' | 'ignore'; message?: string; handle?: string }> {
+    if (!this.aiService) return { action: 'ignore' }
+
+    const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+    const leadCtx = lead ? `Lead: ${lead.totalSessions} sessões, temperatura ${lead.leadTemperature}.` : ''
+
+    // Inject configured context variables
+    const ctxVars = (interceptor.contextVariables ?? [])
+      .map(v => `${v}: ${conversation.variables[v] ?? ''}`)
+      .filter(v => !v.endsWith(': '))
+      .join('\n')
+
+    const redirectsJson = JSON.stringify(interceptor.redirectHandles ?? [])
+
+    const prompt = `${interceptor.systemPrompt}
+
+${leadCtx}
+${ctxVars ? `Contexto da conversa:\n${ctxVars}` : ''}
+
+Histórico recente:
+${history}
+
+O bot está aguardando uma ação específica do cliente (ex: imagem de comprovante, confirmação, etc.).
+O cliente enviou uma mensagem inesperada: "${message}"
+
+Redirects disponíveis:
+${redirectsJson}
+
+Decida o que fazer. Retorne SOMENTE JSON válido:
+- Responder a dúvida inline e continuar aguardando: {"action":"answer","message":"<resposta curta e amigável>"}
+- Redirecionar para um caminho do fluxo: {"action":"redirect","handle":"<handle>"}
+- Ignorar e deixar o bot rejeitar normalmente: {"action":"ignore"}
+
+Regra: "answer" só para dúvidas factuais rápidas. "redirect" quando o cliente claramente quer mudar de ação (ex: trocar série, cancelar). "ignore" quando a mensagem é ruído ou incompreensível.`
+
+    try {
+      const provider = interceptor.provider ?? 'groq'
+      const r = await this.aiService.generate(provider, {
+        prompt,
+        temperature: 0.2,
+        maxTokens: 150,
+      })
+      const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
+      const parsed = JSON.parse(raw)
+      return {
+        action: parsed.action ?? 'ignore',
+        message: parsed.message,
+        handle: parsed.handle,
+      }
+    } catch {
+      return { action: 'ignore' }
+    }
   }
 }

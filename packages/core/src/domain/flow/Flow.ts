@@ -114,10 +114,32 @@ export interface AIValidateReceiptNodeData extends NodeData {
   // handles: 'approved' | 'rejected'
 }
 
+export interface IntentRule {
+  handle: string           // edge handle to follow when this rule matches
+  label?: string           // human-readable label for FlowBuilder UI
+  patterns?: string[]      // any pattern present in message (case-insensitive) → match
+  keywords?: string[]      // ALL keywords must be present → match (AND logic)
+  extractNumber?: boolean  // try to extract a number from the message → quantityDetected
+  isDefault?: boolean      // last resort if nothing else matches (before AI)
+}
+
+export interface IntentAiAgent {
+  enabled: boolean
+  provider?: 'groq' | 'claude'   // default: groq
+  systemPrompt: string            // bot context for the AI ("You sell K-dramas for R$6 each...")
+  canRespondInline?: boolean      // AI may answer without following any handle (default: true)
+  availableHandles?: Array<{
+    handle: string
+    description: string           // AI reads this to decide routing
+  }>
+}
+
 export interface ClassifyIntentNodeData extends NodeData {
-  messageVariable?: string  // var to classify (default: last user message)
-  // sets: __rt_intent, __rt_intent_qty, __rt_wants_ad_series
-  // handles: greeting | quantity | ad_series | catalog | pix_pending | price_issue | doubt | unknown
+  messageVariable?: string   // var to classify (default: last user message)
+  intents?: IntentRule[]     // configurable rules — executed in order, first match wins
+  aiAgent?: IntentAiAgent    // AI fallback when no rule matches
+  // runtime vars set: __rt_intent, __rt_confidence, __rt_title_detected,
+  //   __rt_quantity_detected, __rt_sentiment, __rt_ai_responded
 }
 
 export interface DeliverTitleNodeData extends NodeData {
@@ -160,6 +182,21 @@ export interface ConditionNodeData extends NodeData {
   value: string
 }
 
+export interface CaptureInterceptor {
+  enabled: boolean
+  provider?: 'groq' | 'claude'    // default: groq
+  systemPrompt: string             // bot/node context for the AI
+  contextVariables?: string[]      // conversation vars to inject (e.g. __rt_checkout_final_total_brl)
+  redirectHandles?: Array<{
+    handle: string
+    description: string            // AI reads this to decide if message warrants redirect
+  }>
+  // AI decides:
+  //   { action: "answer",   message: "..." }  → replies inline, stays in waiting
+  //   { action: "redirect", handle: "..." }   → follows edge, exits waiting
+  //   { action: "ignore" }                    → falls through to normal rejection/error
+}
+
 export interface CaptureNodeData extends NodeData {
   variableName: string
   validationRegex?: string
@@ -170,6 +207,7 @@ export interface CaptureNodeData extends NodeData {
   recoveryHints?: string[]
   expectedInputType?: 'text' | 'image' | 'document' | 'audio' | 'any'
   timeoutBehavior?: 'suspend' | 'followup' | 'end'
+  interceptor?: CaptureInterceptor  // smart side-channel for off-topic messages
 }
 
 export interface WebhookNodeData extends NodeData {
