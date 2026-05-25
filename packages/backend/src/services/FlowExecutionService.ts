@@ -1481,6 +1481,13 @@ export class FlowExecutionService {
 
   // ─── Configurable intent rules executor ────────────────────────────────────
 
+  private matchPattern(normalized: string, pattern: string): boolean {
+    const p = this.normalize(pattern)
+    // Word-boundary aware: pattern must appear as a full token (not inside a longer word)
+    const esc = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    return new RegExp(`(?:^|[\\s,!?¿¡.])${esc}(?=$|[\\s,!?¿¡.])`, 'i').test(normalized)
+  }
+
   private runConfiguredRules(
     text: string,
     rules: import('@whatsbot/core').IntentRule[],
@@ -1503,7 +1510,7 @@ export class FlowExecutionService {
       }
 
       if (rule.patterns?.length) {
-        if (rule.patterns.some(p => n.includes(this.normalize(p))))
+        if (rule.patterns.some(p => this.matchPattern(n, p)))
           return { handle: rule.handle, confidence: 0.88, quantityDetected: null, titleDetected: null }
       }
     }
