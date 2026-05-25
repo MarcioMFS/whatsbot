@@ -113,6 +113,12 @@ export const api = {
         body: JSON.stringify({ status, resolvedBy }),
       }),
   },
+  paymentIntents: {
+    list: (botId: string, status?: string) =>
+      request<unknown[]>(`/payment-intents/bot/${botId}${status ? `?status=${status}` : ''}`),
+    cancel: (id: string) =>
+      request<unknown>(`/payment-intents/${id}/cancel`, { method: 'PATCH', body: '{}' }),
+  },
   packageOffers: {
     list: (botId: string, includeInactive = false) =>
       request<unknown[]>(`/package-offers/bot/${botId}${includeInactive ? '?includeInactive=true' : ''}`),

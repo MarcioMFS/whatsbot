@@ -26,6 +26,14 @@ export class PostgreSQLPaymentIntentRepository implements PaymentIntentRepositor
     return rows.map(r => this.toDomain(r))
   }
 
+  async findByBot(botId: string, limit = 50): Promise<PaymentIntent[]> {
+    const { rows } = await this.db.query(
+      'SELECT * FROM payment_intents WHERE bot_id = $1 ORDER BY created_at DESC LIMIT $2',
+      [botId, limit],
+    )
+    return rows.map(r => this.toDomain(r))
+  }
+
   async save(intent: PaymentIntent): Promise<void> {
     const d = intent.toJSON()
     await this.db.query(

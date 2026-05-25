@@ -9,6 +9,7 @@ import { Products } from './pages/Products.tsx'
 import { Orders } from './pages/Orders.tsx'
 import { PackageOffers } from './pages/PackageOffers.tsx'
 import { Handoffs } from './pages/Handoffs.tsx'
+import PaymentIntents from './pages/PaymentIntents.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,7 @@ export default function App() {
       <Route path="/bots/:botId/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
       <Route path="/bots/:botId/package-offers" element={<ProtectedRoute><PackageOffers /></ProtectedRoute>} />
       <Route path="/bots/:botId/handoffs" element={<ProtectedRoute><Handoffs /></ProtectedRoute>} />
+      <Route path="/bots/:botId/payment-intents" element={<ProtectedRoute><PaymentIntents /></ProtectedRoute>} />
     </Routes>
   )
 }

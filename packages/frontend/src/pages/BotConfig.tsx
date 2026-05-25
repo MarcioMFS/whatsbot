@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2, Settings2, Activity, Package, ShoppingBag, Tag, PhoneCall } from 'lucide-react'
+import { ArrowLeft, Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch, Trash2, Settings2, Activity, Package, ShoppingBag, Tag, PhoneCall, CreditCard } from 'lucide-react'
 import { Layout } from '../components/ui/Layout.tsx'
 import { GlassCard } from '../components/ui/GlassCard.tsx'
 import { api } from '../api/client.ts'
@@ -233,6 +233,11 @@ export function BotConfig() {
               className="flex items-center gap-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
               <PhoneCall size={14} />
               Handoffs
+            </button>
+            <button onClick={() => navigate(`/bots/${botId}/payment-intents`)}
+              className="flex items-center gap-2 bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">
+              <CreditCard size={14} />
+              Pagamentos
             </button>
             <button onClick={createFlow}
             className="flex items-center gap-2 bg-brand-500/20 hover:bg-brand-500/30 border border-brand-500/30 text-brand-400 text-sm font-medium px-4 py-2 rounded-xl transition-all">

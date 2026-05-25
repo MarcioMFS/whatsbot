@@ -36,6 +36,7 @@ import { orderRoutes } from './routes/orders.js'
 import { packageOfferRoutes } from './routes/packageOffers.js'
 import { handoffRoutes } from './routes/handoffs.js'
 import { PostgreSQLHandoffRepository } from './adapters/PostgreSQLHandoffRepository.js'
+import { paymentIntentRoutes } from './routes/paymentIntents.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -97,6 +98,7 @@ await app.register(productRoutes, { prefix: '/api/products', productRepo })
 await app.register(orderRoutes, { prefix: '/api/orders', orderRepo })
 await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageOfferRepo, botRepo })
 await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo })
+await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)
