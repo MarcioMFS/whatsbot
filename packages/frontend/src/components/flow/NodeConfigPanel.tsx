@@ -2,6 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { X, Settings, ChevronDown, Check } from 'lucide-react'
 
+interface IntentRule {
+  handle: string; label?: string; patterns?: string[]; keywords?: string[]
+  extractNumber?: boolean; isDefault?: boolean
+}
+interface IntentAiAgent {
+  enabled: boolean; provider?: string; systemPrompt: string
+  canRespondInline?: boolean; availableHandles?: Array<{ handle: string; description: string }>
+}
+interface CaptureInterceptorData {
+  enabled: boolean; provider?: string; systemPrompt: string
+  contextVariables?: string[]; redirectHandles?: Array<{ handle: string; description: string }>
+}
+
 interface FlowNode {
   id: string
   type?: string
@@ -173,6 +186,36 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
                 onChange={v => set('recoveryHints', v.split(',').map((h: string) => h.trim()).filter(Boolean))}
                 placeholder="comprovante, enviei, pix, foto"
                 hint="Palavras-chave que disparam recuperação automática da conversa suspensa." />
+            </div>
+            <div className="border-t border-white/5 pt-3 mt-1">
+              <p className="text-xs font-semibold text-violet-400 mb-2">🤖 Interceptor (off-topic)</p>
+              <p className="text-xs text-slate-500 mb-2">IA responde perguntas enquanto o bot aguarda a entrada esperada. O waiting state é preservado.</p>
+              <Toggle label="Ativar interceptor"
+                checked={Boolean((node.data.interceptor as CaptureInterceptorData | undefined)?.enabled)}
+                onChange={v => set('interceptor', { ...((node.data.interceptor as CaptureInterceptorData) ?? { systemPrompt: '' }), enabled: v })} />
+              {(node.data.interceptor as CaptureInterceptorData | undefined)?.enabled && (
+                <>
+                  <Select label="Provider" value={String((node.data.interceptor as CaptureInterceptorData).provider ?? 'groq')}
+                    onChange={v => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), provider: v })}
+                    options={[{ value: 'groq', label: 'Groq (rápido)' }, { value: 'claude', label: 'Claude (preciso)' }]} />
+                  <Field label="System Prompt" value={String((node.data.interceptor as CaptureInterceptorData).systemPrompt ?? '')}
+                    onChange={v => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), systemPrompt: v })}
+                    textarea placeholder="Você é assistente DramaHub. O bot aguarda um comprovante de pagamento Pix." />
+                  <Field label="Variáveis de contexto (vírgula)"
+                    value={String(((node.data.interceptor as CaptureInterceptorData).contextVariables ?? []).join(', '))}
+                    onChange={v => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), contextVariables: v.split(',').map(s => s.trim()).filter(Boolean) })}
+                    placeholder="__rt_checkout_final_total_brl, __rt_cart_count"
+                    hint="Variáveis injetadas no contexto da IA para ela responder com dados reais." />
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-slate-300 mb-1.5">Handles de redirecionamento (opcional)</p>
+                    <AvailableHandlesList
+                      handles={((node.data.interceptor as CaptureInterceptorData).redirectHandles ?? [])}
+                      onChange={handles => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), redirectHandles: handles })}
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">IA decide: <span className="font-mono text-violet-300">answer</span> (responde, fica em waiting) · <span className="font-mono text-violet-300">redirect</span> (segue handle) · <span className="font-mono text-violet-300">ignore</span> (rejeição normal)</p>
+                </>
+              )}
             </div>
           </>
         )}
@@ -391,19 +434,49 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
         {node.type === 'classify_intent' && (
           <>
             <div className="p-3 rounded-xl bg-cyan-400/5 border border-cyan-400/20 mb-2">
-              <p className="text-xs text-cyan-300 font-semibold mb-1">Classify Intent — sem IA</p>
-              <p className="text-xs text-slate-400">Roteamento determinístico por regras. IA só entra no handle <span className="text-slate-300 font-mono">unknown</span>.</p>
+              <p className="text-xs text-cyan-300 font-semibold mb-1">Classify Intent — Híbrido</p>
+              <p className="text-xs text-slate-400">Regras determinísticas primeiro. IA entra como fallback quando nenhuma regra bate.</p>
             </div>
             <Field label="Variável com o texto (opcional)" value={String(node.data.messageVariable ?? '')} onChange={v => set('messageVariable', v)}
               placeholder="deixe vazio = última mensagem do cliente"
               hint="Ex: user_initial_message" />
-            <div className="mt-2 space-y-1">
-              <p className="text-xs text-slate-500 font-semibold">Handles de saída:</p>
-              {['quantity','ad_series','catalog','pix_pending','price_issue','doubt','unknown'].map(h => (
-                <p key={h} className="text-xs text-slate-400 font-mono">→ <span className="text-cyan-300">{h}</span></p>
-              ))}
+
+            <div className="border-t border-white/5 pt-3 mt-1">
+              <p className="text-xs font-semibold text-cyan-400 mb-2">📋 Regras (executadas em ordem)</p>
+              <IntentRuleList
+                rules={(node.data.intents as IntentRule[] | undefined) ?? []}
+                onChange={rules => set('intents', rules)}
+              />
             </div>
-            <p className="text-xs text-slate-500 mt-2">Runtime vars: <span className="text-cyan-300 font-mono">__rt_intent</span> · <span className="text-cyan-300 font-mono">__rt_intent_qty</span> · <span className="text-cyan-300 font-mono">__rt_wants_ad_series</span></p>
+
+            <div className="border-t border-white/5 pt-3 mt-1">
+              <p className="text-xs font-semibold text-purple-400 mb-2">🤖 AI Agent (fallback)</p>
+              <Toggle label="Ativar AI Agent"
+                checked={Boolean((node.data.aiAgent as IntentAiAgent | undefined)?.enabled)}
+                onChange={v => set('aiAgent', { ...((node.data.aiAgent as IntentAiAgent) ?? { systemPrompt: '' }), enabled: v })} />
+              {(node.data.aiAgent as IntentAiAgent | undefined)?.enabled && (
+                <>
+                  <Select label="Provider" value={String((node.data.aiAgent as IntentAiAgent).provider ?? 'groq')}
+                    onChange={v => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), provider: v })}
+                    options={[{ value: 'groq', label: 'Groq (rápido)' }, { value: 'claude', label: 'Claude (preciso)' }]} />
+                  <Field label="System Prompt" value={String((node.data.aiAgent as IntentAiAgent).systemPrompt ?? '')}
+                    onChange={v => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), systemPrompt: v })}
+                    textarea placeholder="Você é assistente do DramaHub. Vende minisséries por R$6." />
+                  <Toggle label="Pode responder inline (sem seguir handle)"
+                    checked={(node.data.aiAgent as IntentAiAgent).canRespondInline !== false}
+                    onChange={v => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), canRespondInline: v })} />
+                  <div className="mt-3">
+                    <p className="text-xs font-medium text-slate-300 mb-1.5">Handles disponíveis para a IA rotear</p>
+                    <AvailableHandlesList
+                      handles={((node.data.aiAgent as IntentAiAgent).availableHandles ?? [])}
+                      onChange={handles => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), availableHandles: handles })}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 mt-2">Runtime vars: <span className="text-cyan-300 font-mono">__rt_intent</span> · <span className="text-cyan-300 font-mono">__rt_confidence</span> · <span className="text-cyan-300 font-mono">__rt_intent_qty</span> · <span className="text-cyan-300 font-mono">__rt_sentiment</span> · <span className="text-cyan-300 font-mono">__rt_ai_responded</span></p>
           </>
         )}
 
@@ -446,6 +519,68 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
           />
         )}
       </div>
+    </div>
+  )
+}
+
+function IntentRuleList({ rules, onChange }: { rules: IntentRule[]; onChange: (r: IntentRule[]) => void }) {
+  const inputCls = "bg-transparent border border-glass-border rounded-lg px-2 py-1 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-brand-500/40"
+  const update = (i: number, patch: Partial<IntentRule>) => { const n = [...rules]; n[i] = { ...n[i], ...patch }; onChange(n) }
+  const remove = (i: number) => onChange(rules.filter((_, idx) => idx !== i))
+  const add = () => onChange([...rules, { handle: '' }])
+  return (
+    <div className="space-y-2">
+      {rules.map((rule, i) => (
+        <div key={i} className="p-2.5 rounded-xl bg-glass-100 border border-glass-border space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <input value={rule.handle} onChange={e => update(i, { handle: e.target.value })}
+              placeholder="handle" className={`w-28 font-mono text-cyan-300 ${inputCls}`} />
+            <input value={rule.label ?? ''} onChange={e => update(i, { label: e.target.value })}
+              placeholder="label (opcional)" className={`flex-1 ${inputCls}`} />
+            <button onClick={() => remove(i)} className="text-slate-600 hover:text-red-400 transition-colors px-1">✕</button>
+          </div>
+          <input value={(rule.patterns ?? []).join(', ')}
+            onChange={e => update(i, { patterns: e.target.value.split(',').map(p => p.trim()).filter(Boolean) })}
+            placeholder="patterns: oi, bom dia (OR — qualquer bate)"
+            className={`w-full ${inputCls}`} />
+          <input value={(rule.keywords ?? []).join(', ')}
+            onChange={e => update(i, { keywords: e.target.value.split(',').map(k => k.trim()).filter(Boolean) })}
+            placeholder="keywords: quero, comprar (AND — todos devem aparecer)"
+            className={`w-full ${inputCls}`} />
+          <div className="flex items-center gap-4 pt-0.5">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={Boolean(rule.extractNumber)} onChange={e => update(i, { extractNumber: e.target.checked })} className="rounded" />
+              <span className="text-xs text-slate-400">Extrair número → <span className="font-mono text-cyan-300">__rt_intent_qty</span></span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" checked={Boolean(rule.isDefault)} onChange={e => update(i, { isDefault: e.target.checked })} className="rounded" />
+              <span className="text-xs text-slate-400">Fallback (antes da IA)</span>
+            </label>
+          </div>
+        </div>
+      ))}
+      <button onClick={add} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">+ Adicionar regra</button>
+    </div>
+  )
+}
+
+function AvailableHandlesList({ handles, onChange }: { handles: Array<{ handle: string; description: string }>; onChange: (h: Array<{ handle: string; description: string }>) => void }) {
+  const inputCls = "bg-transparent border border-glass-border rounded-lg px-2 py-1 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-brand-500/40"
+  const update = (i: number, patch: Partial<{ handle: string; description: string }>) => { const n = [...handles]; n[i] = { ...n[i], ...patch }; onChange(n) }
+  const remove = (i: number) => onChange(handles.filter((_, idx) => idx !== i))
+  const add = () => onChange([...handles, { handle: '', description: '' }])
+  return (
+    <div className="space-y-1.5">
+      {handles.map((h, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <input value={h.handle} onChange={e => update(i, { handle: e.target.value })}
+            placeholder="handle" className={`w-24 font-mono text-cyan-300 ${inputCls}`} />
+          <input value={h.description} onChange={e => update(i, { description: e.target.value })}
+            placeholder="quando usar (IA lê)" className={`flex-1 ${inputCls}`} />
+          <button onClick={() => remove(i)} className="text-slate-600 hover:text-red-400 transition-colors px-1">✕</button>
+        </div>
+      ))}
+      <button onClick={add} className="text-xs text-purple-400 hover:text-purple-300 transition-colors">+ Handle</button>
     </div>
   )
 }

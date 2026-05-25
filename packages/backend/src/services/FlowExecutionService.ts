@@ -1049,22 +1049,9 @@ export class FlowExecutionService {
           return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
         }
 
-        // ── Step 3: legacy hardcoded fallback (deprecated — migrate to node.data.intents) ──
-        const result = await this.classifyIntentRich(text, lead)
-        this.storeIntentResult(conversation, result)
-
-        if (result.shouldEscalate)
-          return flow.getNextNodes(node.id, 'unknown')[0]?.id
-
-        const handle = this.intentToHandle(result.intent)
-
-        if (handle === 'unknown' || result.intent === 'price_issue') {
-          const autoReason: HandoffReason = result.intent === 'price_issue' ? 'price_issue' : 'unknown_intent'
-          this.createHandoff({ bot, conversation, lead, reason: autoReason, lastMessage: text })
-            .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
-        }
-
-        return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+        // No configured rules and no AI agent — fall through to unknown
+        console.warn(`[classify_intent] node "${node.id}" has no intents configured and aiAgent is disabled. Configure data.intents[] in the FlowBuilder.`)
+        return flow.getNextNodes(node.id, 'unknown')[0]?.id
       }
 
       case 'deliver_title': {
