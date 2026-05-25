@@ -381,7 +381,10 @@ export class FlowExecutionService {
         // P3 — intent-first onboarding: if first message already has clear intent, skip intro
         const firstMsg = conversation.getLastUserMessage()
         if (firstMsg) {
-          const preClass = this.quickClassify(firstMsg)
+          // Prefer configured intents from the flow's classify_intent node over hardcoded runRules()
+          const classifyNode = flow.nodes.find(n => n.type === 'classify_intent')
+          const configuredIntents = (classifyNode?.data as import('@whatsbot/core').ClassifyIntentNodeData | undefined)?.intents
+          const preClass = this.quickClassify(firstMsg, configuredIntents)
           if (preClass.confidence >= 0.75) {
             const intentFirstNext = flow.getNextNodes(node.id, 'intent_detected')[0]
             if (intentFirstNext) {
@@ -1339,8 +1342,14 @@ export class FlowExecutionService {
     return null
   }
 
-  /** Lightweight sync classify — used by P3 trigger pre-classify */
-  quickClassify(text: string): { intent: string; confidence: number; quantityDetected: number | null; titleDetected: string | null } {
+  /** Lightweight sync classify — used by P3 trigger pre-classify.
+   *  Prefers flow-configured IntentRules; falls back to hardcoded runRules() for unconfigured flows. */
+  quickClassify(text: string, intents?: import('@whatsbot/core').IntentRule[]): { intent: string; confidence: number; quantityDetected: number | null; titleDetected: string | null } {
+    if (intents?.length) {
+      const r = this.runConfiguredRules(text, intents)
+      if (r) return { intent: r.handle, confidence: r.confidence, quantityDetected: r.quantityDetected, titleDetected: r.titleDetected ?? null }
+      return { intent: 'unknown', confidence: 0.3, quantityDetected: null, titleDetected: null }
+    }
     const result = this.runRules(text)
     if (result) return result
     return { intent: 'unknown', confidence: 0.3, quantityDetected: null, titleDetected: null }
