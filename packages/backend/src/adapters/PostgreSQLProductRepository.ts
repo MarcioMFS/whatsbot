@@ -35,7 +35,7 @@ export class PostgreSQLProductRepository implements ProductRepository {
            normalized_name = $2
            OR normalized_name ILIKE '%' || $2 || '%'
            OR $2 ILIKE '%' || normalized_name || '%'
-           OR similarity(normalized_name, $2) > 0.3
+           OR similarity(normalized_name, $2) > 0.42
            OR EXISTS (
              SELECT 1 FROM jsonb_array_elements_text(aliases) alias
              WHERE alias ILIKE '%' || $2 || '%'
@@ -45,6 +45,32 @@ export class PostgreSQLProductRepository implements ProductRepository {
        ORDER BY sim DESC, name
        LIMIT $3`,
       [botId, normalized, limit],
+    )
+    return rows.map(r => this.toDomain(r))
+  }
+
+  async searchByCategory(botId: string, genre: string, typeHint: string, limit = 5): Promise<Product[]> {
+    const g = genre.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+    const t = typeHint.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
+    // unaccent() normalizes both sides so "ação" matches query "acao"
+    // Score: category match = 2pts, name/description match = 1pt — deterministic, no RANDOM()
+    const { rows } = await this.db.query(
+      `SELECT *,
+         (CASE WHEN $2 <> '' AND unaccent(lower(coalesce(category,''))) ILIKE '%' || $2 || '%' THEN 2 ELSE 0 END
+          + CASE WHEN $3 <> '' AND unaccent(lower(name)) ILIKE '%' || $3 || '%' THEN 1 ELSE 0 END
+          + CASE WHEN $3 <> '' AND unaccent(lower(coalesce(description,''))) ILIKE '%' || $3 || '%' THEN 1 ELSE 0 END
+         ) AS relevance_score
+       FROM products
+       WHERE bot_id = $1 AND is_available = true
+         AND (
+           ($2 = '' OR unaccent(lower(coalesce(category,''))) ILIKE '%' || $2 || '%')
+           OR ($3 = '' OR unaccent(lower(name)) ILIKE '%' || $3 || '%')
+           OR ($3 = '' OR unaccent(lower(coalesce(description,''))) ILIKE '%' || $3 || '%')
+         )
+       ORDER BY relevance_score DESC, name ASC
+       LIMIT $4`,
+      [botId, g, t, limit],
     )
     return rows.map(r => this.toDomain(r))
   }

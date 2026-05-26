@@ -7,6 +7,7 @@ import {
   Cart,
   PricingService,
   parseCurrencyToCentavos,
+  type ConversationPhase,
   type FlowRepository,
   type ConversationRepository,
   type LeadRepository,
@@ -51,8 +52,24 @@ import type { AIGenerationService } from './AIGenerationService.js'
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
 import type { DeliveryService } from './DeliveryService.js'
+import type { ContextualAIRouter } from './ContextualAIRouter.js'
+import type { PaymentPhaseRouter } from './PaymentPhaseRouter.js'
+import { buildBotPersona } from './BotPersonaBuilder.js'
 
 const RECOVERY_THRESHOLD = 0.6
+
+// Structured diagnostic logger — prefix every line with [FES] for easy grep
+function flog(area: string, data: Record<string, unknown>): void {
+  const parts = Object.entries(data).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(' ')
+  console.log(`[FES:${area}] ${parts}`)
+}
+
+// Simple hash for message dedup detection
+function msgHash(s: string): string {
+  let h = 0
+  for (let i = 0; i < Math.min(s.length, 200); i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
+  return (h >>> 0).toString(16)
+}
 
 export class FlowExecutionService {
   constructor(
@@ -70,10 +87,13 @@ export class FlowExecutionService {
     private deliveryService?: DeliveryService,
     private packageOfferRepo?: PackageOfferRepository,
     private handoffRepo?: HandoffRepository,
+    private contextualAIRouter?: ContextualAIRouter,
+    private paymentPhaseRouter?: PaymentPhaseRouter,
   ) {}
 
-  private emit(botId: string, convId: string, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
-    this.eventRepo?.emit({ botId, conversationId: convId, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+  private emit(botId: string, convId: string | null | undefined, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
+    if (!convId) return
+    this.eventRepo?.emit({ botId, conversationId: convId, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(e => console.error('[FlowExecution] event emit failed:', e?.message))
   }
 
   // Scored recovery — returns 0..1, threshold = 0.6
@@ -100,10 +120,76 @@ export class FlowExecutionService {
     return 0.15
   }
 
+  // Returns the ID of the capture node where the conversation should resume after edit_order.
+  // Priority 1: capture → catalog_search (series browsing — correct for support flows)
+  // Priority 2: capture → classify_intent / ai_router (main flow intent classifier)
+  private findMainCaptureNodeId(flow: Flow): string | null {
+    // P1: capture that feeds directly into catalog search
+    for (const edge of flow.edges) {
+      const target = flow.getNodeById(edge.target)
+      if (target?.type !== 'catalog_search') continue
+      const source = flow.getNodeById(edge.source)
+      if (source?.type === 'capture') return source.id
+    }
+    // P2: capture that feeds into intent classifier
+    const intentNodeTypes = new Set(['classify_intent', 'ai_router'])
+    for (const edge of flow.edges) {
+      const target = flow.getNodeById(edge.target)
+      if (!target || !intentNodeTypes.has(target.type)) continue
+      const source = flow.getNodeById(edge.source)
+      if (source?.type === 'capture') return source.id
+    }
+    return null
+  }
+
+  // #5 — log every phase transition with from/to/reason
+  private transitionPhase(conversation: Conversation, newPhase: ConversationPhase, reason: string): void {
+    const from = conversation.phase ?? 'none'
+    if (from !== newPhase) {
+      flog('phase_transition', {
+        layer: 'conversation_state',
+        from,
+        to: newPhase,
+        reason,
+        convId: conversation.id.slice(0, 8),
+        phone: conversation.phoneNumber,
+      })
+    }
+    conversation.setPhase(newPhase)
+  }
+
   private isAcknowledgment(message: string): boolean {
     const acks = ['ok', 'okay', 'obrigado', 'obg', 'valeu', 'vlw', 'tks', 'thanks', 'ótimo', 'otimo', '👍', '🙏']
     const lower = message.toLowerCase().trim()
     return acks.some(a => lower === a || lower.startsWith(a + ' ') || lower.endsWith(' ' + a))
+  }
+
+  // ── Contextual yes/no helpers ────────────────────────────────────────────
+
+  private detectBotQuestionType(lastBotMessage: string | null): 'want_more_items' | 'confirm_suggested_title' | 'confirm_checkout' | 'unknown' {
+    if (!lastBotMessage) return 'unknown'
+    const m = lastBotMessage.toLowerCase()
+    if (/quer mais alguma|mais alguma|quer outra|tem mais alguma|adicionar outra/.test(m)) return 'want_more_items'
+    if (/[eé] essa|[eé] esse|[eé] essa que você quer|encontrei.*cat[aá]logo|no nosso cat[aá]logo/.test(m)) return 'confirm_suggested_title'
+    if (/gero o pix|pode cobrar|gerar o pix|fechar pedido|valor total|finalizar/.test(m)) return 'confirm_checkout'
+    return 'unknown'
+  }
+
+  private isYesMessage(text: string): boolean {
+    const t = text.toLowerCase().trim()
+    // Only exact matches or very short phrases — conservative to avoid false positives
+    const exactYes = new Set(['sim', 's', 'yeah', 'yes', 'claro', 'pode', 'bora', 'isso', 'exato', 'correto'])
+    if (exactYes.has(t)) return true
+    return /^(sim|s|claro|pode|bora|isso|exato|correto)[.!,]?\s*$/.test(t) ||
+           /^(é isso|é essa|é esse|quero|tá bom|pode ser|aham)[.!,]?\s*$/.test(t)
+  }
+
+  private isNoMessage(text: string): boolean {
+    const t = text.toLowerCase().trim()
+    const exactNo = new Set(['não', 'nao', 'n', 'nope', 'negativo'])
+    if (exactNo.has(t)) return true
+    return /^(n[aã]o|n|nope|negativo)[.!,]?\s*$/.test(t) ||
+           /^(n[aã]o quero|n[aã]o obrigado|n[aã]o preciso)[.!,]?\s*$/.test(t)
   }
 
   private canRecover(conversation: Conversation, message: string, hasImage: boolean): boolean {
@@ -129,6 +215,182 @@ export class FlowExecutionService {
     let conversation = await this.convRepo.findActiveByPhone(bot.id, phoneNumber)
     let lead = await this.leadRepo.findByPhone(bot.id, phoneNumber)
 
+    flog('incoming', {
+      phone: phoneNumber,
+      msgId: msgId ?? null,
+      hasImage,
+      msg: message.slice(0, 80),
+      convStatus: conversation?.status ?? 'none',
+      convNode: conversation?.currentNodeId ?? null,
+      convPhase: conversation?.phase ?? null,
+      leadTags: lead?.tags ?? [],
+    })
+
+    // Guard: conversation in human handoff — log but do not process through flow
+    if (conversation?.status === 'handoff') {
+      console.log(`[FlowExecution] message_during_handoff for ${phoneNumber}: "${message.slice(0, 60)}"`)
+      return
+    }
+
+    // Guard: awaiting_payment phase — route through dedicated PaymentPhaseRouter (images bypass, go to receipt node)
+    if (conversation && !hasImage && conversation.phase === 'awaiting_payment' && this.paymentPhaseRouter) {
+      const cart = Cart.fromVariables(conversation.variables)
+      const history = conversation.history.slice(-6)
+      const lastBotMessage = [...history].reverse().find(m => m.role === 'assistant')?.content ?? null
+      const paymentIntentId =
+        conversation.variables['__rt_checkout_payment_id'] ??
+        conversation.variables['paymentIntentId'] ??
+        null
+      const minutesSincePixGenerated = Math.floor((Date.now() - conversation.updatedAt.getTime()) / 60_000)
+
+      const decision = await this.paymentPhaseRouter.route({
+        userMessage: message,
+        lastBotMessage,
+        cartItems: cart.items,
+        cartTotalBrl: cart.totalInBRL,
+        paymentIntentId,
+        minutesSincePixGenerated,
+        hasImage: false,
+        persona: buildBotPersona(bot.globalConfig, bot.id),
+      })
+
+      const instance = bot.evolutionConfig.instanceName
+      const instanceId = bot.evolutionConfig.instanceId ?? ''
+
+      switch (decision.intent) {
+        case 'receipt_sent': {
+          const reply = 'Perfeito 😊 Agora me envie o print/comprovante do Pix por aqui para eu confirmar.'
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+          conversation.addAssistantMessage(reply)
+          await this.convRepo.save(conversation)
+          return
+        }
+        case 'payment_help': {
+          const reply = decision.reply || 'Pode me descrever melhor o que está acontecendo? Vou te ajudar 😊'
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+          conversation.addAssistantMessage(reply)
+          await this.convRepo.save(conversation)
+          return
+        }
+        case 'edit_order': {
+          // Cancel the active PaymentIntent in the DB so the old Pix is invalid
+          if (this.paymentIntentRepo) {
+            const activeIntent = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+            if (activeIntent) {
+              activeIntent.cancel()
+              await this.paymentIntentRepo.save(activeIntent)
+              console.log(`[PaymentPhaseRouter] cancelled payment_intent=${activeIntent.id} for conv=${conversation.id}`)
+            }
+          }
+
+          // Clear payment vars (keep cart — user can add more or swap below)
+          const pixCancelled = !!conversation.variables['__rt_checkout_payment_id']
+          conversation.setVariable('__rt_checkout_payment_id', '')
+          conversation.setVariable('paymentIntentId', '')
+          this.transitionPhase(conversation, 'browsing_catalog', 'edit_order_intent')
+
+          // #2 PaymentPhaseRouter action log
+          flog('payment_router:action', {
+            layer: 'payment_router',
+            intent: 'edit_order',
+            paymentIntentId,
+            pixCancelled,
+            cartPreserved: true,
+            cartCount: cart.items.length,
+            cartTotal: cart.totalInBRL,
+          })
+
+          // Move conversation back to the main capture node so the next message flows normally.
+          // Use the conversation's own flowId so support flows (buyer tag) land correctly.
+          const editFlowId = conversation.flowId ?? bot.activeFlowId!
+          const editFlow = await this.flowRepo.findById(editFlowId)
+          if (editFlow) {
+            const mainCaptureId = this.findMainCaptureNodeId(editFlow)
+            if (mainCaptureId) {
+              conversation.moveToNode(mainCaptureId)
+            }
+          }
+
+          // Build current cart context so the user knows what's still in the bag
+          const currentCart = Cart.fromVariables(conversation.variables)
+          let cartInfo = ''
+          if (!currentCart.isEmpty) {
+            const items = currentCart.items.map(i => `• ${i.name}`).join('\n')
+            cartInfo = `\n\nSeu carrinho atual:\n${items}\n\nMe diz o que quer mudar — pode adicionar, trocar ou tirar séries 😊`
+          }
+
+          const reply = `Sem problema 😊 Cancelei o Pix gerado.${cartInfo || '\n\nMe fala quais séries você quer deixar!'}`
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+          conversation.addAssistantMessage(reply)
+          await this.convRepo.save(conversation)
+          return
+        }
+        case 'cancel_order': {
+          // Cancel the active PaymentIntent in the DB
+          if (this.paymentIntentRepo) {
+            const activeIntent = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+            if (activeIntent) {
+              activeIntent.cancel()
+              await this.paymentIntentRepo.save(activeIntent)
+              console.log(`[PaymentPhaseRouter] cancelled payment_intent=${activeIntent.id} for conv=${conversation.id}`)
+            }
+          }
+
+          // Clear payment vars + cart
+          const cancelPixCancelled = !!conversation.variables['__rt_checkout_payment_id']
+          conversation.setVariable('__rt_checkout_payment_id', '')
+          conversation.setVariable('paymentIntentId', '')
+          for (const key of Cart.clearKeys()) {
+            conversation.setVariable(key, '')
+          }
+
+          // #2 + #10 cancel_order log
+          flog('payment_router:action', {
+            layer: 'payment_router',
+            intent: 'cancel_order',
+            paymentIntentId,
+            pixCancelled: cancelPixCancelled,
+            cartPreserved: false,
+            cartCleared: true,
+          })
+          flog('analytics:abandonment', {
+            layer: 'business_analytics',
+            event: 'order_cancelled',
+            abandonmentPhase: 'awaiting_payment',
+            phone: phoneNumber,
+            cartCount: cart.items.length,
+            cartTotal: cart.totalInBRL,
+          })
+
+          const reply = 'Tudo bem, sem pressão! 😊 Qualquer hora que quiser voltar é só chamar. Até mais!'
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+          conversation.addAssistantMessage(reply)
+          conversation.end()
+          await this.convRepo.save(conversation)
+          return
+        }
+        case 'internal_takeover': {
+          const reply = 'Claro 😊 Vou verificar isso com mais cuidado pra te ajudar certinho.'
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+          conversation.addAssistantMessage(reply)
+          await this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: message })
+          conversation.handoff()
+          await this.convRepo.save(conversation)
+          return
+        }
+        case 'noise':
+        default: {
+          const reply = decision.reply || 'Perfeito 😊 Qualquer hora me envie o comprovante do Pix!'
+          if (reply) {
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
+            conversation.addAssistantMessage(reply)
+          }
+          await this.convRepo.save(conversation)
+          return
+        }
+      }
+    }
+
     // Recovery: suspended conversation takes priority over starting a new flow
     if (conversation && this.canRecover(conversation, message, hasImage)) {
       const score = this.recoveryScore(message, conversation.snapshot, hasImage)
@@ -150,7 +412,7 @@ export class FlowExecutionService {
 
       if (!hasDedicatedSupportFlow && this.isAcknowledgment(message)) {
         console.log(`[FlowExecution] start_flow_blocked_buyer_recent_payment for ${phoneNumber} — ack "${message}"`)
-        this.emit(bot.id, conversation?.id ?? 'none', phoneNumber, 'post_purchase_support_started', {
+        this.emit(bot.id, conversation?.id, phoneNumber, 'post_purchase_support_started', {
           trigger: message,
           inline: true,
           lastPaymentConfirmedAt: lead.lastPaymentConfirmedAt?.toISOString(),
@@ -166,7 +428,7 @@ export class FlowExecutionService {
 
       if (hasDedicatedSupportFlow) {
         console.log(`[FlowExecution] post_purchase_support_started for ${phoneNumber} → flow ${resolvedFlowId}`)
-        this.emit(bot.id, conversation?.id ?? 'none', phoneNumber, 'post_purchase_support_started', {
+        this.emit(bot.id, conversation?.id, phoneNumber, 'post_purchase_support_started', {
           trigger: message,
           supportFlowId: resolvedFlowId,
           lastPaymentConfirmedAt: lead.lastPaymentConfirmedAt?.toISOString(),
@@ -174,7 +436,6 @@ export class FlowExecutionService {
       }
     }
 
-    // resolve flow: routing rules take priority for new conversations
     const flowId = isNewConversation
       ? (bot.resolveFlowId(lead?.tags ?? []) ?? bot.activeFlowId)
       : conversation!.flowId
@@ -330,6 +591,14 @@ export class FlowExecutionService {
     let steps = 0
     const isStart = conversation.currentNodeId === flow.getTriggerNode().id
 
+    flog('executeFlow', {
+      flowId: flow.id,
+      startNode: conversation.currentNodeId,
+      isStart,
+      convStatus: conversation.status,
+      convPhase: conversation.phase ?? null,
+    })
+
     if (isStart) {
       this.emit(bot.id, conversation.id, conversation.phoneNumber, 'flow_started', { flowId: flow.id })
     }
@@ -339,6 +608,7 @@ export class FlowExecutionService {
         const node = flow.getNodeById(conversation.currentNodeId)
         if (!node || node.type === 'end') {
           conversation.end()
+          flog('executeFlow:end', { steps, nodeId: conversation.currentNodeId, reason: !node ? 'node_not_found' : 'end_node' })
           this.emit(bot.id, conversation.id, conversation.phoneNumber, 'flow_completed', { flowId: flow.id, steps })
           // P2 — persist last state + generate context summary
           if (lead) {
@@ -348,7 +618,9 @@ export class FlowExecutionService {
           break
         }
 
+        flog('executeNode:enter', { step: steps, nodeId: node.id, nodeType: node.type })
         const nextNodeId = await this.executeNode(bot, flow, conversation, node, lead)
+        flog('executeNode:exit', { nodeId: node.id, nodeType: node.type, nextNodeId: nextNodeId ?? null })
 
         if (nextNodeId === null) break // waiting for user input
         if (!nextNodeId) {
@@ -406,6 +678,7 @@ export class FlowExecutionService {
       case 'text_message': {
         const data = node.data as TextNodeData
         const msg = this.interpolate(data.message, conversation.variables)
+        flog('msg:send', { nodeId: node.id, nodeType: 'text_message', hash: msgHash(msg), len: msg.length })
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
@@ -413,10 +686,15 @@ export class FlowExecutionService {
 
       case 'ai_response': {
         const data = node.data as AIResponseNodeData
-        const systemPrompt = bot.buildSystemPrompt()
+        // Prefer node-level systemPrompt over bot default (allows per-node AI personas)
+        const systemPrompt = (data as Record<string, unknown>).systemPrompt as string | undefined
+          ?? bot.buildSystemPrompt()
         const imageBase64 = conversation.variables['__imageBase64']
         if (imageBase64) conversation.setVariable('__imageBase64', '') // consume — não reutilizar
-        const provider = imageBase64 ? 'claude' : bot.aiConfig.provider
+        const nodeProvider = (data as Record<string, unknown>).provider as string | undefined
+        const provider = imageBase64 ? 'claude' : (nodeProvider ?? bot.aiConfig.provider)
+        const nodeTemp = (data as Record<string, unknown>).temperature as number | undefined
+        const nodeMaxTokens = (data as Record<string, unknown>).maxTokens as number | undefined
         try {
           const result = await this.aiService.generate(provider, {
             systemPrompt,
@@ -424,8 +702,8 @@ export class FlowExecutionService {
             history: data.useHistory ? conversation.history.slice(-10) : [],
             userMessage: conversation.getLastUserMessage() ?? '',
             variables: conversation.variables,
-            temperature: bot.aiConfig.temperature,
-            maxTokens: bot.aiConfig.maxTokens,
+            temperature: nodeTemp ?? bot.aiConfig.temperature,
+            maxTokens: nodeMaxTokens ?? bot.aiConfig.maxTokens,
             cacheSystemPrompt: true,
             imageBase64,
           })
@@ -458,8 +736,13 @@ export class FlowExecutionService {
 
       case 'notification': {
         const data = node.data as NotificationNodeData
-        const msg = this.interpolate(data.message, conversation.variables)
-        const target = this.interpolate(data.phoneNumber, conversation.variables)
+        const notifVars = {
+          ...conversation.variables,
+          phone: conversation.phoneNumber,
+          message: conversation.getLastUserMessage() ?? '',
+        }
+        const msg = this.interpolate(data.message, notifVars)
+        const target = this.interpolate(data.phoneNumber, notifVars) || bot.globalConfig?.ownerPhone
         if (target && msg) {
           try {
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: target, message: msg })
@@ -581,6 +864,7 @@ export class FlowExecutionService {
         const value = conversation.variables[data.variable] ?? ''
         const matched = this.evaluateCondition(value, data.operator, data.value)
         const nexts = flow.getNextNodes(node.id, matched ? 'true' : 'false')
+        flog('condition', { nodeId: node.id, variable: data.variable, value: value.slice(0, 60), operator: data.operator, expected: data.value, matched, next: nexts[0]?.id ?? null })
         return nexts[0]?.id
       }
 
@@ -665,6 +949,30 @@ export class FlowExecutionService {
           if (newCount >= 2) {
             this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '' }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           }
+
+          // Notify owner when amount doesn't match (paid more or less than expected)
+          if (result.decision.reason === 'amount_mismatch') {
+            const ownerPhone = bot.globalConfig?.ownerPhone
+            if (ownerPhone) {
+              const debug = result.decision.debugInfo ?? {}
+              const paid = debug['extracted'] != null
+                ? `R$ ${(Number(debug['extracted']) / 100).toFixed(2)}`
+                : '?'
+              const expected = debug['expected'] != null
+                ? `R$ ${(Number(debug['expected']) / 100).toFixed(2)}`
+                : '?'
+              const diff = debug['diffCentavos'] != null
+                ? Number(debug['diffCentavos']) / 100
+                : null
+              const diffStr = diff != null
+                ? diff > 0 ? `pagou R$ ${diff.toFixed(2)} a mais` : `pagou R$ ${Math.abs(diff).toFixed(2)} a menos`
+                : 'valor divergente'
+              await this.messaging.sendMessage({
+                instanceName: instance, instanceId, phoneNumber: ownerPhone,
+                message: `⚠️ *Valor divergente* — ${phone}\nEsperado: ${expected} | Recebido: ${paid} (${diffStr})\nConversa: ${conversation.id.slice(0, 8)}`,
+              }).catch(e => console.error('[FlowExecution] owner amount_mismatch notify failed:', e?.message))
+            }
+          }
         }
         const handle = result.decision.approved ? 'approved' : 'rejected'
         const next = flow.getNextNodes(node.id, handle)
@@ -677,7 +985,7 @@ export class FlowExecutionService {
           lead.recordPaymentConfirmed()
           conversation.setVariable('__lead_tags', lead.tags.join(','))
         }
-        conversation.setPhase('post_purchase')
+        this.transitionPhase(conversation, 'post_purchase', 'payment_confirmed')
         console.log(`[FlowExecution] payment_confirmed for ${conversation.phoneNumber}`)
 
         // Commerce: create Order from cart and deliver access links
@@ -737,12 +1045,17 @@ export class FlowExecutionService {
 
       case 'catalog_search': {
         const data = node.data as CatalogSearchNodeData
-        const query = data.searchFrom
-          ? (conversation.variables[data.searchFrom] ?? conversation.getLastUserMessage() ?? '')
-          : (conversation.getLastUserMessage() ?? '')
+        // __rt_router_candidate_query has highest priority — set by ai_router for title/partial searches
+        const candidateOverride = conversation.variables['__rt_router_candidate_query']
+        if (candidateOverride) delete conversation.variables['__rt_router_candidate_query']
+
+        const queryFromVar = candidateOverride
+          ?? (data.searchFrom ? (conversation.variables[data.searchFrom] ?? '') : '')
+        const query = queryFromVar || (conversation.getLastUserMessage() ?? '')
+        flog('catalog_search', { nodeId: node.id, query: query.slice(0, 80), candidateOverride: candidateOverride ?? null, searchFrom: data.searchFrom ?? null })
 
         conversation.setVariable('__rt_search_query', query)
-        conversation.setPhase('browsing_catalog')
+        this.transitionPhase(conversation, 'browsing_catalog', 'catalog_search_node')
 
         if (!this.catalogSearchService) {
           console.warn('[FlowExecution] catalog_search: no CatalogSearchService — routing not_found')
@@ -755,6 +1068,13 @@ export class FlowExecutionService {
         })
 
         if (result.products.length === 0) {
+          flog('catalog_search:result', { query: query.slice(0, 80), found: 0, unresolved: result.unresolved, decision: 'not_found' })
+          flog('analytics:search', {
+            layer: 'business_analytics',
+            event: 'title_not_found',
+            requestedTitle: query.slice(0, 80),
+            phone,
+          })
           conversation.setVariable('__rt_has_unresolved', 'true')
           conversation.setVariable('__rt_search_unresolved', JSON.stringify(result.unresolved))
           this.emit(bot.id, conversation.id, phone, 'product_not_found', { query, unresolved: result.unresolved })
@@ -763,13 +1083,45 @@ export class FlowExecutionService {
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
 
-        const foundItems: CartItem[] = result.products.map(r => ({
-          productId: r.product.id,
-          name: r.product.name,
-          priceCentavos: r.product.priceCentavos,
-          accessLink: r.product.accessLink,
-        }))
+        // Only the top result per search action — avoids adding multiple products for vague queries
+        const top = result.products[0]
+        flog('catalog_search:result', { query: query.slice(0, 80), found: result.products.length, topProduct: top.product.name, confidence: top.confidence, unresolved: result.unresolved.length, decision: 'found' })
+
+        // #7 Anti-hallucination: compare what the AI extracted vs what DB matched.
+        // Only meaningful for full title searches (≥3 words). Keyword queries (e.g. "doutor")
+        // will never literally match the product name — skip to avoid false positives.
+        const aiSuggestedTitle = top.searchQuery?.trim() ?? query
+        const catalogMatchedTitle = top.product.name
+        const isFullTitleSearch = aiSuggestedTitle.split(/\s+/).filter(Boolean).length >= 3
+        if (isFullTitleSearch && aiSuggestedTitle.toLowerCase() !== catalogMatchedTitle.toLowerCase()) {
+          flog('antihallucination:catalog', {
+            layer: 'anti_hallucination',
+            aiSuggestedTitle,
+            catalogMatchedTitle,
+            confidence: top.confidence,
+            divergent: true,
+            alert: top.confidence < 0.85 ? 'LOW_CONFIDENCE_MISMATCH' : null,
+            query: query.slice(0, 80),
+          })
+        }
+
+        // #10 Business analytics: track requested title
+        flog('analytics:search', {
+          layer: 'business_analytics',
+          event: 'title_found',
+          requestedTitle: query.slice(0, 80),
+          matchedTitle: catalogMatchedTitle,
+          confidence: top.confidence,
+          phone,
+        })
+        const foundItems: CartItem[] = [{
+          productId: top.product.id,
+          name: top.product.name,
+          priceCentavos: top.product.priceCentavos,
+          accessLink: top.product.accessLink,
+        }]
         conversation.setVariable('__rt_catalog_found', JSON.stringify(foundItems))
+        conversation.setVariable('__rt_last_added_name', top.product.name)
         conversation.setVariable('__rt_has_unresolved', result.unresolved.length > 0 ? 'true' : 'false')
         conversation.setVariable('__rt_search_unresolved', JSON.stringify(result.unresolved))
 
@@ -810,13 +1162,43 @@ export class FlowExecutionService {
         this.emit(bot.id, conversation.id, phone, 'product_added_to_cart', {
           count: items.length, cartTotal: cart.totalCentavos, cartCount: cart.count,
         })
-        conversation.setPhase('building_cart')
+        this.transitionPhase(conversation, 'building_cart', 'cart_add_success')
+        flog('analytics:cart', {
+          layer: 'business_analytics',
+          event: 'item_added',
+          itemCount: items.length,
+          cartCount: cart.count,
+          cartTotalCentavos: cart.totalCentavos,
+          items: items.map(i => i.name),
+          phone,
+        })
         return flow.getNextNodes(node.id, 'success')[0]?.id ?? flow.getNextNodes(node.id)[0]?.id
       }
 
       case 'cart_summary': {
         const data = node.data as CartSummaryNodeData
         const cart = Cart.fromVariables(conversation.variables)
+
+        // Idempotency: if checkout already created a PaymentIntent for this conversation
+        // (job-retry scenario), skip resending the cart summary and proceed silently
+        if (this.paymentIntentRepo) {
+          const existingForSummary = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+          if (existingForSummary) {
+            flog('dedup:cart_summary', { layer: 'dedup', nodeId: node.id, existingIntentId: existingForSummary.id, duplicatePrevented: true })
+            console.log(`[cart_summary] skipping resend — pending intent=${existingForSummary.id} already exists`)
+            return flow.getNextNodes(node.id)[0]?.id
+          }
+        }
+
+        // Empty cart guard — never show summary with 0 items
+        if (cart.isEmpty) {
+          console.log('[cart_summary] cart is empty — sending guidance instead')
+          await this.messaging.sendMessage({
+            instanceName: instance, instanceId, phoneNumber: phone,
+            message: 'Seu carrinho ainda está vazio 😅 Me fala o que você quer adicionar!',
+          })
+          return flow.getNextNodes(node.id, 'empty')[0]?.id ?? null
+        }
 
         // Run PricingService — PackageOffer is a pricing layer, NOT a product
         const offers = this.packageOfferRepo ? await this.packageOfferRepo.findByBotId(bot.id) : []
@@ -828,7 +1210,7 @@ export class FlowExecutionService {
 
         const hasDiscount = pricing.discountCentavos > 0
         const defaultTemplate = hasDiscount
-          ? `🛒 *Seu pedido:*\n\n${cart.toSummaryLines().join('\n')}\n\n📦 ${pricing.itemCount} série(s)\n💰 Valor original: ${PricingService.formatBRL(pricing.originalTotalCentavos)}\n🎁 Pacote: ${pricing.appliedOfferName}\n✂️ Desconto: ${PricingService.formatBRL(pricing.discountCentavos)}\n\n✅ *Total final: ${PricingService.formatBRL(pricing.finalTotalCentavos)}*`
+          ? `🛒 *Seu pedido:*\n\n${cart.toSummaryLines().join('\n')}\n\n📦 ${pricing.itemCount} item${pricing.itemCount !== 1 ? 's' : ''}\n💰 Valor original: ${PricingService.formatBRL(pricing.originalTotalCentavos)}\n🎁 Pacote: ${pricing.appliedOfferName}\n✂️ Desconto: ${PricingService.formatBRL(pricing.discountCentavos)}\n\n✅ *Total final: ${PricingService.formatBRL(pricing.finalTotalCentavos)}*`
           : `🛒 *Seu carrinho* (${cart.count} item${cart.count !== 1 ? 's' : ''}):\n\n${cart.toSummaryLines().join('\n')}\n\n💰 *Total: ${cart.totalInBRL}*`
 
         const template = data.messageTemplate ?? defaultTemplate
@@ -866,37 +1248,50 @@ export class FlowExecutionService {
           const pricingVars = PricingService.toPricingVars(pricing)
           for (const [k, v] of Object.entries(pricingVars)) conversation.setVariable(k, v)
 
-          const expiresAt = new Date(Date.now() + (data.expiresInMinutes ?? 60) * 60 * 1000)
-          const intent = PaymentIntent.create({
-            botId: bot.id,
-            leadId: lead?.id ?? conversation.phoneNumber,
-            conversationId: conversation.id,
-            amount: pricing.finalTotalCentavos, // final price after package offer
-            receiverKey,
-            receiverName,
-            expiresAt,
-          })
-          await this.paymentIntentRepo.save(intent)
+          // Idempotency: if a pending intent already exists for this conversation (job retry scenario),
+          // re-use it instead of creating a duplicate
+          const existingIntent = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+          let intent: PaymentIntent
+          if (existingIntent) {
+            flog('dedup:checkout', { layer: 'dedup', nodeId: node.id, existingIntentId: existingIntent.id, duplicatePrevented: true })
+            console.log(`[checkout] reusing existing intent=${existingIntent.id} for conv=${conversation.id}`)
+            intent = existingIntent
+          } else {
+            const expiresAt = new Date(Date.now() + (data.expiresInMinutes ?? 60) * 60 * 1000)
+            intent = PaymentIntent.create({
+              botId: bot.id,
+              leadId: lead?.id ?? conversation.phoneNumber,
+              conversationId: conversation.id,
+              amount: pricing.finalTotalCentavos,
+              receiverKey,
+              receiverName,
+              expiresAt,
+            })
+            await this.paymentIntentRepo.save(intent)
+          }
 
           const outputVar = data.outputVariable ?? '__rt_checkout_payment_id'
           conversation.setVariable(outputVar, intent.id)
           conversation.setVariable('__rt_checkout_payment_id', intent.id)
 
-          const finalAmountBrl = PricingService.formatBRL(pricing.finalTotalCentavos)
-          const hasDiscount = pricing.discountCentavos > 0
-          const discountLine = hasDiscount
-            ? `\n_Pacote aplicado: ${pricing.appliedOfferName} — desconto de ${PricingService.formatBRL(pricing.discountCentavos)}_`
-            : ''
-          const pixTemplate = data.pixMessage
-            ?? `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalAmountBrl}*\nFavorecido: ${receiverName}${discountLine}\n\n_Copie a chave acima e realize o pagamento no seu banco._`
-          const pixMsg = this.interpolate(pixTemplate, {
-            ...conversation.variables,
-            ...pricingVars,
-            amount: finalAmountBrl,
-            pixKey: receiverKey,
-            pixName: receiverName,
-          })
-          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+          // Only send PIX message if this is a fresh intent (not a retry re-using an existing one)
+          if (!existingIntent) {
+            const finalAmountBrl = PricingService.formatBRL(pricing.finalTotalCentavos)
+            const hasDiscount = pricing.discountCentavos > 0
+            const discountLine = hasDiscount
+              ? `\n_Pacote aplicado: ${pricing.appliedOfferName} — desconto de ${PricingService.formatBRL(pricing.discountCentavos)}_`
+              : ''
+            const pixTemplate = data.pixMessage
+              ?? `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalAmountBrl}*\nFavorecido: ${receiverName}${discountLine}\n\n_Copie a chave acima e realize o pagamento no seu banco._`
+            const pixMsg = this.interpolate(pixTemplate, {
+              ...conversation.variables,
+              ...pricingVars,
+              amount: finalAmountBrl,
+              pixKey: receiverKey,
+              pixName: receiverName,
+            })
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+          }
 
           this.emit(bot.id, conversation.id, phone, 'checkout_initiated', {
             paymentIntentId: intent.id,
@@ -909,7 +1304,16 @@ export class FlowExecutionService {
           this.emit(bot.id, conversation.id, phone, 'payment_requested', {
             paymentIntentId: intent.id, amount: pricing.finalTotalCentavos, receiverKey,
           })
-          conversation.setPhase('awaiting_payment')
+          this.transitionPhase(conversation, 'awaiting_payment', 'checkout_pix_sent')
+          flog('analytics:checkout', {
+            layer: 'business_analytics',
+            event: 'checkout_initiated',
+            paymentIntentId: intent.id,
+            finalAmountBrl: pricing.finalTotalCentavos / 100,
+            itemCount: cart.count,
+            discountApplied: pricing.discountCentavos > 0,
+            phone,
+          })
           return flow.getNextNodes(node.id, 'success')[0]?.id
         } catch (err) {
           console.error('[FlowExecution] checkout error:', err)
@@ -951,33 +1355,44 @@ export class FlowExecutionService {
           conversation.setVariable('__rt_remaining_slots', String(qty))
           conversation.setVariable('__rt_delivered_slots', '0')
 
-          const expiresAt = new Date(Date.now() + (data.expiresInMinutes ?? 60) * 60 * 1000)
-          const intent = PaymentIntent.create({
-            botId: bot.id,
-            leadId: lead?.id ?? conversation.phoneNumber,
-            conversationId: conversation.id,
-            amount: pricing.finalTotalCentavos,
-            receiverKey,
-            receiverName,
-            expiresAt,
-          })
-          await this.paymentIntentRepo.save(intent)
+          // Idempotency: reuse existing pending intent on job retry
+          const existingPkgIntent = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+          let pkgIntent: PaymentIntent
+          if (existingPkgIntent) {
+            flog('dedup:package_pix', { layer: 'dedup', nodeId: node.id, existingIntentId: existingPkgIntent.id, duplicatePrevented: true })
+            console.log(`[package_pix] reusing existing intent=${existingPkgIntent.id} for conv=${conversation.id}`)
+            pkgIntent = existingPkgIntent
+          } else {
+            const expiresAt = new Date(Date.now() + (data.expiresInMinutes ?? 60) * 60 * 1000)
+            pkgIntent = PaymentIntent.create({
+              botId: bot.id,
+              leadId: lead?.id ?? conversation.phoneNumber,
+              conversationId: conversation.id,
+              amount: pricing.finalTotalCentavos,
+              receiverKey,
+              receiverName,
+              expiresAt,
+            })
+            await this.paymentIntentRepo.save(pkgIntent)
+          }
 
           const outputVar = data.outputVariable ?? 'paymentIntentId'
-          conversation.setVariable(outputVar, intent.id)
+          conversation.setVariable(outputVar, pkgIntent.id)
 
-          const finalBrl = PricingService.formatBRL(pricing.finalTotalCentavos)
-          const hasDiscount = pricing.discountCentavos > 0
-          const offerLine = hasDiscount
-            ? `\n_${pricing.appliedOfferName}: ${PricingService.formatBRL(pricing.originalTotalCentavos)} → *${finalBrl}*_`
-            : ''
-          const pixMsg = `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalBrl}*\nFavorecido: ${receiverName}${offerLine}\n\n_Copie a chave e pague no seu banco. Depois me envie o comprovante 🚀_`
-          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+          if (!existingPkgIntent) {
+            const finalBrl = PricingService.formatBRL(pricing.finalTotalCentavos)
+            const hasDiscount = pricing.discountCentavos > 0
+            const offerLine = hasDiscount
+              ? `\n_${pricing.appliedOfferName}: ${PricingService.formatBRL(pricing.originalTotalCentavos)} → *${finalBrl}*_`
+              : ''
+            const pixMsg = `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalBrl}*\nFavorecido: ${receiverName}${offerLine}\n\n_Copie a chave e pague no seu banco. Depois me envie o comprovante 🚀_`
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+          }
 
           this.emit(bot.id, conversation.id, phone, 'payment_requested', {
-            paymentIntentId: intent.id, amount: pricing.finalTotalCentavos, receiverKey,
+            paymentIntentId: pkgIntent.id, amount: pricing.finalTotalCentavos, receiverKey,
           })
-          conversation.setPhase('awaiting_payment')
+          this.transitionPhase(conversation, 'awaiting_payment', 'package_pix_sent')
           return flow.getNextNodes(node.id, 'success')[0]?.id
         } catch (err) {
           console.error('[FlowExecution] package_pix error:', err)
@@ -988,6 +1403,84 @@ export class FlowExecutionService {
 
       case 'classify_intent': {
         const data = node.data as ClassifyIntentNodeData
+
+        // Catalog paste guard — runs before any classification
+        {
+          const rawText = data.messageVariable
+            ? (conversation.variables[data.messageVariable] ?? '')
+            : (conversation.getLastUserMessage() ?? '')
+          if (this.isCatalogPaste(rawText)) {
+            console.log('[classify_intent] catalog_paste detected — sending guidance')
+            await this.messaging.sendMessage({
+              instanceName: bot.evolutionConfig.instanceName,
+              instanceId: bot.evolutionConfig.instanceId,
+              phoneNumber: conversation.phoneNumber,
+              message: 'Vi que você colou uma lista do catálogo 😊 Me fala só o nome do item que você quer, ou pode mandar mais de um separado por vírgula.',
+            })
+            return null
+          }
+        }
+
+        // ── Contextual yes/no interception ─────────────────────────────────
+        // Must run before runConfiguredRules so "sim"/"não" isn't swallowed by greeting patterns
+        {
+          const rawText = data.messageVariable
+            ? (conversation.variables[data.messageVariable] ?? '')
+            : (conversation.getLastUserMessage() ?? '')
+          const isYes = this.isYesMessage(rawText)
+          const isNo = this.isNoMessage(rawText)
+
+          if (isYes || isNo) {
+            const lastBotMsg = [...conversation.history].reverse().find(m => m.role === 'assistant')?.content ?? null
+            const qType = this.detectBotQuestionType(lastBotMsg)
+            const cart = Cart.fromVariables(conversation.variables)
+            const instance = bot.evolutionConfig.instanceName
+            const instanceId = bot.evolutionConfig.instanceId
+            const phone = conversation.phoneNumber
+
+            if (qType === 'want_more_items') {
+              if (isYes) {
+                // User wants more titles → keep them in the flow, route to greeting (loops to capture)
+                console.log(`[classify_intent] yes_no_context: want_more_items+yes → greeting`)
+                conversation.setVariable('__rt_yes_no_context', 'want_more_yes')
+                return flow.getNextNodes(node.id, 'greeting')[0]?.id ?? null
+              } else {
+                // User is done → go to checkout if cart has items
+                if (!cart.isEmpty) {
+                  console.log(`[classify_intent] yes_no_context: want_more_items+no → pay (cart=${cart.count})`)
+                  conversation.setVariable('__rt_yes_no_context', 'want_more_no')
+                  return flow.getNextNodes(node.id, 'pay')[0]?.id ?? null
+                }
+                // Cart empty — ask what they want
+                const msg = 'Certo 😊 Pode me falar o que você quer?'
+                await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+                conversation.addAssistantMessage(msg)
+                return null
+              }
+            }
+
+            if (qType === 'confirm_checkout') {
+              if (isYes && !cart.isEmpty) {
+                console.log(`[classify_intent] yes_no_context: confirm_checkout+yes → pay`)
+                conversation.setVariable('__rt_yes_no_context', 'confirm_checkout_yes')
+                return flow.getNextNodes(node.id, 'pay')[0]?.id ?? null
+              }
+              // "não" after checkout offer — fall through to AI router to handle gracefully
+            }
+
+            if (qType === 'unknown') {
+              // Pure yes/no with no identifiable question context → ask for clarification
+              const wordCount = rawText.trim().split(/\s+/).filter(Boolean).length
+              if (wordCount <= 2) {
+                console.log(`[classify_intent] yes_no_context: unknown+${isYes ? 'yes' : 'no'} → clarification`)
+                const msg = 'Certo 😊 Pode me falar o que você quer?'
+                await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+                conversation.addAssistantMessage(msg)
+                return null
+              }
+            }
+          }
+        }
 
         // P3 fast path — trigger pre-classified, reuse result
         if (conversation.variables['__rt_pre_classified'] === 'true') {
@@ -1002,6 +1495,25 @@ export class FlowExecutionService {
         const text = data.messageVariable
           ? (conversation.variables[data.messageVariable] ?? '')
           : (conversation.getLastUserMessage() ?? '')
+
+        // ── Checkout context shortcut ──────────────────────────────────────
+        // Short message after bot offered checkout with non-empty cart
+        // → pay directly, no AI needed, covers all slang/affirmatives
+        {
+          const cart = Cart.fromVariables(conversation.variables)
+          const lastBotMsg = [...conversation.history].reverse().find(m => m.role === 'assistant')?.content ?? ''
+          const botOfferedCheckout = ['pode cobrar', 'gero o pix', 'gerar o pix', 'fechar pedido', 'finalizar'].some(s => lastBotMsg.toLowerCase().includes(s))
+          const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+          const QUESTION_WORDS = ['como', 'quando', 'onde', 'quanto', 'qual', 'quem', 'porque', 'por que', 'o que']
+          const isQuestion = text.includes('?') || QUESTION_WORDS.some(q => text.toLowerCase().startsWith(q))
+          const NEGATIVES = ['não', 'nao', 'nope', 'nunca', 'neg']
+          const isNegative = NEGATIVES.some(n => text.toLowerCase().trim() === n || text.toLowerCase().startsWith(n + ' '))
+
+          if (!cart.isEmpty && botOfferedCheckout && wordCount <= 4 && !isQuestion && !isNegative) {
+            console.log(`[classify_intent] checkout_context_shortcut: "${text.slice(0, 40)}" (${wordCount}w, cart=${cart.count})`)
+            return flow.getNextNodes(node.id, 'pay')[0]?.id ?? undefined
+          }
+        }
 
         // ── Step 1: run configurable rules from node data ──────────────────
         const ruleMatch = data.intents?.length
@@ -1055,6 +1567,251 @@ export class FlowExecutionService {
         // No configured rules and no AI agent — fall through to unknown
         console.warn(`[classify_intent] node "${node.id}" has no intents configured and aiAgent is disabled. Configure data.intents[] in the FlowBuilder.`)
         return flow.getNextNodes(node.id, 'unknown')[0]?.id
+      }
+
+      case 'ai_router': {
+        const data = node.data as import('@whatsbot/core').AiRouterNodeData
+
+        if (!this.contextualAIRouter) {
+          console.warn('[ai_router] ContextualAIRouter not injected — falling through to ack')
+          return flow.getNextNodes(node.id, 'ack')[0]?.id
+        }
+
+        const userMessage = conversation.getLastUserMessage() ?? ''
+
+        // Catalog paste guard
+        if (this.isCatalogPaste(userMessage)) {
+          console.log('[ai_router] catalog_paste detected — sending guidance')
+          await this.messaging.sendMessage({
+            instanceName: bot.evolutionConfig.instanceName,
+            instanceId: bot.evolutionConfig.instanceId,
+            phoneNumber: phone,
+            message: 'Vi que você colou uma parte do catálogo 😊 Me fala só o nome da série que você quer, ou pode mandar mais de uma separada por vírgula.',
+          })
+          return flow.getNextNodes(node.id, 'continue')[0]?.id ?? null
+        }
+
+        // ── Contextual yes/no — ai_router_confirm / "É essa?" ───────────────
+        // Deterministic before calling Claude — context is unambiguous
+        {
+          const isYes = this.isYesMessage(userMessage)
+          const isNo = this.isNoMessage(userMessage)
+          if (isYes || isNo) {
+            const lastBotMsg = [...conversation.history].reverse().find(m => m.role === 'assistant')?.content ?? null
+            const qType = this.detectBotQuestionType(lastBotMsg)
+
+            if (qType === 'confirm_suggested_title') {
+              if (isYes) {
+                // Add the pending candidate to the cart immediately
+                const foundJson = conversation.variables['__rt_catalog_found']
+                if (foundJson) {
+                  try {
+                    const items: CartItem[] = JSON.parse(foundJson)
+                    if (items.length > 0) {
+                      const cartObj = Cart.fromVariables(conversation.variables)
+                      cartObj.addItems(items)
+                      for (const [k, v] of Object.entries(cartObj.toVariables())) conversation.setVariable(k, v)
+                      conversation.setVariable('__rt_catalog_found', '')
+                      const name = conversation.variables['__rt_last_added_name'] ?? items[0].name
+                      console.log(`[ai_router] yes_no_context: confirm_suggested_title+yes → ack (${name})`)
+                      // Fall through to 'ack' handle — suppress Claude call
+                      return flow.getNextNodes(node.id, 'ack')[0]?.id ?? null
+                    }
+                  } catch { /* fall through to Claude */ }
+                }
+              } else {
+                // No → ask for different title
+                const msg = 'Tudo bem! Me fala o que você está procurando 😊'
+                await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+                conversation.addAssistantMessage(msg)
+                console.log(`[ai_router] yes_no_context: confirm_suggested_title+no → title_search`)
+                return flow.getNextNodes(node.id, 'title_search')[0]?.id ?? null
+              }
+            }
+
+            if (qType === 'want_more_items') {
+              if (isNo) {
+                const cartCheck = Cart.fromVariables(conversation.variables)
+                if (!cartCheck.isEmpty) {
+                  console.log(`[ai_router] yes_no_context: want_more_items+no → checkout`)
+                  return flow.getNextNodes(node.id, 'checkout')[0]?.id ?? null
+                }
+              }
+            }
+          }
+        }
+
+        // Multi-title detection: "Série A e Série B"
+        const multipleTitles = this.extractMultipleTitles(userMessage)
+        if (multipleTitles.length >= 2 && this.productRepo && this.catalogSearchService) {
+          console.log(`[ai_router] multi-title detected: ${multipleTitles.join(' | ')}`)
+          const results = await Promise.all(multipleTitles.map(t => this.catalogSearchService!.search(bot.id, t)))
+          const found: CartItem[] = []
+          const notFound: string[] = []
+          for (let i = 0; i < results.length; i++) {
+            const r = results[i]
+            if (r.products.length > 0) {
+              found.push({ productId: r.products[0].product.id, name: r.products[0].product.name, priceCentavos: r.products[0].product.priceCentavos, accessLink: r.products[0].product.accessLink })
+            } else {
+              notFound.push(multipleTitles[i])
+            }
+          }
+          if (found.length > 0) {
+            const cartObj = Cart.fromVariables(conversation.variables)
+            cartObj.addItems(found)
+            for (const [k, v] of Object.entries(cartObj.toVariables())) conversation.setVariable(k, v)
+            const addedNames = found.map(f => `• ${f.name}`).join('\n')
+            const notFoundMsg = notFound.length > 0 ? `\n\nNão encontrei: ${notFound.join(', ')} 😕` : ''
+            const msg = `✅ Adicionei ao carrinho:\n${addedNames}${notFoundMsg}\n\nQuer mais alguma? Ou é só falar *pode cobrar* que eu gero o pix!`
+            await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: phone, message: msg })
+            conversation.addAssistantMessage(msg)
+            return flow.getNextNodes(node.id, 'continue')[0]?.id ?? null
+          }
+        }
+        const history = conversation.history.slice(-10)
+        const lastBotMessage = [...history].reverse().find(m => m.role === 'assistant')?.content ?? null
+        const lastUserMsg = history.filter(m => m.role === 'user').at(-1)
+        const minutesSinceLast = lastUserMsg
+          ? Math.floor((Date.now() - new Date(lastUserMsg.timestamp).getTime()) / 60_000)
+          : 0
+        const cart = Cart.fromVariables(conversation.variables)
+        const hasPendingPayment = !!conversation.variables['__pending_pix_id']
+
+        const decision = await this.contextualAIRouter.route({
+          userMessage,
+          history,
+          phase: conversation.phase,
+          lastBotMessage,
+          cartItems: cart.items,
+          cartTotalBrl: cart.totalInBRL,
+          hasPendingPayment,
+          minutesSinceLastMessage: minutesSinceLast,
+          returningUserThreshold: data.returningUserThresholdMinutes ?? 60,
+          botContext: (data.systemPrompt as string | undefined) ?? bot.buildSystemPrompt(),
+          persona: buildBotPersona(bot.globalConfig, bot.id),
+          savedGenrePref: conversation.variables['__rt_rec_genre'],
+          savedTypePref: conversation.variables['__rt_rec_type'],
+          lastBotQuestionType: this.detectBotQuestionType(lastBotMessage),
+        })
+
+        conversation.setVariable('__rt_router_intent', decision.intent)
+        conversation.setVariable('__rt_router_next_action', decision.nextAction)
+
+        // ── Catalog searches: suppress reply, let catalog_search respond ──────
+        const isCatalogSearch = decision.nextAction === 'search_catalog'
+        const isRecommendationSearch = decision.nextAction === 'catalog_recommendation'
+
+        if (!isCatalogSearch && !isRecommendationSearch && decision.reply.trim()) {
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: decision.reply })
+          conversation.addAssistantMessage(decision.reply)
+        }
+
+        if (decision.shouldResetFlow) {
+          conversation.end()
+          return undefined
+        }
+
+        // ── Title / partial search: save extracted candidate query ─────────────
+        if (isCatalogSearch && decision.candidateQuery?.trim()) {
+          conversation.setVariable('__rt_router_candidate_query', decision.candidateQuery.trim())
+          console.log(`[ai_router] candidateQuery saved: "${decision.candidateQuery}"`)
+        }
+
+        // ── Recommendation request: collect prefs + search when ready ──────────
+        if (decision.intent === 'recommendation_request') {
+          if (decision.genrePreference) conversation.setVariable('__rt_rec_genre', decision.genrePreference)
+          if (decision.typePreference)  conversation.setVariable('__rt_rec_type',  decision.typePreference)
+
+          const genre = decision.genrePreference ?? conversation.variables['__rt_rec_genre'] ?? ''
+          const type  = decision.typePreference  ?? conversation.variables['__rt_rec_type']  ?? ''
+          const shouldSearch = decision.preferencesComplete || (genre && type)
+
+          if (shouldSearch && this.productRepo) {
+            console.log(`[ai_router] recommendation search — genre="${genre}" type="${type}"`)
+            const products = await this.productRepo.searchByCategory(bot.id, genre, type, 3)
+
+            // #4 Recommendation engine pool log
+            flog('recommendation:pool', {
+              layer: 'recommendation_engine',
+              event: 'pool_searched',
+              genre,
+              type,
+              poolSize: products.length,
+              recommendationPool: products.map(p => p.toJSON().name),
+              chosenRecommendation: products.length === 1 ? products[0].toJSON().name : products.map(p => p.toJSON().name),
+              recommendationReason: `genre=${genre} type=${type}`,
+              phone,
+            })
+
+            // Clear saved preferences
+            delete conversation.variables['__rt_rec_genre']
+            delete conversation.variables['__rt_rec_type']
+
+            let recMsg: string
+            if (products.length === 0) {
+              const label = [type, genre].filter(Boolean).join(' de ')
+              recMsg = `Não achei ${label} no catálogo agora 😕\n\nQuer ver o catálogo completo ou prefere outro estilo? 👉 https://dramahub.mfslabs.com.br`
+            } else if (products.length === 1) {
+              recMsg = `Tenho uma ótima opção pra você: *${products[0].toJSON().name}* 😍\n\nQuer essa?`
+            } else {
+              const list = products.map((p, i) => `${i + 1}. *${p.toJSON().name}*`).join('\n')
+              recMsg = `Encontrei essas opções pra você:\n${list}\n\nQual te interessa? 😊`
+            }
+
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: recMsg })
+            conversation.addAssistantMessage(recMsg)
+          } else if (!shouldSearch) {
+            // Still collecting preferences — reply was already sent above with the question
+            // (reply was not suppressed because nextAction is respond_only for incomplete prefs)
+          }
+
+          return flow.getNextNodes(node.id, 'continue')[0]?.id ?? undefined
+        }
+
+        const routerHandleMap: Record<string, string> = {
+          'respond_only':           'ack',
+          'search_catalog':         'title_search',
+          'catalog_recommendation': 'title_search', // goes to same catalog_search node
+          'show_catalog':           'catalog',
+          'checkout':               'checkout',
+          'wait_receipt':           'payment_receipt',
+          'continue_previous_step': 'continue',
+          'human_support':          'handoff',
+        }
+        // unknown_handoff: ask clarifying question before escalating.
+        // Only escalate if __rt_handoff_pending is already set (second trigger).
+        if (decision.intent === 'unknown_handoff') {
+          const alreadyAsked = conversation.variables['__rt_handoff_pending'] === 'true'
+          if (!alreadyAsked) {
+            const clarify = 'Me conta o que aconteceu? Vou fazer o possível pra te ajudar 😊'
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: clarify })
+            conversation.addAssistantMessage(clarify)
+            conversation.setVariable('__rt_handoff_pending', 'true')
+            await this.convRepo.save(conversation)
+            console.log(`[ai_router] unknown_handoff → clarification first for ${phone}`)
+            return null
+          }
+          // Second time: real problem confirmed — clear flag and escalate
+          conversation.setVariable('__rt_handoff_pending', '')
+        }
+
+        const handle = decision.intent === 'unknown_handoff'
+          ? 'handoff'
+          : (routerHandleMap[decision.nextAction] ?? 'ack')
+        console.log(`[ai_router] intent=${decision.intent} handle=${handle} msg="${userMessage.slice(0, 40)}"`)
+
+        // Inline handoff — don't depend on flow graph having a handoff edge
+        if (handle === 'handoff') {
+          const reply = decision.reply || 'Entendido! Vou chamar alguém pra te ajudar agora 🙏'
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: reply })
+          conversation.addAssistantMessage(reply)
+          await this.createHandoff({ bot, conversation, lead, reason: 'user_request', lastMessage: userMessage })
+          conversation.handoff()
+          await this.convRepo.save(conversation)
+          return null
+        }
+
+        return flow.getNextNodes(node.id, handle)[0]?.id ?? undefined
       }
 
       case 'deliver_title': {
@@ -1202,6 +1959,31 @@ export class FlowExecutionService {
       reason: params.reason,
       handoffId: handoff.id,
     })
+
+    // #6 Handoff rich diagnostic log
+    const last5 = params.conversation.history.slice(-5).map(m => `${m.role}: ${m.content.slice(0, 80)}`)
+    const hCart = Cart.fromVariables(params.conversation.variables)
+    const hPaymentIntentId =
+      params.conversation.variables['__rt_checkout_payment_id'] ??
+      params.conversation.variables['paymentIntentId'] ??
+      null
+    flog('handoff:created', {
+      layer: 'handoff',
+      reason: params.reason,
+      handoffId: handoff.id,
+      phone: params.conversation.phoneNumber,
+      phase: params.conversation.phase ?? null,
+      convPhase: params.conversation.phase ?? null,
+      aiIntent: params.conversation.variables['__rt_router_intent'] ?? null,
+      paymentIntentId: hPaymentIntentId,
+      paymentState: hPaymentIntentId ? 'pending_pix' : 'none',
+      cartCount: hCart.count,
+      cartItems: hCart.items.map(i => i.name),
+      cartTotal: hCart.totalInBRL,
+      leadTags: params.lead?.tags ?? [],
+      leadTemperature: params.lead?.leadTemperature ?? null,
+      last5Messages: last5,
+    })
     console.log(`[FlowExecution] handoff_created for ${params.conversation.phoneNumber} reason=${params.reason}`)
   }
 
@@ -1260,6 +2042,7 @@ export class FlowExecutionService {
   }
 
   private interpolate(template: string, variables: Record<string, string>): string {
+    if (!template) return ''
     return template.replace(/{{(\w+)}}/g, (_, key) => variables[key] ?? `{{${key}}}`)
   }
 
@@ -1274,6 +2057,46 @@ export class FlowExecutionService {
 
   private normalize(text: string): string {
     return text.toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  }
+
+  private isCatalogPaste(text: string): boolean {
+    const lines = text.split('\n').filter(l => l.trim().length > 0)
+    if (lines.length < 3) return false
+    const n = this.normalize(text)
+    const catalogSignals = ['dublado', 'dorama', 'romance •', 'drama •', 'acao •', 'suspense •', 'comedia •', 'fantasia •', 'quero esse dorama', '+ quero', 'genero', 'sinopse']
+    const signalCount = catalogSignals.filter(s => n.includes(s)).length
+    return signalCount >= 2
+  }
+
+  /** Extract multiple title candidates. Conservative rules to avoid splitting single titles. */
+  private extractMultipleTitles(text: string): string[] {
+    // Strip leading buy-verb prefix
+    const stripped = text.replace(/^(quero|queria|comprar|pegar|me manda|me passa|preciso de|quero ver)\s+/i, '').trim()
+
+    const articles = new Set(['a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas'])
+    const firstSignificantWord = (s: string) => {
+      const words = s.toLowerCase().split(/\s+/)
+      return words.find(w => !articles.has(w)) ?? words[0]
+    }
+
+    // Comma split — only if both parts have ≥ 2 words AND different first significant word
+    const commaParts = stripped.split(/,\s+/).map(p => p.trim()).filter(p => p.length > 2)
+    if (commaParts.length >= 2) {
+      const totalWords = commaParts.reduce((acc, p) => acc + p.split(/\s+/).length, 0)
+      const allDistinct = commaParts.every((p, i) =>
+        i === 0 || firstSignificantWord(p) !== firstSignificantWord(commaParts[0])
+      )
+      if (totalWords >= 4 && allDistinct) return commaParts
+    }
+
+    // " e " split — only if BOTH parts have ≥ 3 words ("Amor e Honra" = 1 each → no split)
+    const eParts = stripped.split(/\s+e\s+/)
+    if (eParts.length === 2) {
+      const [a, b] = eParts.map(p => p.trim())
+      if (a.split(/\s+/).length >= 3 && b.split(/\s+/).length >= 3) return [a, b]
+    }
+
+    return []
   }
 
   /** Fast rule-based classification used by both quickClassify and classifyIntentRich */
@@ -1553,7 +2376,7 @@ ${handlesJson}
 Decida o que fazer. Retorne SOMENTE JSON válido, sem texto adicional:
 - Rotear para um handle: {"action":"route","handle":"<handle>","titleDetected":"<título ou null>","quantityDetected":<número ou null>}
 ${canInline ? '- Responder inline (para dúvidas simples que você pode resolver): {"action":"respond","message":"<sua resposta>"}' : ''}
-- Escalar para humano: {"action":"handoff"}
+- Escalar para revisão interna: {"action":"handoff"}
 
 Regra: só use "respond" se a resposta for factual e curta. Para qualquer ação de compra ou troca, use "route".`
 
