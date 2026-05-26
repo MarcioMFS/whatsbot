@@ -24,6 +24,19 @@ const NAV_WORDS = new Set([
 
 const STOP = new Set(['o','a','os','as','e','de','do','da','dos','das','em','no','na','nos','nas','um','uma','com','que','se','por','para','ao','aos','eu','meu','minha','seu','sua'])
 
+// Genre/category request patterns — operate on normalized (unaccented) text
+const GENRE_REQUEST_RE = /\b(series?|minisseries?|novela|anime|filme|genero)\b.{0,30}\b(acao|romance|comedia|fantasia|terror|drama|suspense|aventura|historico|policial|cientifico)\b|\b(acao|romance|comedia|fantasia|terror|drama|suspense|aventura|historico|policial)\b.{0,20}\b(series?|minisseries?|novela|anime)\b/i
+
+function detectGenreRequest(message: string): { genre: string; typeHint: string } | null {
+  const m = normalizeText(message)
+  if (!GENRE_REQUEST_RE.test(m)) return null
+  const genres = ['acao', 'romance', 'comedia', 'fantasia', 'terror', 'drama', 'suspense', 'aventura', 'historico', 'policial', 'cientifico']
+  const genre = genres.find(g => m.includes(g)) ?? ''
+  const types = ['minisserie', 'serie', 'novela', 'anime', 'filme']
+  const typeHint = types.find(t => m.includes(t)) ?? 'serie'
+  return genre ? { genre, typeHint } : null
+}
+
 // Returns true if message is purely navigational with no product title content
 function isPureNavigation(message: string): boolean {
   const words = normalizeText(message).split(/\s+/).filter(w => w.length > 0)
@@ -72,6 +85,22 @@ export class CatalogSearchService {
 
   async search(botId: string, userMessage: string): Promise<CatalogSearchResult> {
     const tag = `[CatalogSearch] originalQuery="${userMessage.slice(0, 80)}"`
+
+    // Genre/category request — bypass title search, use searchByCategory directly
+    const genreReq = detectGenreRequest(userMessage)
+    if (genreReq) {
+      console.log(`${tag} decision=genre_request genre="${genreReq.genre}" typeHint="${genreReq.typeHint}"`)
+      const results = await this.productRepo.searchByCategory(botId, genreReq.genre, genreReq.typeHint, 5)
+      if (results.length > 0) {
+        console.log(`${tag} genreMatchCount=${results.length} firstMatch="${results[0].name}" decision=genre_category_match`)
+        return {
+          products: results.map(p => ({ product: p, confidence: 0.7, searchQuery: userMessage })),
+          unresolved: [],
+        }
+      }
+      console.log(`${tag} decision=not_found reason=genre_no_results genre="${genreReq.genre}"`)
+      return { products: [], unresolved: [userMessage] }
+    }
 
     // Pure navigation — no title content
     if (isPureNavigation(userMessage)) {
@@ -137,8 +166,10 @@ export class CatalogSearchService {
       return { products: [], unresolved: [userMessage] }
     }
 
+    // Truncate to 120 products — full catalog exceeds Groq's TPM limit (1297 products ≈ 68k tokens)
     const catalogList = allProducts
-      .map(p => `- ${p.name} (id: ${p.id}, aliases: ${p.aliases.join(', ')})`)
+      .slice(0, 120)
+      .map(p => `- ${p.name} (id: ${p.id})`)
       .join('\n')
 
     let aiCandidates: Array<{ query: string; productId?: string }> = []
@@ -214,7 +245,7 @@ export class CatalogSearchService {
     if (unresolved.length > 0) {
       const allProducts = await this.productRepo.findByBotId(botId)
       if (allProducts.length > 0) {
-        const catalogList = allProducts.map(p => `- ${p.name} (id: ${p.id})`).join('\n')
+        const catalogList = allProducts.slice(0, 120).map(p => `- ${p.name} (id: ${p.id})`).join('\n')
         try {
           const response = await this.aiService.generate('groq', {
             systemPrompt: 'You are a product name extractor. Return ONLY valid JSON, nothing else.',
