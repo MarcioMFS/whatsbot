@@ -1608,23 +1608,10 @@ export class FlowExecutionService {
 
             if (qType === 'confirm_suggested_title') {
               if (isYes) {
-                // Add the pending candidate to the cart immediately
-                const foundJson = conversation.variables['__rt_catalog_found']
-                if (foundJson) {
-                  try {
-                    const items: CartItem[] = JSON.parse(foundJson)
-                    if (items.length > 0) {
-                      const cartObj = Cart.fromVariables(conversation.variables)
-                      cartObj.addItems(items)
-                      for (const [k, v] of Object.entries(cartObj.toVariables())) conversation.setVariable(k, v)
-                      conversation.setVariable('__rt_catalog_found', '')
-                      const name = conversation.variables['__rt_last_added_name'] ?? items[0].name
-                      console.log(`[ai_router] yes_no_context: confirm_suggested_title+yes → ack (${name})`)
-                      // Fall through to 'ack' handle — suppress Claude call
-                      return flow.getNextNodes(node.id, 'ack')[0]?.id ?? null
-                    }
-                  } catch { /* fall through to Claude */ }
-                }
+                // __rt_catalog_found is still set — cart_add node will do the actual adding
+                const name = conversation.variables['__rt_last_added_name'] ?? 'produto'
+                console.log(`[ai_router] yes_no_context: confirm_suggested_title+yes → ack (${name})`)
+                return flow.getNextNodes(node.id, 'ack')[0]?.id ?? null
               } else {
                 // No → ask for different title
                 const msg = 'Tudo bem! Me fala o que você está procurando 😊'
