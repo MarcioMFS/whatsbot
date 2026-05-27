@@ -29,6 +29,12 @@ import { PostgreSQLProductRepository } from './adapters/PostgreSQLProductReposit
 import { PostgreSQLOrderRepository } from './adapters/PostgreSQLOrderRepository.js'
 import { PostgreSQLPackageOfferRepository } from './adapters/PostgreSQLPackageOfferRepository.js'
 import { CatalogSearchService } from './services/CatalogSearchService.js'
+import { ContextualAIRouter } from './services/ContextualAIRouter.js'
+import { PaymentPhaseRouter } from './services/PaymentPhaseRouter.js'
+import { PaymentOrchestrator } from './payment/PaymentOrchestrator.js'
+import { ReceiptExtractorAI } from './payment/ReceiptExtractorAI.js'
+import { PostgreSQLUsedTransactionRepository } from './adapters/PostgreSQLUsedTransactionRepository.js'
+import { InternalEventBus } from './events/InternalEventBus.js'
 import { DeliveryService } from './services/DeliveryService.js'
 import { leadRoutes } from './routes/leads.js'
 import { productRoutes } from './routes/products.js'
@@ -62,7 +68,17 @@ const messaging = new EvolutionAPIAdapter(
 
 const aiProviders = {
   claude: process.env.CLAUDE_API_KEY ? new ClaudeAdapter(process.env.CLAUDE_API_KEY) : null,
-  groq: process.env.GROQ_API_KEY ? new GroqAdapter(process.env.GROQ_API_KEY) : null,
+  groq: (() => {
+    const keys = [
+      process.env.GROQ_API_KEY,
+      process.env.GROQ_API_KEY_2,
+      process.env.GROQ_API_KEY_3,
+      process.env.GROQ_API_KEY_4,
+      process.env.GROQ_API_KEY_5,
+      process.env.GROQ_API_KEY_6,
+    ].filter(Boolean) as string[]
+    return keys.length ? new GroqAdapter(keys) : null
+  })(),
 }
 
 const productRepo = new PostgreSQLProductRepository(db)
@@ -72,11 +88,20 @@ const handoffRepo = new PostgreSQLHandoffRepository(db)
 
 const aiService = new AIGenerationService(aiProviders)
 const catalogSearchService = new CatalogSearchService(productRepo, aiService)
+const contextualAIRouter = new ContextualAIRouter(aiService)
+const paymentPhaseRouter = new PaymentPhaseRouter(aiService)
+const usedTransactionRepo = new PostgreSQLUsedTransactionRepository(db)
+const eventBus = new InternalEventBus(db)
+const claudeProvider = aiProviders.claude
+if (!claudeProvider) throw new Error('CLAUDE_API_KEY required for receipt validation')
+const receiptExtractor = new ReceiptExtractorAI(claudeProvider)
+const paymentOrchestrator = new PaymentOrchestrator(receiptExtractor, paymentIntentRepo, usedTransactionRepo, eventBus)
 const deliveryService = new DeliveryService(messaging, eventRepo)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
-  eventRepo, undefined, paymentIntentRepo,
+  eventRepo, paymentOrchestrator, paymentIntentRepo,
   catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
+  contextualAIRouter, paymentPhaseRouter,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
@@ -97,7 +122,7 @@ await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
 await app.register(productRoutes, { prefix: '/api/products', productRepo })
 await app.register(orderRoutes, { prefix: '/api/orders', orderRepo })
 await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageOfferRepo, botRepo })
-await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo })
+await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRepo: conversationRepo, botRepo, messaging })
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 

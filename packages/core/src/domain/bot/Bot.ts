@@ -36,6 +36,15 @@ export interface BotGlobalConfig {
   supportFlowId?: string
   defaultCurrency?: string
   defaultPaymentExpirationMinutes?: number
+  // Persona / Identity (multi-tenant)
+  assistantIdentityMode?: 'named' | 'brand_only'
+  assistantName?: string       // e.g. "Bia" — only used when mode is 'named'
+  companyName?: string         // e.g. "DramaHub"
+  neverExposeAI?: boolean      // default: true
+  ownerTestMode?: boolean      // allow owner's fromMe messages to enter the flow
+  allowIdentityDisclosure?: boolean  // allow "Sou um assistente virtual" — default: false
+  tone?: 'acolhedor' | 'profissional' | 'casual' | 'formal'
+  locale?: string              // e.g. 'pt-BR', 'en-US', 'es-ES' — default: 'pt-BR'
 }
 
 export interface BotProps {

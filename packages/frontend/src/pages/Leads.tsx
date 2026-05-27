@@ -12,18 +12,35 @@ interface LeadData {
   tags: string[]
   variables: Record<string, string>
   totalSessions: number
+  leadTemperature: 'cold' | 'warm' | 'hot' | 'vip'
+  purchasedTitles: string[]
   lastSeenAt: string
   createdAt: string
 }
 
+const TEMP_COLORS: Record<string, string> = {
+  cold: 'text-slate-400',
+  warm: 'text-yellow-400',
+  hot:  'text-orange-400',
+  vip:  'text-purple-400',
+}
+const TEMP_LABELS: Record<string, string> = {
+  cold: 'frio', warm: 'morno', hot: 'quente', vip: 'VIP',
+}
+
 const TAG_COLORS: Record<string, string> = {
-  quente:         'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  frio:           'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  comprou:        'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  desistiu:       'bg-red-500/20 text-red-300 border-red-500/30',
-  interessado:    'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-  lead:           'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  'lead-negativo':'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  // set by backend automatically
+  buyer:           'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  sent_pix:        'bg-teal-500/20 text-teal-300 border-teal-500/30',
+  pix_generated:   'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  needs_human:     'bg-red-500/20 text-red-300 border-red-500/30',
+  lost:            'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  high_intent:     'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  vip:             'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  // set manually
+  interested:      'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
+  no_budget:       'bg-zinc-500/20 text-zinc-300 border-zinc-500/30',
+  blocked:         'bg-rose-500/20 text-rose-300 border-rose-500/30',
 }
 
 function tagColor(tag: string) {
@@ -131,6 +148,10 @@ export function Leads() {
                   <div className="text-right shrink-0 text-xs text-slate-500">
                     <p className="flex items-center gap-1 justify-end"><Clock size={11} />{timeAgo(lead.lastSeenAt)}</p>
                     <p className="mt-1">{lead.totalSessions} sess{lead.totalSessions === 1 ? 'ão' : 'ões'}</p>
+                    <p className={`mt-1 font-medium ${TEMP_COLORS[lead.leadTemperature ?? 'cold']}`}>{TEMP_LABELS[lead.leadTemperature ?? 'cold']}</p>
+                    {lead.purchasedTitles?.length > 0 && (
+                      <p className="mt-1 text-emerald-400">{lead.purchasedTitles.length} compra{lead.purchasedTitles.length > 1 ? 's' : ''}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -154,7 +175,7 @@ export function Leads() {
                 <div className="mb-4">
                   <p className="text-xs text-slate-500 mb-2 flex items-center gap-1"><Tag size={11} /> Tags</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {['quente', 'frio', 'interessado', 'comprou', 'desistiu', 'lead'].map(tag => (
+                    {['buyer', 'sent_pix', 'pix_generated', 'high_intent', 'vip', 'needs_human', 'lost', 'interested', 'no_budget', 'blocked'].map(tag => (
                       <button
                         key={tag}
                         onClick={() => handleTagToggle(selected, tag)}

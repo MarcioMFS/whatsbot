@@ -200,7 +200,7 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
                     options={[{ value: 'groq', label: 'Groq (rápido)' }, { value: 'claude', label: 'Claude (preciso)' }]} />
                   <Field label="System Prompt" value={String((node.data.interceptor as CaptureInterceptorData).systemPrompt ?? '')}
                     onChange={v => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), systemPrompt: v })}
-                    textarea placeholder="Você é assistente DramaHub. O bot aguarda um comprovante de pagamento Pix." />
+                    textarea placeholder="Você é assistente de atendimento. O bot aguarda um comprovante de pagamento." />
                   <Field label="Variáveis de contexto (vírgula)"
                     value={String(((node.data.interceptor as CaptureInterceptorData).contextVariables ?? []).join(', '))}
                     onChange={v => set('interceptor', { ...(node.data.interceptor as CaptureInterceptorData), contextVariables: v.split(',').map(s => s.trim()).filter(Boolean) })}
@@ -461,7 +461,7 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
                     options={[{ value: 'groq', label: 'Groq (rápido)' }, { value: 'claude', label: 'Claude (preciso)' }]} />
                   <Field label="System Prompt" value={String((node.data.aiAgent as IntentAiAgent).systemPrompt ?? '')}
                     onChange={v => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), systemPrompt: v })}
-                    textarea placeholder="Você é assistente do DramaHub. Vende minisséries por R$6." />
+                    textarea placeholder="Você é assistente de atendimento. Responda perguntas sobre o catálogo e preços." />
                   <Toggle label="Pode responder inline (sem seguir handle)"
                     checked={(node.data.aiAgent as IntentAiAgent).canRespondInline !== false}
                     onChange={v => set('aiAgent', { ...(node.data.aiAgent as IntentAiAgent), canRespondInline: v })} />

@@ -3,34 +3,51 @@ import type { AIProviderPort, AIGenerateParams, AIGenerateResult } from '@whatsb
 
 export class GroqAdapter implements AIProviderPort {
   readonly providerName = 'groq'
-  private client: Groq
+  private clients: Groq[]
+  private currentIndex = 0
 
-  constructor(apiKey: string) {
-    this.client = new Groq({ apiKey })
+  constructor(apiKeys: string | string[]) {
+    const keys = Array.isArray(apiKeys) ? apiKeys : [apiKeys]
+    this.clients = keys.map(k => new Groq({ apiKey: k }))
   }
 
   async generate(params: AIGenerateParams): Promise<AIGenerateResult> {
     const userPrompt = this.buildUserPrompt(params)
+    const messages = [
+      { role: 'system' as const, content: params.systemPrompt },
+      ...params.history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+      { role: 'user' as const, content: userPrompt },
+    ]
 
-    const response = await this.client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      max_tokens: params.maxTokens ?? 1024,
-      temperature: params.temperature ?? 0.7,
-      messages: [
-        { role: 'system', content: params.systemPrompt },
-        ...params.history.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-        { role: 'user', content: userPrompt },
-      ],
-    })
-
-    const choice = response.choices[0]
-    if (!choice?.message.content) throw new Error('Empty response from Groq')
-
-    return {
-      content: choice.message.content,
-      inputTokens: response.usage?.prompt_tokens ?? 0,
-      outputTokens: response.usage?.completion_tokens ?? 0,
+    let lastError: unknown
+    for (let attempt = 0; attempt < this.clients.length; attempt++) {
+      const client = this.clients[this.currentIndex]
+      try {
+        const response = await client.chat.completions.create({
+          model: 'llama-3.3-70b-versatile',
+          max_tokens: params.maxTokens ?? 1024,
+          temperature: params.temperature ?? 0.7,
+          messages,
+        })
+        const choice = response.choices[0]
+        if (!choice?.message.content) throw new Error('Empty response from Groq')
+        return {
+          content: choice.message.content,
+          inputTokens: response.usage?.prompt_tokens ?? 0,
+          outputTokens: response.usage?.completion_tokens ?? 0,
+        }
+      } catch (err: unknown) {
+        const status = (err as { status?: number })?.status
+        if (status === 429 || status === 503) {
+          console.warn(`[GroqAdapter] key[${this.currentIndex}] rate limited (${status}), rotating`)
+          this.currentIndex = (this.currentIndex + 1) % this.clients.length
+          lastError = err
+        } else {
+          throw err
+        }
+      }
     }
+    throw lastError ?? new Error('All Groq keys exhausted')
   }
 
   private buildUserPrompt(params: AIGenerateParams): string {

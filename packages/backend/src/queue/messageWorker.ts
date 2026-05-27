@@ -83,13 +83,26 @@ export function startMessageWorker(
       const bot = await botRepo.findById(botId)
       if (!bot) return
 
-      let imageBase64: string | undefined
-      if (imageMeta?.imgMsg) {
-        imageBase64 = await decryptWhatsAppMedia(imageMeta.imgMsg)
-        console.log(`[worker] image decrypt: ${imageBase64 ? `OK (${imageBase64.length} chars)` : 'FAILED'}`)
+      // Per-phone mutex: prevents race conditions when user sends multiple messages rapidly
+      const lockKey = `msg:lock:${botId}:${phoneNumber}`
+      const lockTTL = 45 // seconds — max time a single message should take to process
+      const acquired = await redis.set(lockKey, '1', 'EX', lockTTL, 'NX')
+      if (!acquired) {
+        // Another job is processing this phone — retry after short delay
+        throw Object.assign(new Error(`PHONE_BUSY:${phoneNumber}`), { name: 'PhoneBusy' })
       }
 
-      await flowExecService.handleIncomingMessage(bot, phoneNumber, message, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
+      try {
+        let imageBase64: string | undefined
+        if (imageMeta?.imgMsg) {
+          imageBase64 = await decryptWhatsAppMedia(imageMeta.imgMsg)
+          console.log(`[worker] image decrypt: ${imageBase64 ? `OK (${imageBase64.length} chars)` : 'FAILED'}`)
+        }
+
+        await flowExecService.handleIncomingMessage(bot, phoneNumber, message, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
+      } finally {
+        await redis.del(lockKey)
+      }
     },
     {
       connection: { ...redis.options, maxRetriesPerRequest: null },

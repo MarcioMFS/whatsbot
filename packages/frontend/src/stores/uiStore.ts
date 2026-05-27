@@ -7,6 +7,8 @@ interface UIState {
   locale: Locale
   setLocale: (locale: Locale) => void
   t: (key: keyof typeof translations.en) => string
+  currentBot: { id: string; name: string } | null
+  setCurrentBot: (bot: { id: string; name: string } | null) => void
 }
 
 export const useUIStore = create<UIState>()(
@@ -15,6 +17,8 @@ export const useUIStore = create<UIState>()(
       locale: 'en',
       setLocale: (locale) => set({ locale }),
       t: (key) => translations[get().locale][key] ?? translations.en[key] ?? key,
+      currentBot: null,
+      setCurrentBot: (bot) => set({ currentBot: bot }),
     }),
     { name: 'whatsbot-ui' }
   )

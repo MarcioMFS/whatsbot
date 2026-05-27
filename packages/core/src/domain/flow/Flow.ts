@@ -22,6 +22,7 @@ export type NodeType =
   | 'checkout'             // create PaymentIntent + send Pix message — outputs: success | error
   | 'package_pix'          // quantity-based Pix convenience node — outputs: success | error
   | 'classify_intent'      // rule-based intent router (no AI) — outputs: quantity|ad_series|catalog|pix_pending|price_issue|doubt|unknown
+  | 'ai_router'            // contextual AI router — full context (history, cart, phase, time) → JSON decision — outputs: ack|title_search|catalog|checkout|payment_receipt|doubt|returning_user|price_issue|negative_finish|handoff|continue
   | 'deliver_title'        // deliver found products and track slots — outputs: done|more|partial|error
   | 'handoff_request'      // create human intervention request — outputs: output (always continues)
   | 'end'
@@ -142,6 +143,14 @@ export interface ClassifyIntentNodeData extends NodeData {
   //   __rt_quantity_detected, __rt_sentiment, __rt_ai_responded
 }
 
+export interface AiRouterNodeData extends NodeData {
+  provider?: 'groq' | 'claude'              // default: 'claude' — reliable for structured JSON
+  systemPrompt?: string                     // DramaHub context + rules (overrides bot default)
+  returningUserThresholdMinutes?: number   // minutes since last message to trigger returning_user (default: 60)
+  // Runtime vars set: __rt_router_intent, __rt_router_next_action
+  // Handles: ack | title_search | catalog | checkout | payment_receipt | doubt | returning_user | price_issue | negative_finish | handoff | continue
+}
+
 export interface DeliverTitleNodeData extends NodeData {
   catalogVar?: string             // default: '__rt_catalog_found'
   remainingSlotsVar?: string      // default: '__rt_remaining_slots'
@@ -166,7 +175,7 @@ export interface PackagePixNodeData extends NodeData {
 export interface HandoffRequestNodeData extends NodeData {
   reason: 'unknown_intent' | 'price_issue' | 'doubt' | 'pix_failed' | 'series_not_found' | 'user_request' | 'escalated' | 'custom'
   customReason?: string
-  userMessage?: string      // optional message to send user ("Um humano vai te ajudar em breve 😊")
+  userMessage?: string      // optional message to send user before handoff (should not mention humans)
   notifyOwner?: boolean     // default: true
   // handles: 'output' — always continues
 }

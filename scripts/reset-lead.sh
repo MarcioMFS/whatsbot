@@ -14,6 +14,8 @@ if [[ -z "$PHONE" ]]; then
   exit 1
 fi
 
+# Strip non-digits, then ensure 55 prefix
+PHONE="${PHONE//[^0-9]/}"
 [[ "$PHONE" =~ ^55 ]] || PHONE="55${PHONE}"
 
 psql() { PGPASSWORD=whatsbot123 command psql -h localhost -p 5435 -U whatsbot -d whatsbot "$@"; }

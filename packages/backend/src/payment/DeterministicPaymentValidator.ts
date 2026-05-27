@@ -13,6 +13,11 @@ const MIN_CONFIDENCE = 0.85
 // 10 minutes tolerance for clock skew / delayed screenshots
 const MAX_FUTURE_TOLERANCE_MS = 10 * 60 * 1000
 
+// Allow receipts up to 12 hours BEFORE the PaymentIntent was created.
+// Covers: (1) user does PIX earlier and sends receipt later, (2) timezone skew when AI
+// extracts local BR time (UTC-3 to UTC-5) but we compare against UTC intentCreatedAt.
+const PRE_INTENT_TOLERANCE_MS = 12 * 60 * 60 * 1000
+
 // Maximum age tolerance for receipts without a timestamp (same-day only)
 const SAME_DAY_GRACE_HOURS = 24
 
@@ -121,7 +126,8 @@ export class DeterministicPaymentValidator {
 
     if (paidAt) {
       const paid = paidAt.getTime()
-      if (paid < createdAt) {
+      // Allow receipts up to 15min before intent (user may have initiated PIX before hitting checkout)
+      if (paid < createdAt - PRE_INTENT_TOLERANCE_MS) {
         return { ok: false, debug: { reason: 'receipt_older_than_intent', paidAt, intentCreatedAt } }
       }
       if (paid > now + MAX_FUTURE_TOLERANCE_MS) {

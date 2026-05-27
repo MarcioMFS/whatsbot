@@ -1,10 +1,15 @@
 import type { FastifyInstance } from 'fastify'
 import { Handoff } from '@whatsbot/core'
-import type { HandoffRepository } from '@whatsbot/core'
+import type { HandoffRepository, ConversationRepository, MessagingPort, BotRepository } from '@whatsbot/core'
 
 interface HandoffCtx {
   handoffRepo: HandoffRepository
+  convRepo?: ConversationRepository
+  botRepo?: BotRepository
+  messaging?: MessagingPort
 }
+
+const HANDOFF_RESOLVED_MESSAGE = 'Olá! Passando aqui só pra avisar que o nosso time já verificou sua situação e está tudo certo por aqui 😊 Qualquer coisa é só chamar!'
 
 export async function handoffRoutes(app: FastifyInstance, ctx: HandoffCtx) {
   app.addHook('preHandler', async (req) => { await req.jwtVerify() })
@@ -61,17 +66,58 @@ export async function handoffRoutes(app: FastifyInstance, ctx: HandoffCtx) {
   )
 
   // PATCH /api/handoffs/:id/status
-  app.patch<{ Params: { id: string }; Body: { status: string; resolvedBy?: string } }>(
+  app.patch<{ Params: { id: string }; Body: { status: string; resolvedBy?: string; sendClosingMessage?: boolean } }>(
     '/:id/status',
     async (req, reply) => {
       const handoff = await ctx.handoffRepo.findById(req.params.id)
       if (!handoff) return reply.code(404).send({ error: 'Not found' })
 
-      const { status, resolvedBy } = req.body
-      if (status === 'resolved') handoff.resolve(resolvedBy)
-      else if (status === 'in_progress') handoff.markInProgress()
-      else if (status === 'ignored') handoff.ignore()
-      else return reply.code(400).send({ error: 'Invalid status' })
+      const { status, resolvedBy, sendClosingMessage = true } = req.body
+      if (status === 'resolved') {
+        handoff.resolve(resolvedBy)
+
+        // End the conversation so the bot doesn't restart on the next message
+        if (ctx.convRepo && handoff.conversationId !== 'manual') {
+          const conv = await ctx.convRepo.findById(handoff.conversationId)
+          if (conv && conv.status === 'handoff') {
+            conv.end()
+            await ctx.convRepo.save(conv)
+            console.log(`[handoffs] conversation ${handoff.conversationId} ended after handoff resolved by ${resolvedBy ?? 'dashboard'}`)
+          }
+        }
+
+        // Send closing message to customer
+        if (sendClosingMessage && ctx.messaging && ctx.botRepo) {
+          const bot = await ctx.botRepo.findById(handoff.botId)
+          if (bot) {
+            try {
+              await ctx.messaging.sendMessage({
+                instanceName: bot.evolutionConfig.instanceName,
+                instanceId: bot.evolutionConfig.instanceId,
+                phoneNumber: handoff.phoneNumber,
+                message: HANDOFF_RESOLVED_MESSAGE,
+              })
+            } catch (err) {
+              console.error('[handoffs] failed to send closing message:', err instanceof Error ? err.message : err)
+            }
+          }
+        }
+      } else if (status === 'in_progress') {
+        handoff.markInProgress()
+      } else if (status === 'ignored') {
+        handoff.ignore()
+
+        // End conversation on ignore too (bot won't help further)
+        if (ctx.convRepo && handoff.conversationId !== 'manual') {
+          const conv = await ctx.convRepo.findById(handoff.conversationId)
+          if (conv && conv.status === 'handoff') {
+            conv.end()
+            await ctx.convRepo.save(conv)
+          }
+        }
+      } else {
+        return reply.code(400).send({ error: 'Invalid status' })
+      }
 
       await ctx.handoffRepo.save(handoff)
       return handoff.toJSON()

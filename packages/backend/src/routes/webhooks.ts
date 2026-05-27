@@ -41,7 +41,6 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       const msgApi = raw.message as Record<string, unknown> | undefined
 
       const fromMe = (info?.IsFromMe ?? keyApi?.fromMe ?? false) as boolean
-      if (fromMe) return reply.code(200).send()
 
       const isGroup = (info?.IsGroup ?? false) as boolean
       if (isGroup) return reply.code(200).send()
@@ -59,6 +58,12 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         ? (keyApi.remoteJidAlt as string)
         : chat
       const phoneNumber = jid.split('@')[0]
+
+      // Owner test mode: allow owner's fromMe messages through when enabled
+      const ownerTestMode = bot.globalConfig?.ownerTestMode ?? false
+      const ownerPhone = bot.globalConfig?.ownerPhone?.replace(/\D/g, '')
+      const isOwner = !!ownerPhone && phoneNumber === ownerPhone
+      if (fromMe && !(ownerTestMode && isOwner)) return reply.code(200).send()
 
       const extText = (msgApi?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined
 
@@ -87,6 +92,9 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         msgId: msgId || undefined,
         hasImage,
         imageMeta: imageMeta || undefined,
+      }, {
+        attempts: 5,
+        backoff: { type: 'fixed', delay: 2000 }, // retry after 2s if PHONE_BUSY
       })
       return reply.code(200).send({ ok: true })
     }

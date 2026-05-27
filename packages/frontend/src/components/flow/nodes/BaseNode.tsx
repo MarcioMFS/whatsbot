@@ -56,7 +56,7 @@ export function BaseNode({ selected, children, color, borderColor, handles }: Ba
           id={h.id}
           style={{
             bottom: -5,
-            left: handles.outputs!.length > 1 ? `${30 + i * 40}%` : '50%',
+            left: '50%',
             background: h.color ?? 'rgba(14,165,233,0.8)',
           }}
         />

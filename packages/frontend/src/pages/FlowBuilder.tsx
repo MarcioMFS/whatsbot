@@ -39,6 +39,7 @@ import { CheckoutNode } from '../components/flow/nodes/CheckoutNode.tsx'
 import { PackagePixNode } from '../components/flow/nodes/PackagePixNode.tsx'
 import { ClassifyIntentNode } from '../components/flow/nodes/ClassifyIntentNode.tsx'
 import { DeliverTitleNode } from '../components/flow/nodes/DeliverTitleNode.tsx'
+import { AiRouterNode } from '../components/flow/nodes/AiRouterNode.tsx'
 
 function validateFlow(nodes: Node[], edges: Edge[]): string[] {
   const errors: string[] = []
@@ -97,6 +98,7 @@ const nodeTypes = {
   package_pix: PackagePixNode,
   classify_intent: ClassifyIntentNode,
   deliver_title: DeliverTitleNode,
+  ai_router: AiRouterNode,
   end: EndNode,
 }
 

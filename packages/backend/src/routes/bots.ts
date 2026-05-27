@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import type { BotRepository, FlowRepository, MessagingPort, ConversationEventRepository, BotGlobalConfig } from '@whatsbot/core'
 import type { BotService } from '../services/BotService.js'
+import { GlobalConfigSchema, buildBotPersonaPreview, invalidatePersonaCache } from '../services/BotPersonaBuilder.js'
 
 const CreateBotSchema = z.object({
   name: z.string().min(1).max(100),
@@ -126,6 +127,32 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     bot.updateGlobalConfig(req.body as Partial<BotGlobalConfig>)
     await ctx.botRepo.save(bot)
     return bot.toJSON()
+  })
+
+  // Dedicated global-config endpoint: validated, sanitized, with preview + cache invalidation
+  app.patch<{ Params: { id: string } }>('/:id/global-config', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+    const parsed = GlobalConfigSchema.safeParse(req.body)
+    if (!parsed.success) return reply.code(400).send({ error: 'Validation failed', details: parsed.error.flatten() })
+
+    bot.updateGlobalConfig(parsed.data)
+    await ctx.botRepo.save(bot)
+    invalidatePersonaCache(bot.id)
+
+    return {
+      config: bot.globalConfig,
+      preview: buildBotPersonaPreview(bot.globalConfig),
+    }
+  })
+
+  app.get<{ Params: { id: string } }>('/:id/global-config/preview', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+    return buildBotPersonaPreview(bot.globalConfig)
   })
 
   app.get<{ Params: { id: string }; Querystring: { limit?: string; type?: string } }>(

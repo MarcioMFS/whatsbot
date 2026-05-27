@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import type { ConversationRepository, BotRepository } from '@whatsbot/core'
+import { buildConversationStateView } from '../services/ConversationStateView.js'
 
 interface ConvCtx {
   conversationRepo: ConversationRepository
@@ -29,4 +30,19 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
     if (!conversation) return reply.code(404).send({ error: 'Not found' })
     return conversation.toJSON()
   })
+
+  // Debug state view — current_phase, locked_state, cart, intent, etc.
+  app.get<{ Params: { botId: string; phone: string } }>(
+    '/bot/:botId/phone/:phone/state',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      if (!conversation) return reply.code(404).send({ error: 'No active conversation for this phone' })
+
+      return buildConversationStateView(conversation)
+    }
+  )
 }
