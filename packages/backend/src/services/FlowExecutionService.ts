@@ -957,10 +957,10 @@ export class FlowExecutionService {
             this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '' }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           }
 
-          // Notify owner when amount doesn't match (paid more or less than expected)
-          if (result.decision.reason === 'amount_mismatch') {
-            const ownerPhone = bot.globalConfig?.ownerPhone
-            if (ownerPhone) {
+          const ownerPhone = bot.globalConfig?.ownerPhone
+          if (ownerPhone) {
+            // Notify owner when amount doesn't match (paid more or less than expected)
+            if (result.decision.reason === 'amount_mismatch') {
               const debug = result.decision.debugInfo ?? {}
               const paid = debug['extracted'] != null
                 ? `R$ ${(Number(debug['extracted']) / 100).toFixed(2)}`
@@ -978,6 +978,15 @@ export class FlowExecutionService {
                 instanceName: instance, instanceId, phoneNumber: ownerPhone,
                 message: `⚠️ *Valor divergente* — ${phone}\nEsperado: ${expected} | Recebido: ${paid} (${diffStr})\nConversa: ${conversation.id.slice(0, 8)}`,
               }).catch(e => console.error('[FlowExecution] owner amount_mismatch notify failed:', e?.message))
+            }
+
+            // Notify owner immediately on fake/fraud receipt (not a real receipt image)
+            if (result.decision.reason === 'invalid_receipt') {
+              await this.messaging.sendMessage({
+                instanceName: instance, instanceId, phoneNumber: ownerPhone,
+                message: `🚨 *Tentativa de golpe detectada* — ${phone}\nA imagem enviada não é um comprovante Pix.\nCarrinho: ${lead?.tags.includes('buyer') ? 'comprador recorrente' : 'novo usuário'} | Conversa: ${conversation.id.slice(0, 8)}\n\nFique atento a este contato.`,
+              }).catch(e => console.error('[FlowExecution] owner fraud notify failed:', e?.message))
+              console.log(`[FES:fraud_alert] phone="${phone}" reason="invalid_receipt" ownerNotified="${ownerPhone}"`)
             }
           }
         }
