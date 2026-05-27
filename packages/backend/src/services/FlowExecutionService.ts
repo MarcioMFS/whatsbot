@@ -680,6 +680,7 @@ export class FlowExecutionService {
         const msg = this.interpolate(data.message, conversation.variables)
         flog('msg:send', { nodeId: node.id, nodeType: 'text_message', hash: msgHash(msg), len: msg.length })
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+        conversation.addAssistantMessage(msg)
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
       }
