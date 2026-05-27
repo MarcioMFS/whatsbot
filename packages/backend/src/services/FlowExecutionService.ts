@@ -252,6 +252,9 @@ export class FlowExecutionService {
         minutesSincePixGenerated,
         hasImage: false,
         persona: buildBotPersona(bot.globalConfig, bot.id),
+        botId: bot.id,
+        conversationId: conversation.id,
+        phoneNumber: phone,
       })
 
       const instance = bot.evolutionConfig.instanceName
@@ -1019,18 +1022,29 @@ export class FlowExecutionService {
               items: cart.items,
             })
             order.markPaid()
-            const { delivered, pending } = await this.deliveryService.deliver(order, phone, instance, instanceId)
+            const { delivered, failed, pending } = await this.deliveryService.deliver(order, phone, instance, instanceId)
+            const ownerPhone = bot.globalConfig?.ownerPhone
             if (pending.length > 0) {
               order.markDeliveryPending()
-              const ownerPhone = bot.globalConfig?.ownerPhone
               if (ownerPhone) {
                 const pendingNames = pending.map(i => i.name).join(', ')
                 await this.messaging.sendMessage({
                   instanceName: instance, instanceId, phoneNumber: ownerPhone,
                   message: `⚠️ Pedido ${order.id.slice(0, 8)} tem itens sem link de entrega: ${pendingNames}`,
-                })
+                }).catch(e => console.error('[FlowExecution] owner pending notify failed:', e?.message))
               }
-            } else if (delivered.length > 0) {
+            }
+            if (failed.length > 0) {
+              if (ownerPhone) {
+                const failedNames = failed.map(i => i.name).join(', ')
+                await this.messaging.sendMessage({
+                  instanceName: instance, instanceId, phoneNumber: ownerPhone,
+                  message: `🚨 *Falha na entrega* — pedido ${order.id.slice(0, 8)}\nItens não enviados: ${failedNames}\nCliente: ${phone}\n\nVerifique e reenvie manualmente.`,
+                }).catch(e => console.error('[FlowExecution] owner delivery_failed notify failed:', e?.message))
+              }
+              console.error(`[FES:delivery_failed] orderId="${order.id}" phone="${phone}" failed=${JSON.stringify(failed.map(i => i.name))}`)
+            }
+            if (pending.length === 0 && failed.length === 0 && delivered.length > 0) {
               order.markDelivered()
             }
             await this.orderRepo.save(order)
@@ -1078,7 +1092,7 @@ export class FlowExecutionService {
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
 
-        const result = await this.catalogSearchService.search(bot.id, query)
+        const result = await this.catalogSearchService.search(bot.id, query, { botId: bot.id, conversationId: conversation.id, phoneNumber: phone })
         this.emit(bot.id, conversation.id, phone, 'catalog_searched', {
           query, found: result.products.length, unresolved: result.unresolved.length,
         })
@@ -1700,6 +1714,9 @@ export class FlowExecutionService {
           savedGenrePref: conversation.variables['__rt_rec_genre'],
           savedTypePref: conversation.variables['__rt_rec_type'],
           lastBotQuestionType: this.detectBotQuestionType(lastBotMessage),
+          botId: bot.id,
+          conversationId: conversation.id,
+          phoneNumber: phone,
         })
 
         conversation.setVariable('__rt_router_intent', decision.intent)

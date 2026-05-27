@@ -32,6 +32,7 @@ import { CatalogSearchService } from './services/CatalogSearchService.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
 import { PaymentPhaseRouter } from './services/PaymentPhaseRouter.js'
 import { PostgreSQLAIDecisionRepository } from './adapters/PostgreSQLAIDecisionRepository.js'
+import { PostgreSQLDeliveryAuditRepository } from './adapters/PostgreSQLDeliveryAuditRepository.js'
 import { PaymentOrchestrator } from './payment/PaymentOrchestrator.js'
 import { ReceiptExtractorAI } from './payment/ReceiptExtractorAI.js'
 import { PostgreSQLUsedTransactionRepository } from './adapters/PostgreSQLUsedTransactionRepository.js'
@@ -98,7 +99,8 @@ const claudeProvider = aiProviders.claude
 if (!claudeProvider) throw new Error('CLAUDE_API_KEY required for receipt validation')
 const receiptExtractor = new ReceiptExtractorAI(claudeProvider)
 const paymentOrchestrator = new PaymentOrchestrator(receiptExtractor, paymentIntentRepo, usedTransactionRepo, eventBus)
-const deliveryService = new DeliveryService(messaging, eventRepo)
+const deliveryAuditRepo = new PostgreSQLDeliveryAuditRepository(db)
+const deliveryService = new DeliveryService(messaging, eventRepo, deliveryAuditRepo)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
   eventRepo, paymentOrchestrator, paymentIntentRepo,
