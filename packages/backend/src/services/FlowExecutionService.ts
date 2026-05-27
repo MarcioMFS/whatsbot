@@ -1198,7 +1198,12 @@ export class FlowExecutionService {
             instanceName: instance, instanceId, phoneNumber: phone,
             message: 'Seu carrinho ainda está vazio 😅 Me fala o que você quer adicionar!',
           })
-          return flow.getNextNodes(node.id, 'empty')[0]?.id ?? null
+          conversation.addAssistantMessage('Seu carrinho ainda está vazio 😅 Me fala o que você quer adicionar!')
+          // Route back to capture so the user can type — never leave them stuck
+          return flow.getNextNodes(node.id, 'empty')[0]?.id
+            ?? flow.getNextNodes(node.id, 'output')[0]?.id
+            ?? flow.nodes.find(n => n.type === 'capture' && n.id.includes('main'))?.id
+            ?? undefined
         }
 
         // Run PricingService — PackageOffer is a pricing layer, NOT a product
