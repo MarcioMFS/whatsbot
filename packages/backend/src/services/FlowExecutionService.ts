@@ -1046,6 +1046,14 @@ export class FlowExecutionService {
             }
             if (pending.length === 0 && failed.length === 0 && delivered.length > 0) {
               order.markDelivered()
+              if (ownerPhone) {
+                const itemNames = delivered.map(i => i.name).join('\n• ')
+                const totalBrl = (order.totalCentavos / 100).toFixed(2).replace('.', ',')
+                await this.messaging.sendMessage({
+                  instanceName: instance, instanceId, phoneNumber: ownerPhone,
+                  message: `✅ *Venda confirmada!*\n\nCliente: ${phone}\nItens:\n• ${itemNames}\nTotal: R$ ${totalBrl}\nPedido: ${order.id.slice(0, 8)}`,
+                }).catch(e => console.error('[FlowExecution] owner sale notify failed:', e?.message))
+              }
             }
             await this.orderRepo.save(order)
             this.emit(bot.id, conversation.id, phone, 'order_created', {
