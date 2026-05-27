@@ -2,6 +2,7 @@ import type { CartItem } from '@whatsbot/core'
 import type { Message } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { BotPersona } from './BotPersonaBuilder.js'
+import type { PostgreSQLAIDecisionRepository } from '../adapters/PostgreSQLAIDecisionRepository.js'
 
 export type RouterIntent =
   | 'ack'
@@ -59,6 +60,10 @@ export interface RouterContext {
   savedTypePref?: string
   // detected question type — helps Claude interpret "sim"/"não" correctly
   lastBotQuestionType?: 'want_more_items' | 'confirm_suggested_title' | 'confirm_checkout' | 'unknown'
+  // audit
+  botId?: string
+  conversationId?: string
+  phoneNumber?: string
 }
 
 const FALLBACK_DECISION: RouterDecision = {
@@ -159,7 +164,10 @@ function alog(area: string, data: Record<string, unknown>): void {
 }
 
 export class ContextualAIRouter {
-  constructor(private aiService: AIGenerationService) {}
+  constructor(
+    private aiService: AIGenerationService,
+    private auditRepo?: PostgreSQLAIDecisionRepository,
+  ) {}
 
   async route(ctx: RouterContext): Promise<RouterDecision> {
     const isReturning = ctx.minutesSinceLastMessage > ctx.returningUserThreshold
@@ -289,7 +297,7 @@ Analise o contexto completo e retorne JSON:
         })
       }
 
-      return {
+      const decision: RouterDecision = {
         intent,
         reply: replyEnforced,
         nextAction,
@@ -299,10 +307,47 @@ Analise o contexto completo e retorne JSON:
         typePreference: typeof parsed.typePreference === 'string' ? parsed.typePreference : undefined,
         preferencesComplete: parsed.preferencesComplete === true,
       }
+
+      if (this.auditRepo && ctx.botId && ctx.phoneNumber) {
+        this.auditRepo.save({
+          botId: ctx.botId,
+          conversationId: ctx.conversationId,
+          phoneNumber: ctx.phoneNumber,
+          layer: 'ai_router',
+          inputMessage: ctx.userMessage,
+          intent,
+          confidence: parsed.confidence ?? undefined,
+          provider: 'claude',
+          durationMs,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+          usedFallback,
+          extra: {
+            nextAction,
+            phase: ctx.phase,
+            lastBotQuestionType: ctx.lastBotQuestionType ?? null,
+            candidateQuery: parsed.candidateQuery ?? null,
+            genrePreference: parsed.genrePreference ?? null,
+            typePreference: parsed.typePreference ?? null,
+            preferencesComplete: parsed.preferencesComplete ?? false,
+            cachedTokens: result.cachedTokens ?? 0,
+          },
+        })
+      }
+
+      return decision
     } catch (err) {
       const durationMs = Date.now() - t0
       console.error('[ContextualAIRouter] error:', err instanceof Error ? err.message : err)
       alog('decision', { usedFallback: true, reason: 'exception', error: err instanceof Error ? err.message : String(err), durationMs })
+      if (this.auditRepo && ctx.botId && ctx.phoneNumber) {
+        this.auditRepo.save({
+          botId: ctx.botId, conversationId: ctx.conversationId, phoneNumber: ctx.phoneNumber,
+          layer: 'ai_router', inputMessage: ctx.userMessage, intent: 'unknown',
+          provider: 'claude', durationMs, usedFallback: true,
+          extra: { error: err instanceof Error ? err.message : String(err) },
+        })
+      }
       return FALLBACK_DECISION
     }
   }

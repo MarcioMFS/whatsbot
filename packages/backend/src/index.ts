@@ -31,6 +31,7 @@ import { PostgreSQLPackageOfferRepository } from './adapters/PostgreSQLPackageOf
 import { CatalogSearchService } from './services/CatalogSearchService.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
 import { PaymentPhaseRouter } from './services/PaymentPhaseRouter.js'
+import { PostgreSQLAIDecisionRepository } from './adapters/PostgreSQLAIDecisionRepository.js'
 import { PaymentOrchestrator } from './payment/PaymentOrchestrator.js'
 import { ReceiptExtractorAI } from './payment/ReceiptExtractorAI.js'
 import { PostgreSQLUsedTransactionRepository } from './adapters/PostgreSQLUsedTransactionRepository.js'
@@ -87,9 +88,10 @@ const packageOfferRepo = new PostgreSQLPackageOfferRepository(db)
 const handoffRepo = new PostgreSQLHandoffRepository(db)
 
 const aiService = new AIGenerationService(aiProviders)
-const catalogSearchService = new CatalogSearchService(productRepo, aiService)
-const contextualAIRouter = new ContextualAIRouter(aiService)
-const paymentPhaseRouter = new PaymentPhaseRouter(aiService)
+const aiDecisionRepo = new PostgreSQLAIDecisionRepository(db)
+const catalogSearchService = new CatalogSearchService(productRepo, aiService, aiDecisionRepo)
+const contextualAIRouter = new ContextualAIRouter(aiService, aiDecisionRepo)
+const paymentPhaseRouter = new PaymentPhaseRouter(aiService, aiDecisionRepo)
 const usedTransactionRepo = new PostgreSQLUsedTransactionRepository(db)
 const eventBus = new InternalEventBus(db)
 const claudeProvider = aiProviders.claude

@@ -1,6 +1,7 @@
 import type { Product } from '@whatsbot/core'
 import type { ProductRepository } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
+import type { PostgreSQLAIDecisionRepository } from '../adapters/PostgreSQLAIDecisionRepository.js'
 
 function normalizeText(text: string): string {
   return text
@@ -77,14 +78,31 @@ export interface CatalogSearchResult {
   unresolved: string[]
 }
 
+export interface CatalogSearchAuditCtx {
+  botId: string
+  conversationId?: string
+  phoneNumber: string
+}
+
 export class CatalogSearchService {
   constructor(
     private productRepo: ProductRepository,
     private aiService: AIGenerationService,
+    private auditRepo?: PostgreSQLAIDecisionRepository,
   ) {}
 
-  async search(botId: string, userMessage: string): Promise<CatalogSearchResult> {
+  async search(botId: string, userMessage: string, audit?: CatalogSearchAuditCtx): Promise<CatalogSearchResult> {
     const tag = `[CatalogSearch] originalQuery="${userMessage.slice(0, 80)}"`
+
+    const saveAudit = (intent: string, confidence: number, extra: Record<string, unknown> = {}) => {
+      if (this.auditRepo && audit) {
+        this.auditRepo.save({
+          botId: audit.botId, conversationId: audit.conversationId, phoneNumber: audit.phoneNumber,
+          layer: 'catalog_search', inputMessage: userMessage, intent, confidence,
+          usedFallback: false, extra: { query: userMessage, ...extra },
+        })
+      }
+    }
 
     // Genre/category request — bypass title search, use searchByCategory directly
     const genreReq = detectGenreRequest(userMessage)
@@ -93,18 +111,21 @@ export class CatalogSearchService {
       const results = await this.productRepo.searchByCategory(botId, genreReq.genre, genreReq.typeHint, 5)
       if (results.length > 0) {
         console.log(`${tag} genreMatchCount=${results.length} firstMatch="${results[0].name}" decision=genre_category_match`)
+        saveAudit('genre_category_match', 0.7, { genre: genreReq.genre, typeHint: genreReq.typeHint, matchCount: results.length, topMatch: results[0].name })
         return {
           products: results.map(p => ({ product: p, confidence: 0.7, searchQuery: userMessage })),
           unresolved: [],
         }
       }
       console.log(`${tag} decision=not_found reason=genre_no_results genre="${genreReq.genre}"`)
+      saveAudit('not_found', 0, { reason: 'genre_no_results', genre: genreReq.genre })
       return { products: [], unresolved: [userMessage] }
     }
 
     // Pure navigation — no title content
     if (isPureNavigation(userMessage)) {
       console.log(`${tag} decision=not_found reason=pure_navigation`)
+      saveAudit('not_found', 0, { reason: 'pure_navigation' })
       return { products: [], unresolved: [userMessage] }
     }
 
@@ -144,6 +165,7 @@ export class CatalogSearchService {
       if (filtered.length > 0) {
         const best = filtered[0]
         console.log(`${tag} finalQueryUsed="${normalized}" finalMatchedProduct="${best.p.name}" decision=fuzzy_match`)
+        saveAudit('fuzzy_match', best.exact ? 1.0 : 0.8, { topMatch: best.p.name, matchCount: filtered.length, exact: best.exact })
         return {
           products: filtered.map(({ p, exact }) => ({
             product: p,
@@ -163,6 +185,7 @@ export class CatalogSearchService {
     const allProducts = await this.productRepo.findByBotId(botId)
     if (allProducts.length === 0) {
       console.log(`${tag} decision=not_found reason=empty_catalog`)
+      saveAudit('not_found', 0, { reason: 'empty_catalog' })
       return { products: [], unresolved: [userMessage] }
     }
 
@@ -190,6 +213,7 @@ export class CatalogSearchService {
       console.log(`${tag} aiRecommendationCandidates=${JSON.stringify(aiCandidates.map(c => ({ query: c.query, productId: c.productId ?? null })))} tokens=${response.inputTokens}/${response.outputTokens}`)
     } catch (err) {
       console.log(`${tag} decision=not_found reason=ai_parse_error err=${err instanceof Error ? err.message : err}`)
+      saveAudit('not_found', 0, { reason: 'ai_parse_error', provider: 'groq', usedFallback: true })
       return { products: [], unresolved: [userMessage] }
     }
 
@@ -210,15 +234,18 @@ export class CatalogSearchService {
 
       if (product) {
         console.log(`${tag} aiExtractedTitle="${candidate.query}" finalMatchedProduct="${product.name}" decision=ai_extracted_match`)
+        saveAudit('ai_extracted_match', 0.75, { provider: 'groq', aiQuery: candidate.query, matchedProduct: product.name })
         found.push({ product, confidence: 0.75, searchQuery: candidate.query })
       } else {
         console.log(`${tag} aiExtractedTitle="${candidate.query}" decision=not_found reason=ai_candidate_no_db_match`)
+        saveAudit('not_found', 0, { reason: 'ai_candidate_no_db_match', provider: 'groq', aiQuery: candidate.query })
         unresolved.push(candidate.query)
       }
     }
 
     if (found.length === 0 && aiCandidates.length === 0) {
       console.log(`${tag} decision=not_found reason=ai_returned_no_candidates`)
+      saveAudit('not_found', 0, { reason: 'ai_returned_no_candidates', provider: 'groq' })
     }
 
     return { products: found, unresolved }

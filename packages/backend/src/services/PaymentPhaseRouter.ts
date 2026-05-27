@@ -1,6 +1,7 @@
 import type { CartItem } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { BotPersona } from './BotPersonaBuilder.js'
+import type { PostgreSQLAIDecisionRepository } from '../adapters/PostgreSQLAIDecisionRepository.js'
 
 export type PaymentPhaseIntent =
   | 'receipt_sent'
@@ -25,6 +26,10 @@ export interface PaymentPhaseContext {
   minutesSincePixGenerated: number
   hasImage: boolean
   persona?: BotPersona
+  // audit
+  botId?: string
+  conversationId?: string
+  phoneNumber?: string
 }
 
 const FALLBACK: PaymentPhaseDecision = {
@@ -125,7 +130,10 @@ function plog(area: string, data: Record<string, unknown>): void {
 }
 
 export class PaymentPhaseRouter {
-  constructor(private aiService: AIGenerationService) {}
+  constructor(
+    private aiService: AIGenerationService,
+    private auditRepo?: PostgreSQLAIDecisionRepository,
+  ) {}
 
   async route(ctx: PaymentPhaseContext): Promise<PaymentPhaseDecision> {
     // Fast deterministic path — no AI cost for unambiguous phrases
@@ -143,6 +151,14 @@ export class PaymentPhaseRouter {
         minutesSincePixGenerated: ctx.minutesSincePixGenerated,
         msg: ctx.userMessage.slice(0, 80),
       })
+      if (this.auditRepo && ctx.botId && ctx.phoneNumber) {
+        this.auditRepo.save({
+          botId: ctx.botId, conversationId: ctx.conversationId, phoneNumber: ctx.phoneNumber,
+          layer: 'payment_router', inputMessage: ctx.userMessage, intent: deterministic,
+          confidence: 0.95, provider: 'deterministic', usedFallback: false,
+          extra: { paymentIntentId: ctx.paymentIntentId, cartCount: ctx.cartItems.length, minutesSincePixGenerated: ctx.minutesSincePixGenerated },
+        })
+      }
       return { intent: deterministic, reply: '', confidence: 0.95 }
     }
 
@@ -217,6 +233,17 @@ Retorne JSON:`
         durationMs,
       })
 
+      if (this.auditRepo && ctx.botId && ctx.phoneNumber) {
+        this.auditRepo.save({
+          botId: ctx.botId, conversationId: ctx.conversationId, phoneNumber: ctx.phoneNumber,
+          layer: 'payment_router', inputMessage: ctx.userMessage, intent,
+          confidence, provider: 'claude', durationMs,
+          inputTokens: result.inputTokens, outputTokens: result.outputTokens,
+          usedFallback: false,
+          extra: { paymentIntentId: ctx.paymentIntentId, cartCount: ctx.cartItems.length, minutesSincePixGenerated: ctx.minutesSincePixGenerated, cachedTokens: result.cachedTokens ?? 0 },
+        })
+      }
+
       return {
         intent,
         reply: typeof parsed.reply === 'string' ? parsed.reply : '',
@@ -226,6 +253,14 @@ Retorne JSON:`
       const durationMs = Date.now() - t0
       console.error('[PaymentPhaseRouter] error:', err instanceof Error ? err.message : err)
       plog('decision', { usedFallback: true, reason: 'exception', error: err instanceof Error ? err.message : String(err), durationMs })
+      if (this.auditRepo && ctx.botId && ctx.phoneNumber) {
+        this.auditRepo.save({
+          botId: ctx.botId, conversationId: ctx.conversationId, phoneNumber: ctx.phoneNumber,
+          layer: 'payment_router', inputMessage: ctx.userMessage, intent: 'noise',
+          provider: 'claude', durationMs, usedFallback: true,
+          extra: { error: err instanceof Error ? err.message : String(err) },
+        })
+      }
       return FALLBACK
     }
   }
