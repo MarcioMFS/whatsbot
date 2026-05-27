@@ -980,8 +980,8 @@ export class FlowExecutionService {
               }).catch(e => console.error('[FlowExecution] owner amount_mismatch notify failed:', e?.message))
             }
 
-            // Notify owner immediately on fake/fraud receipt (not a real receipt image)
-            if (result.decision.reason === 'invalid_receipt') {
+            // Notify owner on 2nd+ invalid receipt — first attempt may be an innocent mistake
+            if (result.decision.reason === 'invalid_receipt' && newCount >= 2) {
               await this.messaging.sendMessage({
                 instanceName: instance, instanceId, phoneNumber: ownerPhone,
                 message: `🚨 *Tentativa de golpe detectada* — ${phone}\nA imagem enviada não é um comprovante Pix.\nCarrinho: ${lead?.tags.includes('buyer') ? 'comprador recorrente' : 'novo usuário'} | Conversa: ${conversation.id.slice(0, 8)}\n\nFique atento a este contato.`,
