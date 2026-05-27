@@ -650,10 +650,16 @@ export class FlowExecutionService {
 
     switch (node.type) {
       case 'trigger': {
+        // Returning user — skip intro entirely if flow has a returning_user edge
+        const returningEdge = flow.getNextNodes(node.id, 'returning_user')[0]
+        if (returningEdge && lead && lead.totalSessions > 1) {
+          console.log(`[FlowExecution] returning_user for ${conversation.phoneNumber} (sessions=${lead.totalSessions} tags=${lead.tags.join(',')}) → skipping intro`)
+          return returningEdge.id
+        }
+
         // P3 — intent-first onboarding: if first message already has clear intent, skip intro
         const firstMsg = conversation.getLastUserMessage()
         if (firstMsg) {
-          // Prefer configured intents from the flow's classify_intent node over hardcoded runRules()
           const classifyNode = flow.nodes.find(n => n.type === 'classify_intent')
           const configuredIntents = (classifyNode?.data as import('@whatsbot/core').ClassifyIntentNodeData | undefined)?.intents
           const preClass = this.quickClassify(firstMsg, configuredIntents)
