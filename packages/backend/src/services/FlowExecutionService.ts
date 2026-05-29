@@ -1549,20 +1549,10 @@ export class FlowExecutionService {
 
             if (qType === 'want_more_items') {
               if (isYes) {
-                // If the bot's message also offered checkout, a short affirmative means "pay now"
-                const botAlsoOfferedCheckout = ['pode cobrar', 'gero o pix', 'gerar o pix', 'fechar pedido'].some(
-                  s => (lastBotMsg ?? '').toLowerCase().includes(s)
-                )
-                const wordCount = rawText.trim().split(/\s+/).filter(Boolean).length
-                if (botAlsoOfferedCheckout && !cart.isEmpty && wordCount <= 3) {
-                  console.log(`[classify_intent] yes_no_context: want_more_items+yes+checkout_offer → pay (cart=${cart.count})`)
-                  conversation.setVariable('__rt_yes_no_context', 'want_more_checkout_yes')
-                  return flow.getNextNodes(node.id, 'pay')[0]?.id ?? null
-                }
-                // User wants more titles → keep them in the flow, route to greeting (loops to capture)
-                console.log(`[classify_intent] yes_no_context: want_more_items+yes → greeting`)
-                conversation.setVariable('__rt_yes_no_context', 'want_more_yes')
-                return flow.getNextNodes(node.id, 'greeting')[0]?.id ?? null
+                // Ambiguous: "sim" after "Quer mais alguma? Ou pode cobrar" could mean more items OR pay.
+                // Let the AI router decide with full conversation context.
+                console.log(`[classify_intent] yes_no_context: want_more_items+yes → ai_check (ambiguous)`)
+                return flow.getNextNodes(node.id, 'ai_check')[0]?.id ?? null
               } else {
                 // User is done → go to checkout if cart has items
                 if (!cart.isEmpty) {
