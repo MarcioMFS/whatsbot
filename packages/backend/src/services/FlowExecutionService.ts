@@ -54,6 +54,7 @@ import type { CatalogSearchService } from './CatalogSearchService.js'
 import type { DeliveryService } from './DeliveryService.js'
 import type { ContextualAIRouter } from './ContextualAIRouter.js'
 import type { PaymentPhaseRouter } from './PaymentPhaseRouter.js'
+import type { CapabilityRouter } from './CapabilityRouter.js'
 import { buildBotPersona } from './BotPersonaBuilder.js'
 
 const RECOVERY_THRESHOLD = 0.6
@@ -89,6 +90,7 @@ export class FlowExecutionService {
     private handoffRepo?: HandoffRepository,
     private contextualAIRouter?: ContextualAIRouter,
     private paymentPhaseRouter?: PaymentPhaseRouter,
+    private capabilityRouter?: CapabilityRouter,
   ) {}
 
   private emit(botId: string, convId: string | null | undefined, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
@@ -436,6 +438,50 @@ export class FlowExecutionService {
           supportFlowId: resolvedFlowId,
           lastPaymentConfirmedAt: lead.lastPaymentConfirmedAt?.toISOString(),
         })
+      }
+    }
+
+    // CapabilityRouter: on new conversations (or ended), let AI pick the right flow
+    if (isNewConversation && this.capabilityRouter) {
+      const cart = conversation ? Cart.fromVariables(conversation.variables) : Cart.empty()
+      const capDecision = await this.capabilityRouter.route({
+        botId: bot.id,
+        conversationId: conversation?.id ?? '',
+        phoneNumber,
+        message,
+        phase: conversation?.phase ?? 'initial',
+        leadTags: lead?.tags ?? [],
+        cartCount: cart.items.length,
+        hasPendingPayment: conversation?.phase === 'awaiting_payment',
+        history: conversation?.history ?? [],
+        hasImage,
+      })
+
+      console.log(`[CapabilityRouter] method=${capDecision.method} capability=${capDecision.capability?.name ?? 'none'} confidence=${capDecision.confidence.toFixed(2)}`)
+
+      if (capDecision.capability?.flowId) {
+        const capFlow = await this.flowRepo.findById(capDecision.capability.flowId)
+        if (capFlow) {
+          if (!this.matchesTrigger(capFlow, message)) return
+          conversation = Conversation.create({
+            botId: bot.id,
+            flowId: capFlow.id,
+            phoneNumber,
+            triggerNodeId: capFlow.getTriggerNode().id,
+          })
+          if (!lead) lead = Lead.create({ botId: bot.id, phoneNumber })
+          else lead.recordSession()
+          lead.touch()
+          conversation.setVariable('__lead_tags', lead.tags.join(','))
+          conversation.setVariable('__lead_temperature', lead.leadTemperature)
+          conversation.setVariable('__lead_sessions', String(lead.totalSessions))
+          conversation.setVariable('__lead_is_returning', lead.totalSessions > 1 ? 'true' : 'false')
+          conversation.setVariable('__lead_purchased_count', String(lead.purchasedTitles.length))
+          conversation.addUserMessage(message)
+          await this.leadRepo.save(lead)
+          await this.executeFlow(bot, capFlow, conversation, lead)
+          return
+        }
       }
     }
 

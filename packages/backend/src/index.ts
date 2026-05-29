@@ -45,6 +45,11 @@ import { packageOfferRoutes } from './routes/packageOffers.js'
 import { handoffRoutes } from './routes/handoffs.js'
 import { PostgreSQLHandoffRepository } from './adapters/PostgreSQLHandoffRepository.js'
 import { paymentIntentRoutes } from './routes/paymentIntents.js'
+import { PostgreSQLCapabilityRepository } from './adapters/PostgreSQLCapabilityRepository.js'
+import { PostgreSQLAIObservationRepository } from './adapters/PostgreSQLAIObservationRepository.js'
+import { CapabilityRouter } from './services/CapabilityRouter.js'
+import { PatternDetector } from './services/PatternDetector.js'
+import { capabilitiesRoutes } from './routes/capabilities.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -101,11 +106,15 @@ const receiptExtractor = new ReceiptExtractorAI(claudeProvider)
 const paymentOrchestrator = new PaymentOrchestrator(receiptExtractor, paymentIntentRepo, usedTransactionRepo, eventBus)
 const deliveryAuditRepo = new PostgreSQLDeliveryAuditRepository(db)
 const deliveryService = new DeliveryService(messaging, eventRepo, deliveryAuditRepo)
+const capabilityRepo = new PostgreSQLCapabilityRepository(db)
+const observationRepo = new PostgreSQLAIObservationRepository(db)
+const capabilityRouter = new CapabilityRouter(capabilityRepo, aiService, observationRepo)
+const patternDetector = new PatternDetector(db)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
   eventRepo, paymentOrchestrator, paymentIntentRepo,
   catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
-  contextualAIRouter, paymentPhaseRouter,
+  contextualAIRouter, paymentPhaseRouter, capabilityRouter,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
@@ -128,6 +137,7 @@ await app.register(orderRoutes, { prefix: '/api/orders', orderRepo })
 await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageOfferRepo, botRepo })
 await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRepo: conversationRepo, botRepo, messaging })
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo })
+await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)

@@ -4,7 +4,7 @@ import gsap from 'gsap'
 import {
   Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch,
   Trash2, Settings2, Activity, Package, ShoppingBag, Tag, PhoneCall, CreditCard,
-  ChevronRight, ArrowRight, Bot,
+  ChevronRight, ArrowRight, Bot, Workflow,
 } from 'lucide-react'
 import { Layout } from '../components/ui/Layout.tsx'
 import { GlassCard } from '../components/ui/GlassCard.tsx'
@@ -308,6 +308,7 @@ export function BotConfig() {
             cards={[
               { label: 'Produtos', desc: 'Catálogo com aliases para busca fuzzy e links de acesso', icon: Package, color: 'indigo', path: 'products' },
               { label: 'Pacotes', desc: 'Pricing por quantidade — mínimo ou exato', icon: Tag, color: 'orange', path: 'package-offers' },
+              { label: 'Capabilities', desc: 'Sub-flows que a IA invoca dinamicamente por contexto', icon: Workflow, color: 'purple', path: 'capabilities' },
             ]}
           />
         )}
