@@ -699,6 +699,18 @@ export class FlowExecutionService {
 
     switch (node.type) {
       case 'trigger': {
+        // Webapp selection bypasses ALL intros — go straight to classify_intent
+        {
+          const triggerMsg = conversation.getLastUserMessage() ?? ''
+          if (triggerMsg && this.isWebappSelection(triggerMsg)) {
+            const classifyNode = flow.nodes.find(n => n.type === 'classify_intent')
+            if (classifyNode) {
+              console.log(`[FlowExecution] webapp_selection at trigger — bypassing intro for ${conversation.phoneNumber}`)
+              return classifyNode.id
+            }
+          }
+        }
+
         // Returning user — skip intro entirely if flow has a returning_user edge
         const returningEdge = flow.getNextNodes(node.id, 'returning_user')[0]
         if (returningEdge && lead && lead.totalSessions > 1) {
