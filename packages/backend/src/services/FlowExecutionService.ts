@@ -1731,8 +1731,10 @@ export class FlowExecutionService {
           }
         }
 
-        // Multi-title detection: "Série A e Série B"
-        const multipleTitles = this.extractMultipleTitles(userMessage)
+        // Multi-title detection: webapp format "• Title1 • Title2" or "Série A e Série B"
+        const multipleTitles = this.isWebappSelection(userMessage)
+          ? this.extractWebappTitles(userMessage)
+          : this.extractMultipleTitles(userMessage)
         if (multipleTitles.length >= 2 && this.productRepo && this.catalogSearchService) {
           console.log(`[ai_router] multi-title detected: ${multipleTitles.join(' | ')}`)
           const results = await Promise.all(multipleTitles.map(t => this.catalogSearchService!.search(bot.id, t)))
@@ -2168,6 +2170,15 @@ export class FlowExecutionService {
       (n.includes('gostaria dessas minisseries') || n.includes('desejo essas minisseries')) &&
       text.includes('• ')
     )
+  }
+
+  /** Extract titles from webapp selection format: split on "• ", strip header and trailing phrase */
+  private extractWebappTitles(text: string): string[] {
+    return text
+      .split('• ')
+      .slice(1) // drop "Olá! Gostaria dessas minisséries: "
+      .map(p => p.replace(/\s*(desejo|gostaria)\s+essas\s+miniss[eé]ries[!.]?\s*$/i, '').trim())
+      .filter(p => p.length > 2)
   }
 
   /** Extract multiple title candidates. Conservative rules to avoid splitting single titles. */
