@@ -1755,12 +1755,10 @@ export class FlowExecutionService {
           }
         }
 
-        // Multi-title detection: webapp format "• Title1 • Title2" or "Série A e Série B"
-        const multipleTitles = this.isWebappSelection(userMessage)
-          ? this.extractWebappTitles(userMessage)
-          : this.extractMultipleTitles(userMessage)
+        // Multi-title detection: AI extracts titles from any format
+        const multipleTitles = await this.aiExtractTitles(userMessage)
         if (multipleTitles.length >= 2 && this.productRepo && this.catalogSearchService) {
-          console.log(`[ai_router] multi-title detected: ${multipleTitles.join(' | ')}`)
+          console.log(`[ai_router] multi-title detected (AI): ${multipleTitles.join(' | ')}`)
           const results = await Promise.all(multipleTitles.map(t => this.catalogSearchService!.search(bot.id, t)))
           const found: CartItem[] = []
           const notFound: string[] = []
@@ -2196,45 +2194,6 @@ export class FlowExecutionService {
     )
   }
 
-  /** Extract titles from webapp selection format: split on "• ", strip header and trailing phrase */
-  private extractWebappTitles(text: string): string[] {
-    return text
-      .split('• ')
-      .slice(1) // drop "Olá! Gostaria dessas minisséries: "
-      .map(p => p.replace(/\s*(desejo|gostaria)\s+essas\s+miniss[eé]ries[!.]?\s*$/i, '').trim())
-      .filter(p => p.length > 2)
-  }
-
-  /** Extract multiple title candidates. Conservative rules to avoid splitting single titles. */
-  private extractMultipleTitles(text: string): string[] {
-    // Strip leading buy-verb prefix
-    const stripped = text.replace(/^(quero|queria|comprar|pegar|me manda|me passa|preciso de|quero ver)\s+/i, '').trim()
-
-    const articles = new Set(['a', 'o', 'as', 'os', 'um', 'uma', 'uns', 'umas'])
-    const firstSignificantWord = (s: string) => {
-      const words = s.toLowerCase().split(/\s+/)
-      return words.find(w => !articles.has(w)) ?? words[0]
-    }
-
-    // Comma split — only if both parts have ≥ 2 words AND different first significant word
-    const commaParts = stripped.split(/,\s+/).map(p => p.trim()).filter(p => p.length > 2)
-    if (commaParts.length >= 2) {
-      const totalWords = commaParts.reduce((acc, p) => acc + p.split(/\s+/).length, 0)
-      const allDistinct = commaParts.every((p, i) =>
-        i === 0 || firstSignificantWord(p) !== firstSignificantWord(commaParts[0])
-      )
-      if (totalWords >= 4 && allDistinct) return commaParts
-    }
-
-    // " e " split — only if BOTH parts have ≥ 3 words ("Amor e Honra" = 1 each → no split)
-    const eParts = stripped.split(/\s+e\s+/)
-    if (eParts.length === 2) {
-      const [a, b] = eParts.map(p => p.trim())
-      if (a.split(/\s+/).length >= 3 && b.split(/\s+/).length >= 3) return [a, b]
-    }
-
-    return []
-  }
 
   /** Fast rule-based classification used by both quickClassify and classifyIntentRich */
   private runRules(text: string): {
@@ -2479,6 +2438,30 @@ export class FlowExecutionService {
       return { handle: defaultRule.handle, confidence: 0.60, quantityDetected: null, titleDetected: null }
 
     return null
+  }
+
+  // ─── AI title extractor — works for any format ──────────────────────────────
+
+  private async aiExtractTitles(text: string): Promise<string[]> {
+    try {
+      const result = await this.aiService.generate('groq', {
+        systemPrompt: 'You are a title extractor. Extract product/series/item names from the user message. Return a JSON array of strings — one entry per title. If there are fewer than 2 distinct titles, return []. Never include phrases like "Desejo essas" or "Gostaria de" — only the actual titles.',
+        promptTemplate: '{{userMessage}}',
+        history: [],
+        userMessage: text,
+        variables: {},
+        temperature: 0,
+        maxTokens: 200,
+        cacheSystemPrompt: true,
+      })
+      const match = result.content.match(/\[[\s\S]*\]/)
+      if (!match) return []
+      const parsed = JSON.parse(match[0])
+      if (!Array.isArray(parsed)) return []
+      return parsed.filter((t: unknown) => typeof t === 'string' && t.trim().length > 2)
+    } catch {
+      return []
+    }
   }
 
   // ─── AI Agent for classify_intent (unmapped scenarios) ─────────────────────
