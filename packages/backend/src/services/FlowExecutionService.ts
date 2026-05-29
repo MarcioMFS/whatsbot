@@ -527,6 +527,22 @@ export class FlowExecutionService {
     conversation.addUserMessage(message, { msgId, sender: phoneNumber })
     if (imageBase64) conversation.setVariable('__imageBase64', imageBase64)
 
+    // Webapp selection arriving during a waiting capture — bypass the capture and re-route through classify_intent
+    // Without this, the selection text is captured as the answer to the pending question, leading to duplicate cart adds
+    if (conversation.status === 'waiting' && !hasImage && this.isWebappSelection(message)) {
+      const classifyNode = flow.nodes.find(n => n.type === 'classify_intent')
+      if (classifyNode) {
+        console.log(`[FlowExecution] webapp_selection_during_wait — bypassing capture at ${conversation.currentNodeId}, rerouting to ${classifyNode.id}`)
+        conversation.resume()
+        conversation.moveToNode(classifyNode.id)
+        await this.executeFlow(bot, flow, conversation, lead)
+        lead.mergeVariables(conversation.variables)
+        await this.leadRepo.save(lead)
+        await this.convRepo.save(conversation)
+        return
+      }
+    }
+
     if (conversation.status === 'waiting') {
       const currentNode = flow.getNodeById(conversation.currentNodeId)
       if (currentNode?.type === 'capture') {
@@ -713,7 +729,7 @@ export class FlowExecutionService {
 
         // Returning user — skip intro entirely if flow has a returning_user edge
         const returningEdge = flow.getNextNodes(node.id, 'returning_user')[0]
-        if (returningEdge && lead && lead.totalSessions > 1) {
+        if (returningEdge && lead && lead.totalSessions > 1 && !lead.isRecentBuyer()) {
           console.log(`[FlowExecution] returning_user for ${conversation.phoneNumber} (sessions=${lead.totalSessions} tags=${lead.tags.join(',')}) → skipping intro`)
           return returningEdge.id
         }
@@ -1761,11 +1777,16 @@ export class FlowExecutionService {
           console.log(`[ai_router] multi-title detected (AI): ${multipleTitles.join(' | ')}`)
           const results = await Promise.all(multipleTitles.map(t => this.catalogSearchService!.search(bot.id, t)))
           const found: CartItem[] = []
+          const seenProductIds = new Set<string>()
           const notFound: string[] = []
           for (let i = 0; i < results.length; i++) {
             const r = results[i]
             if (r.products.length > 0) {
-              found.push({ productId: r.products[0].product.id, name: r.products[0].product.name, priceCentavos: r.products[0].product.priceCentavos, accessLink: r.products[0].product.accessLink })
+              const p = r.products[0].product
+              if (!seenProductIds.has(p.id)) {
+                seenProductIds.add(p.id)
+                found.push({ productId: p.id, name: p.name, priceCentavos: p.priceCentavos, accessLink: p.accessLink })
+              }
             } else {
               notFound.push(multipleTitles[i])
             }
