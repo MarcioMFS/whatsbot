@@ -1638,6 +1638,18 @@ export class FlowExecutionService {
             conversation.setVariable('__rt_quantity_detected', String(ruleMatch.quantityDetected))
           if (ruleMatch.titleDetected)
             conversation.setVariable('__rt_title_detected', ruleMatch.titleDetected)
+
+          // Fraud/support patterns: send reassurance, create handoff (suspend — not end)
+          if (ruleMatch.handle === 'price_issue') {
+            console.log(`[classify_intent] fraud_detected: creating handoff (not end_service) for ${conversation.phoneNumber}`)
+            const msg = 'Entendo! Deixa eu ver o que posso fazer por você 🙏 Vou falar com o pessoal aqui, em instantes alguém te retorna!'
+            await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: conversation.phoneNumber, message: msg })
+            conversation.addAssistantMessage(msg)
+            this.createHandoff({ bot, conversation, lead, reason: 'fraud_accusation', lastMessage: text })
+              .catch(e => console.error('[classify_intent] createHandoff failed:', e?.message))
+            return null // suspend — conversation stays open for operator takeover
+          }
+
           const nextNode = flow.getNextNodes(node.id, ruleMatch.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
           console.log(`[classify_intent] rule_match: handle=${ruleMatch.handle} confidence=${ruleMatch.confidence} next=${nextNode}`)
           return nextNode
