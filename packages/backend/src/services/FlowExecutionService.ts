@@ -2165,7 +2165,7 @@ export class FlowExecutionService {
   private isWebappSelection(text: string): boolean {
     const n = this.normalize(text)
     return (
-      (n.includes('gostaria dessas minisserias') || n.includes('desejo essas minisserias')) &&
+      (n.includes('gostaria dessas minisseries') || n.includes('desejo essas minisseries')) &&
       text.includes('• ')
     )
   }
