@@ -1236,9 +1236,8 @@ export class FlowExecutionService {
             message: 'Seu carrinho ainda está vazio 😅 Me fala o que você quer adicionar!',
           })
           conversation.addAssistantMessage('Seu carrinho ainda está vazio 😅 Me fala o que você quer adicionar!')
-          // Route back to capture so the user can type — never leave them stuck
+          // Route back to capture — never through output (which leads to checkout)
           return flow.getNextNodes(node.id, 'empty')[0]?.id
-            ?? flow.getNextNodes(node.id, 'output')[0]?.id
             ?? flow.nodes.find(n => n.type === 'capture' && n.id.includes('main'))?.id
             ?? undefined
         }
