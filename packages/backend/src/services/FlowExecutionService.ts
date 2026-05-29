@@ -1492,11 +1492,20 @@ export class FlowExecutionService {
       case 'classify_intent': {
         const data = node.data as ClassifyIntentNodeData
 
+        console.log(`[classify_intent] start — phone=${conversation.phoneNumber} node=${node.id}`)
+
         // Catalog paste guard — runs before any classification
         {
           const rawText = data.messageVariable
             ? (conversation.variables[data.messageVariable] ?? '')
             : (conversation.getLastUserMessage() ?? '')
+
+          // Webapp selection: "Olá! Gostaria dessas minisséries: • Title1 • Title2 Desejo essas minisséries!"
+          if (this.isWebappSelection(rawText)) {
+            console.log(`[classify_intent] webapp_selection detected — routing to ai_check: "${rawText.slice(0, 80)}"`)
+            return flow.getNextNodes(node.id, 'ai_check')[0]?.id ?? null
+          }
+
           if (this.isCatalogPaste(rawText)) {
             console.log('[classify_intent] catalog_paste detected — sending guidance')
             await this.messaging.sendMessage({
@@ -1577,6 +1586,7 @@ export class FlowExecutionService {
           // Try the exact handle first, then legacy mapping
           const directEdge = flow.getNextNodes(node.id, intent)[0]
           const handle = directEdge ? intent : this.intentToHandle(intent)
+          console.log(`[classify_intent] p3_fast_path: intent=${intent} handle=${handle}`)
           return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
         }
 
@@ -1604,6 +1614,7 @@ export class FlowExecutionService {
         }
 
         // ── Step 1: run configurable rules from node data ──────────────────
+        console.log(`[classify_intent] step1_rules: text="${text.slice(0, 80)}" intents=${data.intents?.length ?? 0}`)
         const ruleMatch = data.intents?.length
           ? this.runConfiguredRules(text, data.intents)
           : null
@@ -1615,11 +1626,13 @@ export class FlowExecutionService {
             conversation.setVariable('__rt_quantity_detected', String(ruleMatch.quantityDetected))
           if (ruleMatch.titleDetected)
             conversation.setVariable('__rt_title_detected', ruleMatch.titleDetected)
-          console.log(`[classify_intent] rule match: "${text.slice(0, 60)}" → ${ruleMatch.handle} (${ruleMatch.confidence})`)
-          return flow.getNextNodes(node.id, ruleMatch.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          const nextNode = flow.getNextNodes(node.id, ruleMatch.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          console.log(`[classify_intent] rule_match: handle=${ruleMatch.handle} confidence=${ruleMatch.confidence} next=${nextNode}`)
+          return nextNode
         }
 
         // ── Step 2: AI Agent for unmapped scenarios ────────────────────────
+        console.log(`[classify_intent] step2_ai_agent: enabled=${!!data.aiAgent?.enabled} text="${text.slice(0, 80)}"`)
         if (data.aiAgent?.enabled) {
           const agentDecision = await this.runIntentAgent(text, conversation, lead, bot, data.aiAgent)
           conversation.setVariable('__rt_intent', agentDecision.handle ?? 'unknown')
@@ -1636,11 +1649,12 @@ export class FlowExecutionService {
               phoneNumber: conversation.phoneNumber,
               message: agentDecision.message,
             })
-            console.log(`[classify_intent] AI responded inline for: "${text.slice(0, 60)}"`)
+            console.log(`[classify_intent] ai_agent: action=respond inline="${agentDecision.message?.slice(0, 60)}"`)
             return null // stay — wait for next user message
           }
 
           if (agentDecision.action === 'handoff') {
+            console.log(`[classify_intent] ai_agent: action=handoff reason=unknown_intent`)
             this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
               .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
             return flow.getNextNodes(node.id, 'unknown')[0]?.id
@@ -1648,12 +1662,13 @@ export class FlowExecutionService {
 
           // action === 'route'
           const handle = agentDecision.handle ?? 'unknown'
-          console.log(`[classify_intent] AI routed: "${text.slice(0, 60)}" → ${handle}`)
-          return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          const nextNode = flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          console.log(`[classify_intent] ai_agent: action=route handle=${handle} title="${agentDecision.titleDetected ?? ''}" next=${nextNode}`)
+          return nextNode
         }
 
         // No configured rules and no AI agent — fall through to unknown
-        console.warn(`[classify_intent] node "${node.id}" has no intents configured and aiAgent is disabled. Configure data.intents[] in the FlowBuilder.`)
+        console.warn(`[classify_intent] no_rules_no_ai: node=${node.id} — configure data.intents[] in FlowBuilder`)
         return flow.getNextNodes(node.id, 'unknown')[0]?.id
       }
 
@@ -2144,6 +2159,15 @@ export class FlowExecutionService {
     const catalogSignals = ['dublado', 'dorama', 'romance •', 'drama •', 'acao •', 'suspense •', 'comedia •', 'fantasia •', 'quero esse dorama', '+ quero', 'genero', 'sinopse']
     const signalCount = catalogSignals.filter(s => n.includes(s)).length
     return signalCount >= 2
+  }
+
+  /** Detects structured webapp selection: "Olá! Gostaria dessas minisséries: • Title1 • Title2 Desejo essas minisséries!" */
+  private isWebappSelection(text: string): boolean {
+    const n = this.normalize(text)
+    return (
+      (n.includes('gostaria dessas minisserias') || n.includes('desejo essas minisserias')) &&
+      text.includes('• ')
+    )
   }
 
   /** Extract multiple title candidates. Conservative rules to avoid splitting single titles. */
