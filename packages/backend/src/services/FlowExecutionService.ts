@@ -270,6 +270,26 @@ export class FlowExecutionService {
           await this.convRepo.save(conversation)
           return
         }
+        case 'resend_pix': {
+          const pixKey = conversation.variables['__rt_checkout_pix_key']
+            ?? conversation.variables['paymentPixKey']
+            ?? bot.globalConfig?.defaultPixKey
+            ?? ''
+          const pixAmount = conversation.variables['__rt_checkout_final_total_brl']
+            ?? conversation.variables['__rt_cart_total_brl']
+            ?? ''
+          const pixName = bot.globalConfig?.defaultReceiverName ?? ''
+          const intro = `Claro 😊 Segue a chave pix${pixAmount ? ` — valor: *${pixAmount}*` : ''}:`
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: intro })
+          if (pixKey) {
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: pixKey })
+          } else {
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: 'Me chama que te passo a chave 😊' })
+          }
+          conversation.addAssistantMessage(intro)
+          await this.convRepo.save(conversation)
+          return
+        }
         case 'payment_help': {
           const reply = decision.reply || 'Pode me descrever melhor o que está acontecendo? Vou te ajudar 😊'
           await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
@@ -729,7 +749,7 @@ export class FlowExecutionService {
 
         // Returning user — skip intro entirely if flow has a returning_user edge
         const returningEdge = flow.getNextNodes(node.id, 'returning_user')[0]
-        if (returningEdge && lead && lead.totalSessions > 1 && !lead.isRecentBuyer()) {
+        if (returningEdge && lead && lead.totalSessions > 1 && !lead.tags.includes('buyer')) {
           console.log(`[FlowExecution] returning_user for ${conversation.phoneNumber} (sessions=${lead.totalSessions} tags=${lead.tags.join(',')}) → skipping intro`)
           return returningEdge.id
         }
@@ -1407,6 +1427,7 @@ export class FlowExecutionService {
               pixKey: receiverKey,
               pixName: receiverName,
             })
+            conversation.setVariable('__rt_checkout_pix_key', receiverKey)
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
           }
@@ -1504,6 +1525,7 @@ export class FlowExecutionService {
               ? `\n_${pricing.appliedOfferName}: ${PricingService.formatBRL(pricing.originalTotalCentavos)} → *${finalBrl}*_`
               : ''
             const pixMsg = `💳 *Pagamento via Pix*\n\nValor: *${finalBrl}*\nFavorecido: ${receiverName}${offerLine}\n\n_Copie a chave abaixo e pague no seu banco. Depois me envie o comprovante 🚀_`
+            conversation.setVariable('__rt_checkout_pix_key', receiverKey)
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
           }

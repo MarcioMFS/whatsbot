@@ -6,6 +6,7 @@ import type { PostgreSQLAIDecisionRepository } from '../adapters/PostgreSQLAIDec
 export type PaymentPhaseIntent =
   | 'receipt_sent'
   | 'payment_help'
+  | 'resend_pix'
   | 'edit_order'
   | 'cancel_order'
   | 'noise'
@@ -37,6 +38,16 @@ const FALLBACK: PaymentPhaseDecision = {
   reply: 'Perfeito 😊 Qualquer hora me envie o comprovante do Pix!',
   confidence: 0.5,
 }
+
+const RESEND_PIX_PATTERNS = [
+  /\bpode (me )?(re)?enviar (o )?(pix|chave|pagamento)\b/i,
+  /\b(re)?envia (o )?(pix|chave)\b/i,
+  /\bmanda (o )?(pix|chave) (de novo|novamente|outra vez)\b/i,
+  /\b(re)?manda (o )?(pix|chave)\b/i,
+  /\bpix (de novo|novamente|outra vez)\b/i,
+  /\bqual (é |e )?(a )?chave\b/i,
+  /\bme manda (a )?chave\b/i,
+]
 
 // Deterministic patterns — checked before calling AI
 const EDIT_ORDER_PATTERNS = [
@@ -74,6 +85,9 @@ const CANCEL_ORDER_PATTERNS = [
 
 function deterministicClassify(text: string): PaymentPhaseIntent | null {
   const t = text.trim()
+  for (const pattern of RESEND_PIX_PATTERNS) {
+    if (pattern.test(t)) return 'resend_pix'
+  }
   for (const pattern of CANCEL_ORDER_PATTERNS) {
     if (pattern.test(t)) return 'cancel_order'
   }
@@ -96,8 +110,9 @@ ${identityBlock}
 Retorne SOMENTE JSON válido, nenhum texto fora do JSON.
 
 INTENTS disponíveis:
+- resend_pix: cliente pede para reenviar a chave ou o pix ("pode mandar o pix de novo?", "me manda a chave", "reenviar o pix", "me envia o pix")
 - receipt_sent: cliente afirma que pagou ou enviou comprovante sem ter enviado imagem ("paguei", "mandei", "fiz o pix", "transferi", "já enviei", "olha lá")
-- payment_help: dúvida sobre como pagar ("qual a chave?", "como faço o pix?", "deu erro", "não consigo pagar", "qual o valor mesmo?")
+- payment_help: dúvida sobre como pagar ("como faço o pix?", "deu erro", "não consigo pagar", "qual o valor mesmo?")
 - edit_order: quer alterar o pedido antes de pagar ("quero trocar", "errei o item", "adiciona mais uma", "muda para", "quero outra série", "tira essa", "quero mudar")
 - cancel_order: quer desistir completamente ("não quero mais", "cancela", "desisti", "deixa pra lá", "esquece", "vou sair")
 - noise: mensagem sem relação com o pagamento (risada, emoji solto, texto aleatório, "kkk", "ok", "sim", "entendi", "tá", saudação genérica)
@@ -209,7 +224,7 @@ Retorne JSON:`
       const parsed = JSON.parse(raw.slice(jsonStart, jsonEnd + 1)) as Partial<PaymentPhaseDecision>
 
       const validIntents: PaymentPhaseIntent[] = [
-        'receipt_sent', 'payment_help', 'edit_order', 'cancel_order', 'noise', 'internal_takeover',
+        'receipt_sent', 'payment_help', 'resend_pix', 'edit_order', 'cancel_order', 'noise', 'internal_takeover',
       ]
       const intent = validIntents.includes(parsed.intent as PaymentPhaseIntent)
         ? (parsed.intent as PaymentPhaseIntent)
