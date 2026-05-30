@@ -905,12 +905,13 @@ export class FlowExecutionService {
           }
         }
 
-        const lines = [`💳 *Chave Pix para pagamento*`, ``, `\`${receiverKey}\``]
+        const lines = [`💳 *Chave Pix para pagamento*`]
         if (displayAmount) lines.push(``, `Valor: *R$ ${displayAmount}*`)
         if (desc) lines.push(`Descrição: ${desc}`)
         if (receiverName) lines.push(`Favorecido: ${receiverName}`)
-        lines.push(``, `_Copie a chave acima e pague pelo seu banco._`)
+        lines.push(``, `_Copie a chave abaixo e pague pelo seu banco._`)
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: lines.join('\n') })
+        await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
       }
@@ -1398,7 +1399,7 @@ export class FlowExecutionService {
               ? `\n_Pacote aplicado: ${pricing.appliedOfferName} — desconto de ${PricingService.formatBRL(pricing.discountCentavos)}_`
               : ''
             const pixTemplate = data.pixMessage
-              ?? `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalAmountBrl}*\nFavorecido: ${receiverName}${discountLine}\n\n_Copie a chave acima e realize o pagamento no seu banco._`
+              ?? `💳 *Pagamento via Pix*\n\nValor: *${finalAmountBrl}*\nFavorecido: ${receiverName}${discountLine}\n\n_Copie a chave abaixo e realize o pagamento no seu banco._`
             const pixMsg = this.interpolate(pixTemplate, {
               ...conversation.variables,
               ...pricingVars,
@@ -1407,6 +1408,7 @@ export class FlowExecutionService {
               pixName: receiverName,
             })
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
           }
 
           this.emit(bot.id, conversation.id, phone, 'checkout_initiated', {
@@ -1501,8 +1503,9 @@ export class FlowExecutionService {
             const offerLine = hasDiscount
               ? `\n_${pricing.appliedOfferName}: ${PricingService.formatBRL(pricing.originalTotalCentavos)} → *${finalBrl}*_`
               : ''
-            const pixMsg = `💳 *Pagamento via Pix*\n\nChave: \`${receiverKey}\`\nValor: *${finalBrl}*\nFavorecido: ${receiverName}${offerLine}\n\n_Copie a chave e pague no seu banco. Depois me envie o comprovante 🚀_`
+            const pixMsg = `💳 *Pagamento via Pix*\n\nValor: *${finalBrl}*\nFavorecido: ${receiverName}${offerLine}\n\n_Copie a chave abaixo e pague no seu banco. Depois me envie o comprovante 🚀_`
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
           }
 
           this.emit(bot.id, conversation.id, phone, 'payment_requested', {
