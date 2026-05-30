@@ -28,9 +28,28 @@ export interface AIObservation {
   createdAt?: Date
 }
 
+export interface AIObservationIntentStat {
+  intent: string
+  count: number
+  escalated: number
+}
+
+export interface AIObservationStats {
+  total: number
+  aiCount: number
+  defaultCount: number
+  fallbackRate: number
+  successCount: number
+  escalatedCount: number
+  pendingCount: number
+  byIntent: AIObservationIntentStat[]
+}
+
 export interface AIObservationRepository {
   save(observation: AIObservation): Promise<void>
   findByBotId(botId: string, limit?: number): Promise<AIObservation[]>
   findProblematic(botId: string, days: number): Promise<AIObservation[]>
+  getStats(botId: string, days: number): Promise<AIObservationStats>
   updateOutcome(id: string, outcome: string, reason?: string): Promise<void>
+  updateOutcomeByConversation(conversationId: string, outcome: string, reason?: string): Promise<void>
 }

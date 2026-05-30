@@ -11,6 +11,7 @@ import { PackageOffers } from './pages/PackageOffers.tsx'
 import { Handoffs } from './pages/Handoffs.tsx'
 import PaymentIntents from './pages/PaymentIntents.tsx'
 import { Capabilities } from './pages/Capabilities.tsx'
+import { AIPatterns } from './pages/AIPatterns.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -33,6 +34,7 @@ export default function App() {
       <Route path="/bots/:botId/handoffs" element={<ProtectedRoute><Handoffs /></ProtectedRoute>} />
       <Route path="/bots/:botId/payment-intents" element={<ProtectedRoute><PaymentIntents /></ProtectedRoute>} />
       <Route path="/bots/:botId/capabilities" element={<ProtectedRoute><Capabilities /></ProtectedRoute>} />
+      <Route path="/bots/:botId/patterns" element={<ProtectedRoute><AIPatterns /></ProtectedRoute>} />
     </Routes>
   )
 }

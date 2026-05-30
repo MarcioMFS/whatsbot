@@ -1,4 +1,4 @@
-import type { CartItem } from '@whatsbot/core'
+import type { CartItem, AIObservationRepository } from '@whatsbot/core'
 import type { Message } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { BotPersona } from './BotPersonaBuilder.js'
@@ -60,6 +60,8 @@ export interface RouterContext {
   savedTypePref?: string
   // detected question type — helps Claude interpret "sim"/"não" correctly
   lastBotQuestionType?: 'want_more_items' | 'confirm_suggested_title' | 'confirm_checkout' | 'unknown'
+  hasImage?: boolean
+  leadTags?: string[]
   // audit
   botId?: string
   conversationId?: string
@@ -167,6 +169,7 @@ export class ContextualAIRouter {
   constructor(
     private aiService: AIGenerationService,
     private auditRepo?: PostgreSQLAIDecisionRepository,
+    private observationRepo?: AIObservationRepository,
   ) {}
 
   async route(ctx: RouterContext): Promise<RouterDecision> {
@@ -333,6 +336,29 @@ Analise o contexto completo e retorne JSON:
             cachedTokens: result.cachedTokens ?? 0,
           },
         })
+      }
+
+      if (this.observationRepo && ctx.botId && ctx.phoneNumber) {
+        this.observationRepo.save({
+          botId: ctx.botId,
+          conversationId: ctx.conversationId,
+          phoneNumber: ctx.phoneNumber,
+          userMessage: ctx.userMessage,
+          hasImage: ctx.hasImage ?? false,
+          phase: ctx.phase,
+          cartCount: ctx.cartItems.length,
+          leadTags: ctx.leadTags ?? [],
+          historyLength: ctx.history.length,
+          layer: 'ai_router',
+          selectedIntent: intent,
+          method: usedFallback ? 'default' : 'ai',
+          confidence: parsed.confidence ?? undefined,
+          reasoning: `nextAction=${nextAction}${parsed.candidateQuery ? ` query=${parsed.candidateQuery}` : ''}`,
+          provider: 'claude',
+          durationMs,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
+        }).catch(e => console.error('[ContextualAIRouter] observation save failed:', e?.message))
       }
 
       return decision

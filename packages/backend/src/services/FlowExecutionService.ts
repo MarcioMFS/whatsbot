@@ -55,6 +55,7 @@ import type { DeliveryService } from './DeliveryService.js'
 import type { ContextualAIRouter } from './ContextualAIRouter.js'
 import type { PaymentPhaseRouter } from './PaymentPhaseRouter.js'
 import type { CapabilityRouter } from './CapabilityRouter.js'
+import type { AIObservationRepository } from '@whatsbot/core'
 import { buildBotPersona } from './BotPersonaBuilder.js'
 
 const RECOVERY_THRESHOLD = 0.6
@@ -91,6 +92,7 @@ export class FlowExecutionService {
     private contextualAIRouter?: ContextualAIRouter,
     private paymentPhaseRouter?: PaymentPhaseRouter,
     private capabilityRouter?: CapabilityRouter,
+    private observationRepo?: AIObservationRepository,
   ) {}
 
   private emit(botId: string, convId: string | null | undefined, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
@@ -1100,6 +1102,7 @@ export class FlowExecutionService {
           conversation.setVariable('__lead_tags', lead.tags.join(','))
         }
         this.transitionPhase(conversation, 'post_purchase', 'payment_confirmed')
+        this.observationRepo?.updateOutcomeByConversation(conversation.id, 'success').catch(e => console.error('[FES] outcome success failed:', e?.message))
         console.log(`[FlowExecution] payment_confirmed for ${conversation.phoneNumber}`)
 
         // Commerce: create Order from cart and deliver access links
@@ -1852,6 +1855,8 @@ export class FlowExecutionService {
           savedGenrePref: conversation.variables['__rt_rec_genre'],
           savedTypePref: conversation.variables['__rt_rec_type'],
           lastBotQuestionType: this.detectBotQuestionType(lastBotMessage),
+          hasImage: false,
+          leadTags: lead?.tags ?? [],
           botId: bot.id,
           conversationId: conversation.id,
           phoneNumber: phone,
@@ -2118,6 +2123,7 @@ export class FlowExecutionService {
       leadTags: params.lead?.tags ?? [],
     })
     await this.handoffRepo.save(handoff)
+    this.observationRepo?.updateOutcomeByConversation(params.conversation.id, 'escalated', params.reason).catch(e => console.error('[FES] outcome escalated failed:', e?.message))
     this.emit(params.bot.id, params.conversation.id, params.conversation.phoneNumber, 'handoff_requested', {
       reason: params.reason,
       handoffId: handoff.id,

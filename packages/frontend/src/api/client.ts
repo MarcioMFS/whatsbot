@@ -149,4 +149,17 @@ export const api = {
     patterns: (botId: string, days = 7) =>
       request<unknown[]>(`/capabilities/bot/${botId}/patterns?days=${days}`),
   },
+  observations: {
+    stats: (botId: string, days = 7) =>
+      request<{ stats: unknown }>(`/observations/bot/${botId}/stats?days=${days}`),
+    problematic: (botId: string, days = 7) =>
+      request<{ observations: unknown[] }>(`/observations/bot/${botId}/problematic?days=${days}`),
+    feed: (botId: string, limit = 100) =>
+      request<{ observations: unknown[] }>(`/observations/bot/${botId}?limit=${limit}`),
+    setOutcome: (id: string, outcome: string, reason?: string) =>
+      request<void>(`/observations/${id}/outcome`, {
+        method: 'PATCH',
+        body: JSON.stringify({ outcome, reason }),
+      }),
+  },
 }

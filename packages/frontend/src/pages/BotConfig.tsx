@@ -309,6 +309,7 @@ export function BotConfig() {
               { label: 'Produtos', desc: 'Catálogo com aliases para busca fuzzy e links de acesso', icon: Package, color: 'indigo', path: 'products' },
               { label: 'Pacotes', desc: 'Pricing por quantidade — mínimo ou exato', icon: Tag, color: 'orange', path: 'package-offers' },
               { label: 'Capabilities', desc: 'Sub-flows que a IA invoca dinamicamente por contexto', icon: Workflow, color: 'purple', path: 'capabilities' },
+              { label: 'AI Patterns', desc: 'Decisões do roteador de IA, taxa de fallback e desfechos', icon: Activity, color: 'amber', path: 'patterns' },
             ]}
           />
         )}

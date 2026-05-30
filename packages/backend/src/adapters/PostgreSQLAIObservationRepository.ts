@@ -1,5 +1,5 @@
 import type { Pool } from 'pg'
-import type { AIObservation, AIObservationRepository } from '@whatsbot/core'
+import type { AIObservation, AIObservationRepository, AIObservationStats } from '@whatsbot/core'
 
 export class PostgreSQLAIObservationRepository implements AIObservationRepository {
   constructor(private db: Pool) {}
@@ -62,11 +62,62 @@ export class PostgreSQLAIObservationRepository implements AIObservationRepositor
     return rows.map(r => this.toDomain(r))
   }
 
+  async getStats(botId: string, days: number): Promise<AIObservationStats> {
+    const totals = await this.db.query(
+      `SELECT
+         count(*)::int AS total,
+         count(*) FILTER (WHERE method = 'ai')::int AS ai_count,
+         count(*) FILTER (WHERE method = 'default')::int AS default_count,
+         count(*) FILTER (WHERE outcome = 'success')::int AS success_count,
+         count(*) FILTER (WHERE outcome = 'escalated')::int AS escalated_count,
+         count(*) FILTER (WHERE outcome IS NULL)::int AS pending_count
+       FROM ai_observations
+       WHERE bot_id = $1 AND created_at > now() - ($2 || ' days')::interval`,
+      [botId, days],
+    )
+    const byIntent = await this.db.query(
+      `SELECT selected_intent AS intent,
+              count(*)::int AS count,
+              count(*) FILTER (WHERE outcome = 'escalated')::int AS escalated
+       FROM ai_observations
+       WHERE bot_id = $1 AND created_at > now() - ($2 || ' days')::interval
+       GROUP BY selected_intent
+       ORDER BY count DESC`,
+      [botId, days],
+    )
+    const t = totals.rows[0] ?? {}
+    const total = t.total ?? 0
+    return {
+      total,
+      aiCount: t.ai_count ?? 0,
+      defaultCount: t.default_count ?? 0,
+      fallbackRate: total > 0 ? (t.default_count ?? 0) / total : 0,
+      successCount: t.success_count ?? 0,
+      escalatedCount: t.escalated_count ?? 0,
+      pendingCount: t.pending_count ?? 0,
+      byIntent: byIntent.rows.map(r => ({
+        intent: r.intent as string,
+        count: r.count as number,
+        escalated: r.escalated as number,
+      })),
+    }
+  }
+
   async updateOutcome(id: string, outcome: string, reason?: string): Promise<void> {
     await this.db.query(
       'UPDATE ai_observations SET outcome = $1, outcome_reason = $2, outcome_at = now() WHERE id = $3',
       [outcome, reason ?? null, id],
     )
+  }
+
+  async updateOutcomeByConversation(conversationId: string, outcome: string, reason?: string): Promise<void> {
+    await this.db.query(
+      `UPDATE ai_observations SET outcome = $1, outcome_reason = $2, outcome_at = now()
+       WHERE conversation_id = $3 AND outcome IS NULL`,
+      [outcome, reason ?? null, conversationId],
+    ).catch(err => {
+      console.error('[AIObservationRepository] updateOutcomeByConversation failed:', err?.message)
+    })
   }
 
   private toDomain(row: Record<string, unknown>): AIObservation {

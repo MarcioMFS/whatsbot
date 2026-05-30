@@ -50,6 +50,7 @@ import { PostgreSQLAIObservationRepository } from './adapters/PostgreSQLAIObserv
 import { CapabilityRouter } from './services/CapabilityRouter.js'
 import { PatternDetector } from './services/PatternDetector.js'
 import { capabilitiesRoutes } from './routes/capabilities.js'
+import { observationRoutes } from './routes/observations.js'
 
 const requiredEnv = ['DATABASE_URL', 'REDIS_URL', 'JWT_SECRET', 'EVOLUTION_URL', 'EVOLUTION_API_KEY']
 for (const key of requiredEnv) {
@@ -95,8 +96,9 @@ const handoffRepo = new PostgreSQLHandoffRepository(db)
 
 const aiService = new AIGenerationService(aiProviders)
 const aiDecisionRepo = new PostgreSQLAIDecisionRepository(db)
+const observationRepo = new PostgreSQLAIObservationRepository(db)
 const catalogSearchService = new CatalogSearchService(productRepo, aiService, aiDecisionRepo)
-const contextualAIRouter = new ContextualAIRouter(aiService, aiDecisionRepo)
+const contextualAIRouter = new ContextualAIRouter(aiService, aiDecisionRepo, observationRepo)
 const paymentPhaseRouter = new PaymentPhaseRouter(aiService, aiDecisionRepo)
 const usedTransactionRepo = new PostgreSQLUsedTransactionRepository(db)
 const eventBus = new InternalEventBus(db)
@@ -107,14 +109,13 @@ const paymentOrchestrator = new PaymentOrchestrator(receiptExtractor, paymentInt
 const deliveryAuditRepo = new PostgreSQLDeliveryAuditRepository(db)
 const deliveryService = new DeliveryService(messaging, eventRepo, deliveryAuditRepo)
 const capabilityRepo = new PostgreSQLCapabilityRepository(db)
-const observationRepo = new PostgreSQLAIObservationRepository(db)
 const capabilityRouter = new CapabilityRouter(capabilityRepo, aiService, observationRepo)
 const patternDetector = new PatternDetector(db)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
   eventRepo, paymentOrchestrator, paymentIntentRepo,
   catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
-  contextualAIRouter, paymentPhaseRouter, capabilityRouter,
+  contextualAIRouter, paymentPhaseRouter, capabilityRouter, observationRepo,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
@@ -138,6 +139,7 @@ await app.register(packageOfferRoutes, { prefix: '/api/package-offers', packageO
 await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRepo: conversationRepo, botRepo, messaging })
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo })
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector })
+await app.register(observationRoutes, { prefix: '/api/observations', observationRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 startMessageWorker(redis, flowExecService, botRepo)
