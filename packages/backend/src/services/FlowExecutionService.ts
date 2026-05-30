@@ -256,7 +256,7 @@ export class FlowExecutionService {
         persona: buildBotPersona(bot.globalConfig, bot.id),
         botId: bot.id,
         conversationId: conversation.id,
-        phoneNumber: phone,
+        phoneNumber,
       })
 
       const instance = bot.evolutionConfig.instanceName
