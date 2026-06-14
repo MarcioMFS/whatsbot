@@ -2,18 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import gsap from 'gsap'
 import {
-  Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, Users, GitBranch,
-  Trash2, Settings2, Activity, Package, ShoppingBag, Tag, PhoneCall, CreditCard,
-  ChevronRight, ArrowRight, Bot, Workflow, Copy,
+  Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, GitBranch,
+  Trash2, Settings2, Package, ChevronRight, ArrowRight, Bot, Copy,
+  Layers, Sparkles, BookOpen, MessageCircle, CreditCard, LifeBuoy,
+  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow } from '../components/mkhub'
-import { api } from '../api/client.ts'
+import { api, type BotModule } from '../api/client.ts'
 import { useUIStore } from '../stores/uiStore.ts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RoutingRule { tag: string; flowId: string }
+
+interface AgentTone {
+  formality?: 'informal' | 'neutro' | 'formal'
+  emoji?: 'nenhum' | 'raro' | 'moderado'
+  length?: 'curtas' | 'medias'
+  slang?: boolean
+}
 
 interface GlobalConfig {
   defaultPixKey?: string
@@ -26,10 +35,26 @@ interface GlobalConfig {
   assistantName?: string
   companyName?: string
   agentKnowledge?: string
+  agentInstructions?: string
+  agentGreeting?: string
+  agentIntroMessage?: string
+  agentTestNumbers?: string[]
+  agentTone?: AgentTone
   neverExposeAI?: boolean
+  allowIdentityDisclosure?: boolean
   ownerTestMode?: boolean
+  runtime?: 'flow' | 'agent'
   tone?: 'acolhedor' | 'profissional' | 'casual' | 'formal'
   locale?: 'pt-BR' | 'en-US' | 'es-ES'
+  modules?: Record<string, { enabled: boolean; config?: Record<string, unknown> }>
+}
+
+interface PersonaPreview {
+  identityLine: string
+  greetingExample: string
+  paymentExample: string
+  handoffExample: string
+  toneExample: string
 }
 
 interface BotData {
@@ -44,24 +69,29 @@ interface BotData {
   evolutionConfig: { instanceName: string }
 }
 
-interface FlowData {
-  id: string
-  name: string
-  nodes: unknown[]
-  edges: unknown[]
-}
+interface FlowData { id: string; name: string; nodes: unknown[]; edges: unknown[] }
 
 // ─── Tabs ─────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'automacao',    label: 'Automação',    icon: GitBranch  },
-  { id: 'operacao',     label: 'Operação',     icon: Activity   },
-  { id: 'catalogo',     label: 'Catálogo',     icon: Package    },
-  { id: 'financeiro',   label: 'Financeiro',   icon: CreditCard },
-  { id: 'configuracoes',label: 'Configurações',icon: Settings2  },
+  { id: 'config',       label: 'Config',       icon: Settings2 },
+  { id: 'automacao',    label: 'Flows',        icon: GitBranch },
+  { id: 'modulos',      label: 'Módulos',      icon: Layers },
+  { id: 'skills',       label: 'Skills',       icon: Sparkles },
+  { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
+  { id: 'tom',          label: 'Tom',          icon: MessageCircle },
 ] as const
 
 type TabId = typeof TABS[number]['id']
+
+// Presentation map: icon + kind label per module id (backend owns the truth; this is just chrome).
+const MODULE_ICON: Record<string, LucideIcon> = {
+  payment_pix: CreditCard, human_handoff: LifeBuoy, catalog: Search,
+  delivery: Package, recover: RotateCcw, media: ImageIcon,
+}
+const KIND_LABEL: Record<BotModule['type'], string> = {
+  routable: 'roteável', tool: 'ferramenta', effect: 'efeito',
+}
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -71,10 +101,11 @@ export function BotConfig() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { setCurrentBot } = useUIStore()
 
-  const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'automacao'
+  const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'config'
 
   const [bot, setBot] = useState<BotData | null>(null)
   const [flows, setFlows] = useState<FlowData[]>([])
+  const [modules, setModules] = useState<BotModule[]>([])
   const [qrCode, setQrCode] = useState<string | null>(null)
   const [showQR, setShowQR] = useState(false)
   const [qrLoading, setQrLoading] = useState(false)
@@ -83,7 +114,8 @@ export function BotConfig() {
   const [routingRules, setRoutingRules] = useState<RoutingRule[]>([])
   const [routingSaving, setRoutingSaving] = useState(false)
   const [globalConfig, setGlobalConfig] = useState<GlobalConfig>({})
-  const [configSaving, setConfigSaving] = useState(false)
+  const [preview, setPreview] = useState<PersonaPreview | null>(null)
+  const [savingTab, setSavingTab] = useState<string | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -92,7 +124,8 @@ export function BotConfig() {
       api.bots.get(botId),
       api.flows.list(botId),
       api.bots.connectionStatus(botId),
-    ]).then(([b, f, s]) => {
+      api.bots.modules(botId),
+    ]).then(([b, f, s, m]) => {
       const botData = b as BotData
       setBot(botData)
       setCurrentBot({ id: botData.id, name: botData.name })
@@ -100,6 +133,7 @@ export function BotConfig() {
       setGlobalConfig(botData.globalConfig ?? {})
       setFlows(f as FlowData[])
       setWaState((s as { state: 'open' | 'connecting' | 'close' }).state)
+      setModules((m as { modules: BotModule[] }).modules)
     })
     if (headingRef.current) {
       gsap.fromTo(headingRef.current, { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.4, ease: 'power3.out' })
@@ -124,6 +158,22 @@ export function BotConfig() {
 
   const setTab = (tab: TabId) => setSearchParams({ tab })
 
+  // Save a slice of globalConfig via the validated endpoint (persona preview + cache invalidation).
+  const saveGlobal = async (patch: Partial<GlobalConfig>, tabKey: string) => {
+    if (!botId) return
+    setSavingTab(tabKey)
+    try {
+      const res = await api.bots.updateGlobalConfig(botId, patch as Record<string, unknown>)
+      setGlobalConfig(c => ({ ...c, ...patch }))
+      if (res?.preview) setPreview(res.preview as PersonaPreview)
+    } finally { setSavingTab(null) }
+  }
+
+  const setRuntime = (runtime: 'flow' | 'agent') => {
+    setGlobalConfig(c => ({ ...c, runtime }))
+    void saveGlobal({ runtime }, 'runtime')
+  }
+
   const createFlow = async () => {
     if (!botId) return
     const name = prompt('Nome do fluxo:')
@@ -132,7 +182,6 @@ export function BotConfig() {
     setFlows(f => [...f, flow])
   }
 
-  // A1: clone an existing flow (nodes + edges) as a starting template
   const cloneFlow = async (src: FlowData) => {
     if (!botId) return
     const name = prompt('Nome do novo fluxo:', `Cópia de ${src.name}`)
@@ -169,13 +218,6 @@ export function BotConfig() {
     setBot(updated)
   }
 
-  const saveConfig = async () => {
-    if (!botId) return
-    setConfigSaving(true)
-    try { await api.bots.updateConfig(botId, globalConfig as Record<string, unknown>) }
-    finally { setConfigSaving(false) }
-  }
-
   const saveRouting = async () => {
     if (!botId) return
     setRoutingSaving(true)
@@ -189,15 +231,23 @@ export function BotConfig() {
     <MkLayout>
       <div className="max-w-4xl mx-auto">
 
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
+        {/* Status bar */}
+        <div className="flex items-center gap-3 mb-7">
           <div style={{ width: 40, height: 40, borderRadius: 13, border: '1px solid var(--line)', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Bot size={18} strokeWidth={1.6} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h1 ref={headingRef} className="mk-display" style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.01em' }}>{bot.name}</h1>
-            <p style={{ color: 'var(--muted)', fontSize: '.8rem', marginTop: 2 }}>{bot.productInfo.name}</p>
+            <div className="flex items-center gap-3 mt-1">
+              <span className="flex items-center gap-1.5" style={{ fontSize: '.76rem', color: 'var(--muted)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: waState === 'open' ? '#22a06b' : waState === 'connecting' ? '#d9a300' : '#bcbcb8' }} className={waState === 'connecting' ? 'animate-pulse' : ''} />
+                {waState === 'open' ? 'Conectado' : waState === 'connecting' ? 'Conectando…' : waState === 'close' ? 'Desconectado' : '—'}
+              </span>
+              <span style={{ color: 'var(--muted)', fontSize: '.76rem' }}>·</span>
+              <span style={{ fontSize: '.76rem', color: 'var(--muted)' }}>{bot.productInfo.name}</span>
+            </div>
           </div>
+          <RuntimeSwitch value={globalConfig.runtime ?? 'flow'} onChange={setRuntime} saving={savingTab === 'runtime'} />
           <span className="text-xs font-semibold" style={bot.isActive
             ? { background: 'var(--ink)', color: 'var(--paper)', padding: '5px 14px', borderRadius: 999 }
             : { border: '1px solid var(--line)', color: 'var(--muted)', padding: '4px 13px', borderRadius: 999 }}>
@@ -205,106 +255,49 @@ export function BotConfig() {
           </span>
         </div>
 
-        {/* Top cards */}
-        <div className="grid grid-cols-2 gap-5 mb-8">
-          <MkCard style={{ padding: 22 }}>
-            <Eyebrow className="block mb-4">Configuração do Bot</Eyebrow>
-            <dl className="space-y-2.5 text-sm">
-              <Row label="Provedor IA" value={bot.aiConfig.provider} />
-              <Row label="Modelo" value={bot.aiConfig.model} />
-              <Row label="Temperatura" value={String(bot.aiConfig.temperature)} />
-              <Row label="Instância" value={bot.evolutionConfig.instanceName} />
-              <Row label="Idioma" value={bot.productInfo.language} />
-            </dl>
-          </MkCard>
-
-          <MkCard style={{ padding: 22 }}>
-            <Eyebrow className="block mb-4">Conexão WhatsApp</Eyebrow>
-            <div className="flex items-center gap-2 mb-4">
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: waState === 'open' ? '#22a06b' : waState === 'connecting' ? '#d9a300' : '#bcbcb8' }} className={waState === 'connecting' ? 'animate-pulse' : ''} />
-              <span className="text-sm" style={{ color: 'var(--ink-soft)' }}>
-                {waState === 'open' ? 'Conectado' : waState === 'connecting' ? 'Conectando...' : waState === 'close' ? 'Desconectado' : '—'}
-              </span>
-            </div>
-            <div className="flex flex-col gap-2">
-              {waState === 'open' ? (
-                <div className="flex items-center gap-2 text-sm px-4 py-2.5 rounded-xl" style={{ background: 'rgba(34,160,107,0.08)', border: '1px solid rgba(34,160,107,0.2)', color: '#1d7a52' }}>
-                  <QrCode size={16} /> WhatsApp conectado
-                </div>
-              ) : (
-                <button onClick={loadQR} disabled={qrLoading}
-                  className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl transition-all"
-                  style={{ border: '1px solid var(--line)', color: 'var(--ink)', background: 'var(--paper-2)' }}>
-                  {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />}
-                  Mostrar QR Code
-                </button>
-              )}
-              <a href="https://evolution.whatsbot.mfslabs.com.br/manager" target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl transition-all"
-                style={{ border: '1px solid var(--line)', color: 'var(--muted)' }}>
-                <ExternalLink size={14} /> Evolution Manager
-              </a>
-            </div>
-            {qrError && (
-              <div className="mt-3 text-xs rounded-lg px-3 py-2.5" style={{ background: 'rgba(217,163,0,0.08)', border: '1px solid rgba(217,163,0,0.2)', color: '#9a7400' }}>
-                <p>{qrError}</p>
-                <p style={{ color: 'var(--muted)', marginTop: 4 }}>Instância: <span className="font-mono" style={{ color: 'var(--ink-soft)' }}>{bot.evolutionConfig.instanceName}</span></p>
-              </div>
-            )}
-            {showQR && qrCode && waState !== 'open' && (
-              <div className="mt-4 p-3 bg-white rounded-xl inline-block" style={{ border: '1px solid var(--line)' }}>
-                <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-40 h-40" />
-              </div>
-            )}
-          </MkCard>
-        </div>
-
-        {/* Tab bar — editorial underline */}
-        <div className="flex gap-7 mb-8" style={{ borderBottom: '1px solid var(--line)' }}>
+        {/* Tab bar */}
+        <div className="flex gap-7 mb-8 overflow-x-auto" style={{ borderBottom: '1px solid var(--line)' }}>
           {TABS.map(tab => {
             const active = activeTab === tab.id
             return (
               <button key={tab.id} onClick={() => setTab(tab.id)}
-                className="flex items-center gap-2 pb-3 text-sm transition-colors"
+                className="flex items-center gap-2 pb-3 text-sm transition-colors whitespace-nowrap"
                 style={{ color: active ? 'var(--ink)' : 'var(--muted)', fontWeight: active ? 600 : 500, borderBottom: active ? '2px solid var(--ink)' : '2px solid transparent', marginBottom: -1 }}>
                 <tab.icon size={14} strokeWidth={1.8} />
-                <span className="hidden sm:inline">{tab.label}</span>
+                <span>{tab.label}</span>
               </button>
             )
           })}
         </div>
 
-        {/* Tab content */}
+        {activeTab === 'config' && (
+          <ConfigTab
+            bot={bot} flows={flows} botId={botId!} navigate={navigate}
+            globalConfig={globalConfig} setGlobalConfig={setGlobalConfig}
+            saveGlobal={saveGlobal} savingTab={savingTab}
+            routingRules={routingRules} setRoutingRules={setRoutingRules} routingSaving={routingSaving} saveRouting={saveRouting}
+            waState={waState} qrLoading={qrLoading} qrError={qrError} showQR={showQR} qrCode={qrCode} loadQR={loadQR}
+          />
+        )}
+
         {activeTab === 'automacao' && (
           <AutomacaoTab bot={bot} flows={flows} botId={botId!} navigate={navigate} createFlow={createFlow} cloneFlow={cloneFlow} toggleActive={toggleActive} />
         )}
 
-        {activeTab === 'operacao' && (
-          <NavCardsTab botId={botId!} navigate={navigate} cards={[
-            { label: 'Leads', desc: 'Perfis de contatos, tags e histórico de sessões', icon: Users, path: 'leads' },
-            { label: 'Pedidos', desc: 'Pedidos gerados pelos flows de venda', icon: ShoppingBag, path: 'orders' },
-            { label: 'Handoffs', desc: 'Conversas escaladas para atendimento humano', icon: PhoneCall, path: 'handoffs' },
-          ]} />
+        {activeTab === 'modulos' && (
+          <ModulosTab modules={modules} setModules={setModules} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
         )}
 
-        {activeTab === 'catalogo' && (
-          <NavCardsTab botId={botId!} navigate={navigate} cards={[
-            { label: 'Produtos', desc: 'Catálogo com aliases para busca fuzzy e links de acesso', icon: Package, path: 'products' },
-            { label: 'Pacotes', desc: 'Pricing por quantidade — mínimo ou exato', icon: Tag, path: 'package-offers' },
-            { label: 'Capabilities', desc: 'Sub-flows que a IA invoca dinamicamente por contexto', icon: Workflow, path: 'capabilities' },
-            { label: 'AI Patterns', desc: 'Decisões do roteador de IA, taxa de fallback e desfechos', icon: Activity, path: 'patterns' },
-          ]} />
+        {activeTab === 'skills' && (
+          <SkillsTab modules={modules} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
         )}
 
-        {activeTab === 'financeiro' && (
-          <NavCardsTab botId={botId!} navigate={navigate} cards={[
-            { label: 'Pagamentos', desc: 'PaymentIntents gerados, status e cancelamentos', icon: CreditCard, path: 'payment-intents' },
-            { label: 'Eventos', desc: 'Log de eventos da conversa em tempo real', icon: Activity, path: 'events' },
-          ]} />
+        {activeTab === 'conhecimento' && (
+          <ConhecimentoTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
         )}
 
-        {activeTab === 'configuracoes' && (
-          <ConfigTab flows={flows} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} configSaving={configSaving} saveConfig={saveConfig} routingRules={routingRules} setRoutingRules={setRoutingRules} routingSaving={routingSaving} saveRouting={saveRouting} />
+        {activeTab === 'tom' && (
+          <TomTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} preview={preview} />
         )}
 
       </div>
@@ -312,7 +305,453 @@ export function BotConfig() {
   )
 }
 
-// ─── Tab: Automação ───────────────────────────────────────────────────────────
+// ─── Tab: Config ──────────────────────────────────────────────────────────────
+
+function ConfigTab({
+  bot, flows, botId, navigate, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+  routingRules, setRoutingRules, routingSaving, saveRouting,
+  waState, qrLoading, qrError, showQR, qrCode, loadQR,
+}: {
+  bot: BotData; flows: FlowData[]; botId: string; navigate: (p: string) => void
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+  routingRules: RoutingRule[]; setRoutingRules: React.Dispatch<React.SetStateAction<RoutingRule[]>>
+  routingSaving: boolean; saveRouting: () => void
+  waState: string | null; qrLoading: boolean; qrError: string; showQR: boolean; qrCode: string | null; loadQR: () => void
+}) {
+  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
+  const saveBasics = () => saveGlobal({
+    supportFlowId: globalConfig.supportFlowId, defaultCurrency: globalConfig.defaultCurrency,
+    ownerTestMode: globalConfig.ownerTestMode,
+    agentTestNumbers: globalConfig.agentTestNumbers,
+  }, 'config')
+
+  return (
+    <div className="space-y-9">
+      {/* Connection */}
+      <ConfigSection title="Conexão WhatsApp" subtitle="Estado da instância e leitura do QR">
+        <div className="flex items-center gap-2 mb-4">
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: waState === 'open' ? '#22a06b' : waState === 'connecting' ? '#d9a300' : '#bcbcb8' }} className={waState === 'connecting' ? 'animate-pulse' : ''} />
+          <span className="text-sm" style={{ color: 'var(--ink-soft)' }}>
+            {waState === 'open' ? 'Conectado' : waState === 'connecting' ? 'Conectando...' : waState === 'close' ? 'Desconectado' : '—'}
+          </span>
+          <span className="text-xs ml-auto font-mono" style={{ color: 'var(--muted)' }}>{bot.evolutionConfig.instanceName}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {waState !== 'open' && (
+            <button onClick={loadQR} disabled={qrLoading}
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl"
+              style={{ border: '1px solid var(--line)', color: 'var(--ink)', background: 'var(--paper-2)' }}>
+              {qrLoading ? <Loader2 size={16} className="animate-spin" /> : <QrCode size={16} />} Mostrar QR Code
+            </button>
+          )}
+          <a href="https://evolution.whatsbot.mfslabs.com.br/manager" target="_blank" rel="noreferrer"
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl"
+            style={{ border: '1px solid var(--line)', color: 'var(--muted)' }}>
+            <ExternalLink size={14} /> Evolution Manager
+          </a>
+        </div>
+        {qrError && <p className="mt-3 text-xs rounded-lg px-3 py-2.5" style={{ background: 'rgba(217,163,0,0.08)', border: '1px solid rgba(217,163,0,0.2)', color: '#9a7400' }}>{qrError}</p>}
+        {showQR && qrCode && waState !== 'open' && (
+          <div className="mt-4 p-3 bg-white rounded-xl inline-block" style={{ border: '1px solid var(--line)' }}>
+            <img src={qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`} alt="QR Code" className="w-40 h-40" />
+          </div>
+        )}
+      </ConfigSection>
+
+      {/* Runtime + teste */}
+      <ConfigSection title="Runtime & Teste" subtitle="Fluxo = o grafo é o cérebro · Agente = a IA orquestra (tool-calling). Números de teste usam o agente mesmo em Fluxo.">
+        <div className="grid grid-cols-2 gap-5">
+          <MkSelect label="Moeda padrão" value={globalConfig.defaultCurrency ?? 'BRL'} onChange={v => set('defaultCurrency', v)}>
+            <option value="BRL">BRL — Real</option>
+            <option value="USD">USD — Dólar</option>
+            <option value="EUR">EUR — Euro</option>
+          </MkSelect>
+          <MkSelect label="Fluxo de suporte pós-compra" value={globalConfig.supportFlowId ?? ''} onChange={v => set('supportFlowId', v || undefined)}>
+            <option value="">Nenhum</option>
+            {flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </MkSelect>
+          <div className="col-span-2">
+            <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Números de teste do agente (um por linha)</label>
+            <textarea
+              value={(globalConfig.agentTestNumbers ?? []).join('\n')}
+              onChange={e => set('agentTestNumbers', e.target.value.split('\n').map(s => s.trim()).filter(Boolean))}
+              rows={3} placeholder={'5511999999999\n5592888888888'}
+              className="mk-input w-full px-3 py-2.5 text-sm font-mono" style={{ resize: 'vertical' }} />
+          </div>
+          <ToggleRow on={!!globalConfig.ownerTestMode} onChange={() => set('ownerTestMode', !globalConfig.ownerTestMode)}
+            title="Modo teste (dono)" desc={globalConfig.ownerTestMode ? 'Dono pode testar o fluxo' : 'Mensagens do dono ignoradas'} />
+        </div>
+        <div className="mt-5">
+          <MkButton onClick={saveBasics} disabled={savingTab === 'config'}>
+            {savingTab === 'config' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+          </MkButton>
+        </div>
+      </ConfigSection>
+
+      {/* Roteamento */}
+      <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa.">
+        <div className="space-y-2">
+          {routingRules.length === 0 && (
+            <p className="text-xs py-4 text-center rounded-xl" style={{ color: 'var(--muted)', background: 'var(--paper)', border: '1px solid var(--line)' }}>Nenhuma regra. Sempre usa o flow ativo padrão.</p>
+          )}
+          {routingRules.map((rule, i) => (
+            <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--paper)', border: '1px solid var(--line)' }}>
+              <span className="text-xs w-4 text-center" style={{ color: 'var(--muted)' }}>{i + 1}</span>
+              <span className="text-xs shrink-0" style={{ color: 'var(--muted)' }}>Tag</span>
+              <input value={rule.tag} onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, tag: e.target.value } : x))} placeholder="buyer"
+                className="mk-input text-xs px-2 py-1.5 w-28" />
+              <ChevronRight size={12} strokeWidth={1.8} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              <select value={rule.flowId} onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, flowId: e.target.value } : x))}
+                className="mk-input text-xs px-2 py-1.5 flex-1">
+                <option value="">Selecionar flow...</option>
+                {flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+              <button onClick={() => setRoutingRules(r => r.filter((_, j) => j !== i))} style={{ color: 'var(--muted)' }} className="hover:opacity-60">
+                <Trash2 size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 mt-4">
+          <MkButton variant="ghost" onClick={() => setRoutingRules(r => [...r, { tag: '', flowId: '' }])}><Plus size={12} /> Adicionar regra</MkButton>
+          <MkButton onClick={saveRouting} disabled={routingSaving}>
+            {routingSaving ? <Loader2 size={12} className="animate-spin" /> : null} Salvar regras
+          </MkButton>
+        </div>
+      </ConfigSection>
+
+      {/* Avançado / observabilidade */}
+      <div>
+        <Eyebrow className="block mb-3">Avançado</Eyebrow>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            { label: 'Capabilities', desc: 'Sub-flows legados que a IA invocava por contexto', icon: Workflow, path: 'capabilities' },
+            { label: 'AI Patterns', desc: 'Decisões do roteador de IA e taxa de fallback', icon: Activity, path: 'patterns' },
+            { label: 'Eventos', desc: 'Log de eventos da conversa em tempo real', icon: Zap, path: 'events' },
+          ].map(card => (
+            <MkCard key={card.path} hover onClick={() => navigate(`/bots/${botId}/${card.path}`)} style={{ padding: 16 }}>
+              <div className="flex items-center gap-4">
+                <div style={{ width: 36, height: 36, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <card.icon size={16} strokeWidth={1.6} />
+                </div>
+                <div className="flex-1">
+                  <p className="mk-display" style={{ fontWeight: 600, fontSize: '.9rem' }}>{card.label}</p>
+                  <p style={{ color: 'var(--muted)', fontSize: '.75rem', marginTop: 1 }}>{card.desc}</p>
+                </div>
+                <ArrowRight size={15} strokeWidth={1.6} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              </div>
+            </MkCard>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab: Módulos ─────────────────────────────────────────────────────────────
+
+function ModulosTab({
+  modules, setModules, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+}: {
+  modules: BotModule[]; setModules: React.Dispatch<React.SetStateAction<BotModule[]>>
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+}) {
+  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
+  const recoverCfg = (modules.find(m => m.id === 'recover')?.config ?? {}) as {
+    idleMinutes?: number; maxAttempts?: number; messages?: string[]
+  }
+  const setRecover = (patch: Partial<typeof recoverCfg>) =>
+    setModules(ms => ms.map(m => m.id === 'recover' ? { ...m, config: { ...m.config, ...patch } } : m))
+
+  const toggle = (id: string) =>
+    setModules(ms => ms.map(m => m.id === id ? { ...m, enabled: !m.enabled } : m))
+
+  const save = () => {
+    const modulesPatch: GlobalConfig['modules'] = {}
+    for (const m of modules) {
+      modulesPatch[m.id] = { enabled: m.enabled }
+    }
+    // recover é o único com config canônica (modules.recover.config) — TimeoutService lê daqui.
+    const rc = modules.find(m => m.id === 'recover')
+    if (rc) modulesPatch['recover'] = { enabled: rc.enabled, config: rc.config }
+    saveGlobal({
+      modules: modulesPatch,
+      // payment_pix / human_handoff = blobs (o registry lê via legacyConfig — sem refactor de leitor)
+      defaultPixKey: globalConfig.defaultPixKey,
+      defaultReceiverName: globalConfig.defaultReceiverName,
+      defaultPaymentExpirationMinutes: globalConfig.defaultPaymentExpirationMinutes,
+      ownerPhone: globalConfig.ownerPhone,
+    }, 'modulos')
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="mk-display" style={{ fontSize: '1.15rem', fontWeight: 600 }}>Módulos</h2>
+          <p style={{ color: 'var(--muted)', fontSize: '.8rem', marginTop: 2 }}>Ligue, desligue e configure as máquinas prontas da plataforma. Desligar remove a capacidade do agente.</p>
+        </div>
+        <MkButton onClick={save} disabled={savingTab === 'modulos'}>
+          {savingTab === 'modulos' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar módulos
+        </MkButton>
+      </div>
+
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill,minmax(330px,1fr))' }}>
+        {modules.map(m => {
+          const Icon = MODULE_ICON[m.id] ?? Layers
+          return (
+            <div key={m.id} className="mk-card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 12, opacity: m.enabled ? 1 : 0.5 }}>
+              <div className="flex items-start justify-between">
+                <div style={{ width: 42, height: 42, borderRadius: 13, border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--paper-2)' }}>
+                  <Icon size={18} strokeWidth={1.6} />
+                </div>
+                <MkSwitch on={m.enabled} onChange={() => toggle(m.id)} label={m.name} />
+              </div>
+              <div>
+                <h3 className="mk-display" style={{ fontSize: '1.02rem', fontWeight: 600 }}>{m.name}</h3>
+                <span className="mk-eyebrow" style={{ fontSize: '.58rem' }}>{KIND_LABEL[m.type]}</span>
+              </div>
+              <p style={{ color: 'var(--muted)', fontSize: '.85rem', lineHeight: 1.5, flex: 1 }}>{m.description}</p>
+
+              {/* Config panel — só onde há leitor real */}
+              {m.id === 'payment_pix' && m.enabled && (
+                <div className="space-y-3 pt-2" style={{ borderTop: '1px solid var(--line)' }}>
+                  <MkField label="Chave PIX" value={globalConfig.defaultPixKey ?? ''} onChange={v => set('defaultPixKey', v)} placeholder="email@exemplo.com" />
+                  <MkField label="Favorecido" value={globalConfig.defaultReceiverName ?? ''} onChange={v => set('defaultReceiverName', v)} placeholder="João Silva" />
+                  <div>
+                    <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Expiração (min)</label>
+                    <input type="number" min={5} max={1440} value={globalConfig.defaultPaymentExpirationMinutes ?? 60}
+                      onChange={e => set('defaultPaymentExpirationMinutes', Number(e.target.value))}
+                      className="mk-input w-full px-3 py-2.5 text-sm" />
+                  </div>
+                </div>
+              )}
+              {m.id === 'human_handoff' && m.enabled && (
+                <div className="pt-2" style={{ borderTop: '1px solid var(--line)' }}>
+                  <MkField label="Telefone do dono" value={globalConfig.ownerPhone ?? ''} onChange={v => set('ownerPhone', v)} placeholder="5511999999999" />
+                </div>
+              )}
+              {m.id === 'recover' && m.enabled && (
+                <div className="space-y-3 pt-2" style={{ borderTop: '1px solid var(--line)' }}>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Ocioso (min)</label>
+                      <input type="number" min={1} max={1440} value={recoverCfg.idleMinutes ?? 30}
+                        onChange={e => setRecover({ idleMinutes: Number(e.target.value) })}
+                        className="mk-input w-full px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Tentativas</label>
+                      <input type="number" min={1} max={5} value={recoverCfg.maxAttempts ?? 2}
+                        onChange={e => setRecover({ maxAttempts: Number(e.target.value) })}
+                        className="mk-input w-full px-3 py-2 text-sm" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Mensagens (uma por tentativa)</label>
+                    <textarea value={(recoverCfg.messages ?? []).join('\n')}
+                      onChange={e => setRecover({ messages: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) })}
+                      rows={2} placeholder={'Oi {nome}, ainda quer fechar?\nÚltima chamada do {item} 👀'}
+                      className="mk-input w-full px-3 py-2 text-sm" style={{ resize: 'vertical' }} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab: Skills ──────────────────────────────────────────────────────────────
+
+function SkillsTab({
+  modules, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+}: {
+  modules: BotModule[]
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+}) {
+  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
+  const save = () => saveGlobal({
+    agentInstructions: globalConfig.agentInstructions,
+    agentIntroMessage: globalConfig.agentIntroMessage,
+    agentGreeting: globalConfig.agentGreeting,
+  }, 'skills')
+
+  return (
+    <div className="space-y-9">
+      <ConfigSection title="Como o agente age" subtitle="Regras e jeito de vender — vira o system prompt do agente. A IA propõe, o código dispõe.">
+        <MkTextarea label="Instruções do agente" value={globalConfig.agentInstructions ?? ''}
+          onChange={v => set('agentInstructions', v)} rows={7}
+          placeholder={'Ex:\n- Sempre confirme o título antes de gerar o PIX\n- Se a pessoa hesitar, ofereça o pacote\n- Nunca prometa o que o módulo não faz'} />
+      </ConfigSection>
+
+      <ConfigSection title="Abertura" subtitle="Como o bot inicia a 1ª conversa. Mensagem exata tem prioridade; a orientação deixa a IA abrir com as palavras dela.">
+        <div className="space-y-5">
+          <MkTextarea label="Mensagem de abertura (exata, verbatim)" value={globalConfig.agentIntroMessage ?? ''}
+            onChange={v => set('agentIntroMessage', v)} rows={3}
+            placeholder="Oi! Bem-vindo à DramaHub 🎬 Qual série você procura?"
+            hint="Enviada literal no 1º contato. Use quando copy/preços precisam ser exatos (não passa pela IA)." />
+          <MkTextarea label="Orientação de abertura (IA)" value={globalConfig.agentGreeting ?? ''}
+            onChange={v => set('agentGreeting', v)} rows={2}
+            placeholder="Apresente-se de forma calorosa e pergunte o que a pessoa procura."
+            hint="Usada quando NÃO há mensagem exata acima." />
+        </div>
+        <div className="mt-5">
+          <MkButton onClick={save} disabled={savingTab === 'skills'}>
+            {savingTab === 'skills' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+          </MkButton>
+        </div>
+      </ConfigSection>
+
+      <div>
+        <Eyebrow className="block mb-3">Habilidades automáticas</Eyebrow>
+        <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginBottom: 14 }}>O que cada módulo ligado já entrega ao agente — sem você descrever.</p>
+        <div className="space-y-2">
+          {modules.filter(m => m.enabled).map(m => {
+            const Icon = MODULE_ICON[m.id] ?? Layers
+            return (
+              <div key={m.id} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+                <Icon size={16} strokeWidth={1.6} style={{ color: 'var(--ink-soft)', flexShrink: 0 }} />
+                <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{m.name}</span>
+                <span className="text-xs" style={{ color: 'var(--muted)' }}>{m.description}</span>
+              </div>
+            )
+          })}
+        </div>
+        <p style={{ color: 'var(--muted)', fontSize: '.72rem', marginTop: 14, fontStyle: 'italic' }}>
+          Skills descritas (nome + exemplos + sub-fluxo) chegam numa próxima fase.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// ─── Tab: Conhecimento ────────────────────────────────────────────────────────
+
+function ConhecimentoTab({
+  globalConfig, setGlobalConfig, saveGlobal, savingTab,
+}: {
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+}) {
+  return (
+    <div className="space-y-6">
+      <ConfigSection title="O que o bot sabe" subtitle="Fatos que o bot pode usar como verdade — ele só afirma o que está aqui, não inventa.">
+        <MkTextarea
+          label="Conhecimento (link do catálogo, entrega, garantia…)"
+          value={globalConfig.agentKnowledge ?? ''}
+          onChange={v => setGlobalConfig(c => ({ ...c, agentKnowledge: v }))}
+          rows={9}
+          placeholder={'Ex:\n- Catálogo completo: https://...\n- Entrega: acesso na hora, por aqui mesmo\n- Garantia: 7 dias'}
+          hint="Um fato por linha. O bot usa isso como única fonte de verdade: envia o link quando faz sentido e, se algo não estiver aqui, ele não inventa que “não existe” — guia a pessoa de outro jeito."
+        />
+        <div className="mt-5">
+          <MkButton onClick={() => saveGlobal({ agentKnowledge: globalConfig.agentKnowledge }, 'conhecimento')} disabled={savingTab === 'conhecimento'}>
+            {savingTab === 'conhecimento' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+          </MkButton>
+        </div>
+      </ConfigSection>
+    </div>
+  )
+}
+
+// ─── Tab: Tom ─────────────────────────────────────────────────────────────────
+
+function TomTab({
+  globalConfig, setGlobalConfig, saveGlobal, savingTab, preview,
+}: {
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+  preview: PersonaPreview | null
+}) {
+  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
+  const tone = globalConfig.agentTone ?? {}
+  const setTone = (patch: Partial<AgentTone>) => setGlobalConfig(c => ({ ...c, agentTone: { ...c.agentTone, ...patch } }))
+  const save = () => saveGlobal({
+    assistantIdentityMode: globalConfig.assistantIdentityMode, assistantName: globalConfig.assistantName,
+    companyName: globalConfig.companyName, neverExposeAI: globalConfig.neverExposeAI,
+    allowIdentityDisclosure: globalConfig.allowIdentityDisclosure, locale: globalConfig.locale,
+    tone: globalConfig.tone, agentTone: globalConfig.agentTone,
+  }, 'tom')
+
+  return (
+    <div className="space-y-9">
+      <ConfigSection title="Identidade" subtitle="Como o bot se apresenta. Voz neutra natural — humano de verdade, sem cara de bot.">
+        <div className="grid grid-cols-2 gap-5">
+          <MkSelect label="Modo de identidade" value={globalConfig.assistantIdentityMode ?? 'brand_only'} onChange={v => set('assistantIdentityMode', v)}>
+            <option value="brand_only">Só marca (sem nome)</option>
+            <option value="named">Com nome (ex: Bia)</option>
+          </MkSelect>
+          <MkField label="Nome do assistente" value={globalConfig.assistantName ?? ''} onChange={v => set('assistantName', v)} placeholder="Bia" />
+          <MkField label="Nome da empresa" value={globalConfig.companyName ?? ''} onChange={v => set('companyName', v)} placeholder="DramaHub" />
+          <MkSelect label="Idioma" value={globalConfig.locale ?? 'pt-BR'} onChange={v => set('locale', v)}>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="en-US">English (US)</option>
+            <option value="es-ES">Español</option>
+          </MkSelect>
+          <ToggleRow on={globalConfig.neverExposeAI !== false} onChange={() => set('neverExposeAI', !(globalConfig.neverExposeAI !== false))}
+            title="Nunca revelar que é IA" desc={globalConfig.neverExposeAI === false ? 'Pode revelar se perguntado' : 'Sempre nega ser IA'} />
+        </div>
+      </ConfigSection>
+
+      <ConfigSection title="Tom de voz" subtitle="Knobs que calibram a voz natural do agente.">
+        <div className="grid grid-cols-2 gap-5">
+          <MkSelect label="Formalidade" value={tone.formality ?? 'neutro'} onChange={v => setTone({ formality: v as AgentTone['formality'] })}>
+            <option value="informal">Informal</option>
+            <option value="neutro">Neutro</option>
+            <option value="formal">Formal</option>
+          </MkSelect>
+          <MkSelect label="Emoji" value={tone.emoji ?? 'raro'} onChange={v => setTone({ emoji: v as AgentTone['emoji'] })}>
+            <option value="nenhum">Nenhum</option>
+            <option value="raro">Raro</option>
+            <option value="moderado">Moderado</option>
+          </MkSelect>
+          <MkSelect label="Tamanho das mensagens" value={tone.length ?? 'curtas'} onChange={v => setTone({ length: v as AgentTone['length'] })}>
+            <option value="curtas">Curtas</option>
+            <option value="medias">Médias</option>
+          </MkSelect>
+          <ToggleRow on={!!tone.slang} onChange={() => setTone({ slang: !tone.slang })}
+            title="Gírias leves" desc={tone.slang ? 'Regionalismos permitidos' : 'Sem gírias'} />
+        </div>
+        <div className="mt-5">
+          <MkButton onClick={save} disabled={savingTab === 'tom'}>
+            {savingTab === 'tom' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar tom
+          </MkButton>
+        </div>
+      </ConfigSection>
+
+      {preview && (
+        <div>
+          <Eyebrow className="block mb-3">Prévia</Eyebrow>
+          <MkCard style={{ padding: 22 }}>
+            <div className="space-y-3">
+              <PreviewLine label="Identidade" text={preview.identityLine} />
+              <PreviewLine label="Abertura" text={preview.greetingExample} />
+              <PreviewLine label="Pagamento" text={preview.paymentExample} />
+              <PreviewLine label="Handoff" text={preview.handoffExample} />
+            </div>
+          </MkCard>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PreviewLine({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <span className="mk-eyebrow" style={{ fontSize: '.56rem' }}>{label}</span>
+      <p style={{ color: 'var(--ink-soft)', fontSize: '.9rem', marginTop: 2, fontStyle: 'italic' }}>“{text}”</p>
+    </div>
+  )
+}
+
+// ─── Tab: Automação (Flows) ───────────────────────────────────────────────────
 
 function AutomacaoTab({
   bot, flows, botId, navigate, createFlow, cloneFlow, toggleActive,
@@ -371,158 +810,25 @@ function AutomacaoTab({
   )
 }
 
-// ─── Tab: Nav Cards (monochrome) ──────────────────────────────────────────────
-
-function NavCardsTab({
-  botId, navigate, cards,
-}: {
-  botId: string
-  navigate: (path: string) => void
-  cards: Array<{ label: string; desc: string; icon: React.ElementType; path: string }>
-}) {
-  return (
-    <div className="grid grid-cols-1 gap-3">
-      {cards.map(card => (
-        <MkCard key={card.path} hover onClick={() => navigate(`/bots/${botId}/${card.path}`)} style={{ padding: 20 }}>
-          <div className="flex items-center gap-4">
-            <div style={{ width: 42, height: 42, borderRadius: 13, border: '1px solid var(--line)', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <card.icon size={18} strokeWidth={1.6} />
-            </div>
-            <div className="flex-1">
-              <p className="mk-display" style={{ fontWeight: 600, fontSize: '.95rem' }}>{card.label}</p>
-              <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginTop: 2 }}>{card.desc}</p>
-            </div>
-            <ArrowRight size={16} strokeWidth={1.6} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-          </div>
-        </MkCard>
-      ))}
-    </div>
-  )
-}
-
-// ─── Tab: Configurações ───────────────────────────────────────────────────────
-
-function ConfigTab({
-  flows, globalConfig, setGlobalConfig, configSaving, saveConfig,
-  routingRules, setRoutingRules, routingSaving, saveRouting,
-}: {
-  flows: FlowData[]
-  globalConfig: GlobalConfig
-  setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
-  configSaving: boolean
-  saveConfig: () => void
-  routingRules: RoutingRule[]
-  setRoutingRules: React.Dispatch<React.SetStateAction<RoutingRule[]>>
-  routingSaving: boolean
-  saveRouting: () => void
-}) {
-  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
-
-  return (
-    <div className="space-y-9">
-      {/* Pagamentos */}
-      <ConfigSection title="Pagamentos" subtitle="Dados Pix e expiração usados pelos nós de checkout">
-        <div className="grid grid-cols-2 gap-5">
-          <MkField label="Chave Pix padrão" value={globalConfig.defaultPixKey ?? ''} onChange={v => set('defaultPixKey', v)} placeholder="email@exemplo.com" />
-          <MkField label="Nome do favorecido" value={globalConfig.defaultReceiverName ?? ''} onChange={v => set('defaultReceiverName', v)} placeholder="João Silva" />
-          <MkField label="Telefone do dono do bot" value={globalConfig.ownerPhone ?? ''} onChange={v => set('ownerPhone', v)} placeholder="5511999999999" />
-          <ToggleRow on={!!globalConfig.ownerTestMode} onChange={() => set('ownerTestMode', !globalConfig.ownerTestMode)}
-            title="Modo teste (dono)" desc={globalConfig.ownerTestMode ? 'Dono pode testar o fluxo' : 'Mensagens do dono ignoradas'} />
-          <MkSelect label="Fluxo de suporte pós-compra" value={globalConfig.supportFlowId ?? ''} onChange={v => set('supportFlowId', v || undefined)}>
-            <option value="">Nenhum</option>
-            {flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </MkSelect>
-          <MkSelect label="Moeda padrão" value={globalConfig.defaultCurrency ?? 'BRL'} onChange={v => set('defaultCurrency', v)}>
-            <option value="BRL">BRL — Real</option>
-            <option value="USD">USD — Dólar</option>
-            <option value="EUR">EUR — Euro</option>
-          </MkSelect>
-          <div>
-            <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Expiração de pagamento (min)</label>
-            <input type="number" min={5} max={1440} value={globalConfig.defaultPaymentExpirationMinutes ?? 60}
-              onChange={e => set('defaultPaymentExpirationMinutes', Number(e.target.value))}
-              className="mk-input w-full px-3 py-2.5 text-sm" />
-          </div>
-        </div>
-      </ConfigSection>
-
-      {/* Persona */}
-      <ConfigSection title="Persona & Identidade" subtitle="Como o bot se apresenta nas conversas">
-        <div className="grid grid-cols-2 gap-5">
-          <MkSelect label="Modo de identidade" value={globalConfig.assistantIdentityMode ?? 'brand_only'} onChange={v => set('assistantIdentityMode', v)}>
-            <option value="brand_only">Só marca (sem nome)</option>
-            <option value="named">Com nome (ex: Bia)</option>
-          </MkSelect>
-          <MkField label="Nome do assistente" value={globalConfig.assistantName ?? ''} onChange={v => set('assistantName', v)} placeholder="Bia" />
-          <MkField label="Nome da empresa" value={globalConfig.companyName ?? ''} onChange={v => set('companyName', v)} placeholder="DramaHub" />
-          <MkSelect label="Tom de voz" value={globalConfig.tone ?? 'acolhedor'} onChange={v => set('tone', v)}>
-            <option value="acolhedor">Acolhedor — emojis, diminutivos</option>
-            <option value="casual">Casual — gírias leves, direto</option>
-            <option value="profissional">Profissional — sem gírias</option>
-            <option value="formal">Formal — sem emojis</option>
-          </MkSelect>
-          <MkSelect label="Idioma" value={globalConfig.locale ?? 'pt-BR'} onChange={v => set('locale', v)}>
-            <option value="pt-BR">Português (Brasil)</option>
-            <option value="en-US">English (US)</option>
-            <option value="es-ES">Español</option>
-          </MkSelect>
-          <ToggleRow on={globalConfig.neverExposeAI !== false} onChange={() => set('neverExposeAI', !(globalConfig.neverExposeAI !== false))}
-            title="Nunca revelar que é IA" desc={globalConfig.neverExposeAI === false ? 'Pode revelar se perguntado' : 'Sempre nega ser IA'} />
-        </div>
-      </ConfigSection>
-
-      {/* Conhecimento do agente */}
-      <ConfigSection title="O que o bot sabe" subtitle="Fatos que o bot pode usar como verdade — ele só afirma o que está aqui, não inventa">
-        <MkTextarea
-          label="Conhecimento (link do catálogo, entrega, garantia…)"
-          value={globalConfig.agentKnowledge ?? ''}
-          onChange={v => set('agentKnowledge', v)}
-          rows={6}
-          placeholder={'Ex:\n- Catálogo completo: https://...\n- Entrega: acesso na hora, por aqui mesmo\n- Garantia: 7 dias'}
-          hint="Um fato por linha. O bot usa isso como única fonte de verdade: envia o link quando faz sentido e, se algo não estiver aqui, ele não inventa que “não existe” — guia a pessoa de outro jeito."
-        />
-      </ConfigSection>
-
-      <MkButton onClick={saveConfig} disabled={configSaving}>
-        {configSaving ? <Loader2 size={14} className="animate-spin" /> : null} Salvar configurações
-      </MkButton>
-
-      {/* Roteamento */}
-      <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa.">
-        <div className="space-y-2">
-          {routingRules.length === 0 && (
-            <p className="text-xs py-4 text-center rounded-xl" style={{ color: 'var(--muted)', background: 'var(--paper)', border: '1px solid var(--line)' }}>Nenhuma regra. Sempre usa o flow ativo padrão.</p>
-          )}
-          {routingRules.map((rule, i) => (
-            <div key={i} className="rounded-xl p-3 flex items-center gap-3" style={{ background: 'var(--paper)', border: '1px solid var(--line)' }}>
-              <span className="text-xs w-4 text-center" style={{ color: 'var(--muted)' }}>{i + 1}</span>
-              <span className="text-xs shrink-0" style={{ color: 'var(--muted)' }}>Tag</span>
-              <input value={rule.tag} onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, tag: e.target.value } : x))} placeholder="buyer"
-                className="mk-input text-xs px-2 py-1.5 w-28" />
-              <ChevronRight size={12} strokeWidth={1.8} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-              <select value={rule.flowId} onChange={e => setRoutingRules(r => r.map((x, j) => j === i ? { ...x, flowId: e.target.value } : x))}
-                className="mk-input text-xs px-2 py-1.5 flex-1">
-                <option value="">Selecionar flow...</option>
-                {flows.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-              <button onClick={() => setRoutingRules(r => r.filter((_, j) => j !== i))} style={{ color: 'var(--muted)' }} className="hover:opacity-60">
-                <Trash2 size={13} />
-              </button>
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-3 mt-4">
-          <MkButton variant="ghost" onClick={() => setRoutingRules(r => [...r, { tag: '', flowId: '' }])}><Plus size={12} /> Adicionar regra</MkButton>
-          <MkButton onClick={saveRouting} disabled={routingSaving}>
-            {routingSaving ? <Loader2 size={12} className="animate-spin" /> : null} Salvar regras
-          </MkButton>
-        </div>
-      </ConfigSection>
-    </div>
-  )
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function RuntimeSwitch({ value, onChange, saving }: { value: 'flow' | 'agent'; onChange: (v: 'flow' | 'agent') => void; saving: boolean }) {
+  return (
+    <div className="flex items-center rounded-full p-0.5" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+      {(['flow', 'agent'] as const).map(mode => {
+        const active = value === mode
+        return (
+          <button key={mode} onClick={() => !active && onChange(mode)} disabled={saving}
+            className="text-xs font-semibold px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5"
+            style={active ? { background: 'var(--ink)', color: 'var(--paper)' } : { color: 'var(--muted)' }}>
+            {saving && active ? <Loader2 size={11} className="animate-spin" /> : null}
+            {mode === 'flow' ? 'Fluxo' : 'Agente'}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 function GhostBtn({ children, onClick, active, title }: { children: React.ReactNode; onClick: () => void; active?: boolean; title?: string }) {
   return (
@@ -544,15 +850,6 @@ function ConfigSection({ title, subtitle, children }: { title: string; subtitle:
         <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginTop: 2 }}>{subtitle}</p>
       </div>
       <MkCard style={{ padding: 22 }}>{children}</MkCard>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
-      <span className="font-medium" style={{ color: 'var(--ink)' }}>{value}</span>
     </div>
   )
 }

@@ -3,6 +3,10 @@ import { z } from 'zod'
 import type { BotRepository, FlowRepository, MessagingPort, ConversationEventRepository, BotGlobalConfig } from '@whatsbot/core'
 import type { BotService } from '../services/BotService.js'
 import { GlobalConfigSchema, buildBotPersonaPreview, invalidatePersonaCache } from '../services/BotPersonaBuilder.js'
+import { ModuleRegistry } from '../services/ModuleRegistry.js'
+
+// Registro é stateless (só o catálogo de defs) — uma instância serve todas as requisições.
+const moduleRegistry = new ModuleRegistry()
 
 const CreateBotSchema = z.object({
   name: z.string().min(1).max(100),
@@ -146,6 +150,21 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
       config: bot.globalConfig,
       preview: buildBotPersonaPreview(bot.globalConfig),
     }
+  })
+
+  // Registro de Módulos resolvido por bot: cada def + estado (enabled) + config (com fallback ao blob legado).
+  // A aba "Módulos" do Centro de Controle renderiza isto. Ver Brain/spec_centro_de_controle_F5.md.
+  app.get<{ Params: { id: string } }>('/:id/modules', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+    const modules = moduleRegistry.definitions().map(def => ({
+      ...def,
+      enabled: moduleRegistry.isEnabled(bot, def.id),
+      config: moduleRegistry.configFor(bot, def.id),
+    }))
+    return { modules }
   })
 
   app.get<{ Params: { id: string } }>('/:id/global-config/preview', async (req, reply) => {

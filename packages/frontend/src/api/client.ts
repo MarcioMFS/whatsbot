@@ -2,6 +2,21 @@ import { useAuthStore } from '../stores/authStore.ts'
 
 const BASE = '/api'
 
+// Módulo resolvido por bot (GET /bots/:id/modules) — def do registro + estado + config.
+export interface BotModule {
+  id: string
+  name: string
+  type: 'routable' | 'tool' | 'effect'
+  description: string
+  toolNames?: string[]
+  effectOn?: string
+  dependsOn?: string[]
+  policyKeys?: string[]
+  defaultEnabled?: boolean
+  enabled: boolean
+  config: Record<string, unknown>
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
   const res = await fetch(`${BASE}${path}`, {
@@ -60,6 +75,13 @@ export const api = {
       request<unknown>(`/bots/${id}/routing-rules`, { method: 'PATCH', body: JSON.stringify({ rules }) }),
     updateConfig: (id: string, config: Record<string, unknown>) =>
       request<unknown>(`/bots/${id}/config`, { method: 'PATCH', body: JSON.stringify(config) }),
+    // Centro de Controle: save validado (persona preview + invalida cache)
+    updateGlobalConfig: (id: string, config: Record<string, unknown>) =>
+      request<{ config: Record<string, unknown>; preview: unknown }>(
+        `/bots/${id}/global-config`, { method: 'PATCH', body: JSON.stringify(config) }
+      ),
+    modules: (id: string) =>
+      request<{ modules: BotModule[] }>(`/bots/${id}/modules`),
     events: (id: string, limit?: number) =>
       request<{ events: unknown[] }>(`/bots/${id}/events${limit ? `?limit=${limit}` : ''}`),
   },

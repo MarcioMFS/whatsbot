@@ -17,7 +17,7 @@ const BOT_NAV: BotNavItem[] = [
   { label: 'Pacotes',       icon: Tag,             href: 'package-offers' },
   { label: 'Handoffs',      icon: PhoneCall,       href: 'handoffs' },
   { label: 'Pagamentos',    icon: CreditCard,      href: 'payment-intents' },
-  { label: 'Configurações', icon: Settings2,       href: 'config', tab: 'configuracoes' },
+  { label: 'Configurações', icon: Settings2,       href: 'config', tab: 'config' },
 ]
 
 function botNavTo(botId: string, item: BotNavItem): string {
@@ -30,7 +30,7 @@ function isBotNavActive(item: BotNavItem, botId: string, pathname: string, searc
   const tab = new URLSearchParams(search).get('tab')
   if (item.href === 'config') {
     if (pathname !== configPath) return false
-    if (!item.tab) return !tab || !['automacao', 'configuracoes'].includes(tab)
+    if (!item.tab) return !tab || !['automacao', 'config', 'modulos', 'skills', 'conhecimento', 'tom'].includes(tab)
     return tab === item.tab
   }
   return pathname === `/bots/${botId}/${item.href}`

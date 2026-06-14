@@ -196,8 +196,30 @@ export const GlobalConfigSchema = z.object({
   allowIdentityDisclosure:  z.boolean().optional(),
   tone:                     z.enum(['acolhedor', 'profissional', 'casual', 'formal']).optional(),
   locale:                   z.enum(['pt-BR', 'en-US', 'es-ES']).optional(),
+  ownerTestMode:            z.boolean().optional(),
+  // Agente v2 — runtime, prompt, abertura, conhecimento, tom e política
+  runtime:                  z.enum(['flow', 'agent']).optional(),
+  agentTestNumbers:         z.array(z.string().trim().max(30)).max(50).optional(),
+  agentInstructions:        z.string().max(8000).optional(),
+  agentGreeting:            z.string().max(2000).optional(),
+  agentKnowledge:           z.string().max(8000).optional(),
+  agentIntroMessage:        z.string().max(2000).optional(),
+  agentTone: z.object({
+    formality: z.enum(['informal', 'neutro', 'formal']).optional(),
+    emoji:     z.enum(['nenhum', 'raro', 'moderado']).optional(),
+    length:    z.enum(['curtas', 'medias']).optional(),
+    slang:     z.boolean().optional(),
+  }).strict().optional(),
+  agentPolicy: z.object({
+    can_generate_pix:   z.boolean().optional(),
+    can_validate_proof: z.boolean().optional(),
+    can_deliver_access: z.boolean().optional(),
+    can_transfer_human: z.boolean().optional(),
+    can_apply_discount: z.boolean().optional(),
+    can_refund:         z.boolean().optional(),
+    can_cancel_order:   z.boolean().optional(),
+  }).strict().optional(),
   // Registro de Módulos (liga/desliga + config por bot) — a config de recuperação mora em modules.recover.config
-
   modules: z.record(z.object({
     enabled: z.boolean(),
     config:  z.record(z.unknown()).optional(),
