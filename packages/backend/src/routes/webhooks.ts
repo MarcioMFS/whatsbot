@@ -36,9 +36,11 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       // Evolution Go format: { Info: { Chat, IsFromMe, IsGroup, ID }, Message: { ... } }
       // Evolution API format: { key: { remoteJid, fromMe, id }, message: { ... } }
       const info = raw.Info as Record<string, unknown> | undefined
-      const msgGo = raw.Message as Record<string, unknown> | undefined
       const keyApi = raw.key as Record<string, unknown> | undefined
-      const msgApi = raw.message as Record<string, unknown> | undefined
+      // Peel WhatsApp wrapper layers (viewOnce, ephemeral, documentWithCaption, edited, future ones)
+      // so the real imageMessage/audioMessage/text is reached regardless of how it was wrapped.
+      const msgGo = unwrapMessage(raw.Message as Record<string, unknown> | undefined)
+      const msgApi = unwrapMessage(raw.message as Record<string, unknown> | undefined)
 
       const fromMe = (info?.IsFromMe ?? keyApi?.fromMe ?? false) as boolean
 
@@ -68,11 +70,22 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       const extText = (msgApi?.extendedTextMessage as Record<string, unknown> | undefined)?.text as string | undefined
 
       const imgMsg = (msgGo?.imageMessage ?? msgApi?.imageMessage) as Record<string, unknown> | undefined
-      const hasImage = !!(imgMsg ?? msgGo?.documentMessage ?? msgApi?.documentMessage)
+      // Comprovante em PDF (ou imagem enviada como documento): banco gera PDF, não print.
+      // Só aceita PDF/imagem; o decrypt do worker lê via mimetype (já trata 'document').
+      const docMsg = (msgGo?.documentMessage ?? msgApi?.documentMessage) as Record<string, unknown> | undefined
+      const docMime = (docMsg?.mimetype as string | undefined) ?? ''
+      const docSupported = docMime === 'application/pdf' || docMime.startsWith('image/')
+      const mediaMsg = imgMsg ?? (docSupported ? docMsg : undefined)
+      const hasImage = !!mediaMsg
 
-      // Objeto Message completo para /message/downloadimage
-      const imageCaption = (imgMsg?.caption as string | undefined) ?? ''
-      const imageMeta = imgMsg ? { imgMsg } : undefined
+      // Objeto Message completo para download/decrypt no worker
+      const imageCaption = ((imgMsg?.caption ?? docMsg?.caption) as string | undefined) ?? ''
+      const imageMeta = mediaMsg ? { imgMsg: mediaMsg } : undefined
+
+      // Voice notes (PTT) — decrypt + transcribe happens in the worker
+      const audioMsg = (msgGo?.audioMessage ?? msgApi?.audioMessage) as Record<string, unknown> | undefined
+      const hasAudio = !!audioMsg
+      const audioMeta = audioMsg ? { audioMsg } : undefined
 
       const message =
         (msgGo?.conversation as string | undefined) ??
@@ -83,7 +96,18 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         (raw.body as string | undefined) ??
         (hasImage ? (imageCaption || '[image]') : '')
 
-      if (!phoneNumber || !message.trim()) return reply.code(200).send()
+      // Audio carries no text here — the transcript is produced in the worker.
+      if (!phoneNumber || (!message.trim() && !hasAudio)) {
+        // Safety net: never drop content silently. If something arrived but we extracted
+        // no text/image/audio, log the message keys so unhandled types surface instead of vanishing.
+        if (phoneNumber && !hasImage && !hasAudio) {
+          const keys = [...Object.keys(msgGo ?? {}), ...Object.keys(msgApi ?? {})]
+          if (keys.length) {
+            console.warn(`[webhook] no_content_dropped phone=${phoneNumber} msgId=${msgId || 'n/a'} keys=${JSON.stringify(keys)}`)
+          }
+        }
+        return reply.code(200).send()
+      }
 
       await messageQueue.add('process', {
         botId: bot.id,
@@ -92,13 +116,45 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         msgId: msgId || undefined,
         hasImage,
         imageMeta: imageMeta || undefined,
+        hasAudio,
+        audioMeta: audioMeta || undefined,
       }, {
-        attempts: 5,
-        backoff: { type: 'fixed', delay: 2000 }, // retry after 2s if PHONE_BUSY
+        // Retry deve cobrir o lock TTL (45s no messageWorker) — senão msg concorrente
+        // do mesmo telefone esgota antes do lock liberar e é DESCARTADA (mensagem engolida).
+        // Exponencial: rápido no caso comum (lock libera em segundos), cobre ~94s no pior caso.
+        attempts: 8,
+        backoff: { type: 'exponential', delay: 1500 }, // 1.5,3,6,12,24,48,96s
       })
       return reply.code(200).send({ ok: true })
     }
   )
+}
+
+const MAX_UNWRAP_DEPTH = 5
+
+/**
+ * Recursively peel WhatsApp/Baileys wrapper layers until the real content message is reached.
+ * Generic (not a hardcoded type list): any key whose value nests a `.message`/`.Message` object
+ * is treated as a wrapper and descended into. Handles viewOnceMessage(V2), ephemeralMessage,
+ * documentWithCaptionMessage, editedMessage, and any future wrapper of the same shape.
+ * Content keys (imageMessage, audioMessage, conversation, extendedTextMessage) have no nested
+ * `.message`, so they are returned untouched. Depth-limited to avoid pathological loops.
+ */
+function unwrapMessage(
+  msg: Record<string, unknown> | undefined,
+  depth = 0,
+): Record<string, unknown> | undefined {
+  if (!msg || typeof msg !== 'object' || depth >= MAX_UNWRAP_DEPTH) return msg
+  for (const value of Object.values(msg)) {
+    if (value && typeof value === 'object') {
+      const v = value as Record<string, unknown>
+      const inner = (v.message ?? v.Message) as Record<string, unknown> | undefined
+      if (inner && typeof inner === 'object') {
+        return unwrapMessage(inner, depth + 1)
+      }
+    }
+  }
+  return msg
 }
 
 function verifySecret(provided: string | undefined, expected: string): boolean {

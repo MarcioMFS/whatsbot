@@ -3,6 +3,7 @@ import { createHmac, hkdfSync, createDecipheriv } from 'crypto'
 import type Redis from 'ioredis'
 import type { BotRepository } from '@whatsbot/core'
 import type { FlowExecutionService } from '../services/FlowExecutionService.js'
+import type { TranscriptionService } from '../services/TranscriptionService.js'
 
 const MEDIA_KEY_INFO: Record<string, string> = {
   image: 'WhatsApp Image Keys',
@@ -67,17 +68,21 @@ export function startMessageWorker(
   redis: Redis,
   flowExecService: FlowExecutionService,
   botRepo: BotRepository,
+  transcriptionService?: TranscriptionService,
+  agentRuntime?: { handleIncomingMessage(bot: import('@whatsbot/core').Bot, phone: string, message: string, imageBase64?: string, opts?: { isLastAttempt?: boolean }): Promise<void> },
 ): Worker {
   const worker = new Worker(
     'messages',
     async (job) => {
-      const { botId, phoneNumber, message, msgId, hasImage, imageMeta } = job.data as {
+      const { botId, phoneNumber, message, msgId, hasImage, imageMeta, hasAudio, audioMeta } = job.data as {
         botId: string
         phoneNumber: string
         message: string
         msgId?: string
         hasImage?: boolean
         imageMeta?: { imgMsg: Record<string, unknown> }
+        hasAudio?: boolean
+        audioMeta?: { audioMsg: Record<string, unknown> }
       }
 
       const bot = await botRepo.findById(botId)
@@ -99,7 +104,37 @@ export function startMessageWorker(
           console.log(`[worker] image decrypt: ${imageBase64 ? `OK (${imageBase64.length} chars)` : 'FAILED'}`)
         }
 
-        await flowExecService.handleIncomingMessage(bot, phoneNumber, message, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
+        // Voice note: decrypt audio bytes, transcribe, and treat the transcript as the text message
+        let effectiveMessage = message
+        if (hasAudio && audioMeta?.audioMsg) {
+          const audioB64 = await decryptWhatsAppMedia(audioMeta.audioMsg)
+          if (audioB64 && transcriptionService) {
+            const mime = (audioMeta.audioMsg.mimetype as string | undefined) ?? 'audio/ogg'
+            const transcript = await transcriptionService.transcribe(Buffer.from(audioB64, 'base64'), mime)
+            console.log(`[worker] audio transcript: ${transcript ? `"${transcript.slice(0, 80)}"` : 'EMPTY/FAILED'}`)
+            if (transcript) effectiveMessage = transcript
+          } else {
+            console.log(`[worker] audio decrypt: ${audioB64 ? 'OK but no transcription service' : 'FAILED'}`)
+          }
+        }
+
+        if (!effectiveMessage.trim()) return
+
+        // v2 runtime branch: agent (tool-calling) vs flow (legacy graph)
+        // Whitelist override: numero de teste cai no agente mesmo com runtime='flow' (testa em prod sem afetar clientes reais)
+        const testNumbers = bot.globalConfig?.agentTestNumbers ?? []
+        const phoneTail = (p: string) => p.replace(/\D/g, '').slice(-8) // tolera 55 (pais) e o 9 extra do movel BR
+        const incomingTail = phoneTail(phoneNumber)
+        const isTestNumber = incomingTail.length === 8 && testNumbers.some((n) => phoneTail(n) === incomingTail)
+        const useAgent = bot.globalConfig?.runtime === 'agent' || isTestNumber
+        if (useAgent && agentRuntime) {
+          // última tentativa? então o agente faz fallback (handoff). Senão, erro transitório
+          // re-lança e o BullMQ re-processa sozinho (cliente não precisa "acordar" o bot).
+          const isLastAttempt = job.attemptsMade >= ((job.opts.attempts ?? 1) - 1)
+          await agentRuntime.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { isLastAttempt })
+        } else {
+          await flowExecService.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
+        }
       } finally {
         await redis.del(lockKey)
       }

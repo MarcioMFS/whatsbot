@@ -11,13 +11,20 @@ export class ClaudeAdapter implements AIProviderPort {
 
   async generate(params: AIGenerateParams): Promise<AIGenerateResult> {
     const userPrompt = this.buildUserPrompt(params)
-    const model = params.imageBase64 ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6'
+    const media = params.imageBase64
+    // Comprovante pode chegar em PDF (banco) ou imagem (print). Detecta pelos magic bytes:
+    // base64 de "%PDF" começa com "JVBER". Claude lê PDF nativo, multi-página, sem beta header.
+    const isPdf = !!media && media.startsWith('JVBER')
+    const model = media ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-4-6'
 
-    const lastUserContent: Anthropic.MessageParam['content'] = params.imageBase64
-      ? [
-          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: params.imageBase64 } },
+    // SDK types ainda não incluem o 'document' block, mas o runtime aceita (PDF GA, sem beta header).
+    const lastUserContent: Anthropic.MessageParam['content'] = media
+      ? ([
+          isPdf
+            ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: media } }
+            : { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: media } },
           { type: 'text', text: userPrompt },
-        ]
+        ] as unknown as Anthropic.MessageParam['content'])
       : userPrompt
 
     const response = await this.client.messages.create({

@@ -29,6 +29,12 @@ import { PostgreSQLProductRepository } from './adapters/PostgreSQLProductReposit
 import { PostgreSQLOrderRepository } from './adapters/PostgreSQLOrderRepository.js'
 import { PostgreSQLPackageOfferRepository } from './adapters/PostgreSQLPackageOfferRepository.js'
 import { CatalogSearchService } from './services/CatalogSearchService.js'
+import { TranscriptionService } from './services/TranscriptionService.js'
+import { VisionTitleExtractor } from './services/VisionTitleExtractor.js'
+import { GeminiProvider } from './agent/providers/GeminiProvider.js'
+import { GroqAgentProvider } from './agent/providers/GroqAgentProvider.js'
+import { AgentRuntime } from './agent/AgentRuntime.js'
+import { ModuleRegistry } from './services/ModuleRegistry.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
 import { PaymentPhaseRouter } from './services/PaymentPhaseRouter.js'
 import { PostgreSQLAIDecisionRepository } from './adapters/PostgreSQLAIDecisionRepository.js'
@@ -74,20 +80,22 @@ const messaging = new EvolutionAPIAdapter(
   process.env.EVOLUTION_API_KEY!,
 )
 
+const groqKeys = [
+  process.env.GROQ_API_KEY,
+  process.env.GROQ_API_KEY_2,
+  process.env.GROQ_API_KEY_3,
+  process.env.GROQ_API_KEY_4,
+  process.env.GROQ_API_KEY_5,
+  process.env.GROQ_API_KEY_6,
+].filter(Boolean) as string[]
+
 const aiProviders = {
   claude: process.env.CLAUDE_API_KEY ? new ClaudeAdapter(process.env.CLAUDE_API_KEY) : null,
-  groq: (() => {
-    const keys = [
-      process.env.GROQ_API_KEY,
-      process.env.GROQ_API_KEY_2,
-      process.env.GROQ_API_KEY_3,
-      process.env.GROQ_API_KEY_4,
-      process.env.GROQ_API_KEY_5,
-      process.env.GROQ_API_KEY_6,
-    ].filter(Boolean) as string[]
-    return keys.length ? new GroqAdapter(keys) : null
-  })(),
+  groq: groqKeys.length ? new GroqAdapter(groqKeys) : null,
 }
+
+const transcriptionService = groqKeys.length ? new TranscriptionService(groqKeys) : undefined
+if (!transcriptionService) console.warn('[index] No GROQ keys — voice note transcription disabled')
 
 const productRepo = new PostgreSQLProductRepository(db)
 const orderRepo = new PostgreSQLOrderRepository(db)
@@ -105,6 +113,7 @@ const eventBus = new InternalEventBus(db)
 const claudeProvider = aiProviders.claude
 if (!claudeProvider) throw new Error('CLAUDE_API_KEY required for receipt validation')
 const receiptExtractor = new ReceiptExtractorAI(claudeProvider)
+const visionTitleExtractor = new VisionTitleExtractor(claudeProvider)
 const paymentOrchestrator = new PaymentOrchestrator(receiptExtractor, paymentIntentRepo, usedTransactionRepo, eventBus)
 const deliveryAuditRepo = new PostgreSQLDeliveryAuditRepository(db)
 const deliveryService = new DeliveryService(messaging, eventRepo, deliveryAuditRepo)
@@ -116,9 +125,14 @@ const flowExecService = new FlowExecutionService(
   eventRepo, paymentOrchestrator, paymentIntentRepo,
   catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
   contextualAIRouter, paymentPhaseRouter, capabilityRouter, observationRepo,
+  visionTitleExtractor,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
-const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo)
+// Registro de Módulos — resolve liga/desliga + config por bot; alimenta tool-set do agente (F2) e efeitos (F3).
+const moduleRegistry = new ModuleRegistry()
+console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: ${moduleRegistry.definitions().map(m => m.id).join(', ')}`)
+
+const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo, moduleRegistry)
 timeoutService.start()
 
 await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
@@ -142,7 +156,22 @@ await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capability
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
-startMessageWorker(redis, flowExecService, botRepo)
+// v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.
+// Provider do agente: Groq (default, llama-3.3-70b) ou Gemini (AGENT_PROVIDER=gemini).
+// Gemini exige projeto GCP com billing ativo; Groq é o fallback enquanto isso.
+const agentProvider = process.env.AGENT_PROVIDER === 'gemini'
+  ? new GeminiProvider()
+  : new GroqAgentProvider(groqKeys)
+const agentRuntime = new AgentRuntime(
+  agentProvider,
+  conversationRepo,
+  leadRepo,
+  messaging,
+  { catalogSearchService, productRepo, paymentIntentRepo, packageOfferRepo, paymentOrchestrator },
+  moduleRegistry,
+)
+
+startMessageWorker(redis, flowExecService, botRepo, transcriptionService, agentRuntime)
 
 const port = Number(process.env.PORT ?? 3001)
 await app.listen({ port, host: '0.0.0.0' })

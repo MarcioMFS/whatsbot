@@ -77,6 +77,9 @@ export class PaymentOrchestrator {
       isFingerprintUsed,
     )
 
+    // [diag] por que aprova/rejeita — observabilidade do funil de pagamento
+    console.log(`[PaymentOrchestrator] decision approved=${decision.approved} reason=${decision.reason ?? '-'} intent.amount=${intent.amount} extracted=${JSON.stringify(extracted)} debug=${JSON.stringify(decision.debugInfo ?? {})}`)
+
     // ── Step 5: Emit validation event ─────────────────────────────────────
     await this.eventBus.emit({
       type: 'receipt_validated',
