@@ -31,7 +31,17 @@ const addToCart: AgentTool = {
     const cart = Cart.fromVariables(ctx.conversation.variables)
     cart.addItem({ productId: product.id, name: product.name, priceCentavos: product.priceCentavos, accessLink: product.accessLink })
     for (const [k, v] of Object.entries(cart.toVariables())) ctx.conversation.setVariable(k, v)
-    return { success: true, code: 'OK', data: { itemAdded: product.name, cartCount: cart.count, cartTotalBRL: cart.totalInBRL } }
+    // Total JÁ com pacote/desconto — mesmo cálculo do cart_summary/generate_pix.
+    // (antes devolvia cart.totalInBRL cru → carrinho dizia R$12 e o PIX cobrava R$10 do pacote)
+    const offers = await ctx.services.packageOfferRepo.findByBotId(ctx.bot.id)
+    const pricing = PricingService.calculate(cart, offers)
+    return { success: true, code: 'OK', data: {
+      itemAdded: product.name,
+      cartCount: cart.count,
+      cartTotalBRL: PricingService.formatBRL(pricing.finalTotalCentavos),
+      discountBRL: PricingService.formatBRL(pricing.discountCentavos),
+      appliedOffer: pricing.appliedOfferName,
+    } }
   },
 }
 

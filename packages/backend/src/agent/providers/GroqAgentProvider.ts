@@ -69,6 +69,7 @@ function toOpenAIMessages(system: string, messages: AgentMessage[]): OpenAIMsg[]
 
 export class GroqAgentProvider implements IAgentProvider {
   readonly name = 'groq'
+  readonly supportsVision = false   // llama-3.3-70b é texto-só → AgentRuntime pré-extrai títulos com Claude
   private clients: Groq[]
   private idx = 0
 

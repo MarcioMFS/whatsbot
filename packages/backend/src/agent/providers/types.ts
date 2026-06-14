@@ -53,5 +53,6 @@ export interface CompleteRequest {
 
 export interface IAgentProvider {
   readonly name: string
+  readonly supportsVision?: boolean   // true = lê imagens nativamente (Gemini/VLM). false/undefined = texto-só (Groq) → pré-extrai com Claude.
   complete(req: CompleteRequest): Promise<ProviderResponse>
 }

@@ -46,6 +46,7 @@ function toContents(messages: AgentMessage[]): GeminiContent[] {
 
 export class GeminiProvider implements IAgentProvider {
   readonly name = 'gemini'
+  readonly supportsVision = true   // multimodal nativo (Vertex) — lê o print direto, sem pré-extração
 
   async complete(req: CompleteRequest): Promise<ProviderResponse> {
     const token = await getGoogleAccessToken()
