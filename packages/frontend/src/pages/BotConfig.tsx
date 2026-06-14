@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
-import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow } from '../components/mkhub'
+import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow, InfoTip } from '../components/mkhub'
 import { api, type BotModule, type FlowSegment } from '../api/client.ts'
 import { SegmentEditorModal } from '../components/flow/SegmentEditorModal.tsx'
 import { useUIStore } from '../stores/uiStore.ts'
@@ -248,6 +248,7 @@ export function BotConfig() {
               <span style={{ fontSize: '.76rem', color: 'var(--muted)' }}>{bot.productInfo.name}</span>
             </div>
           </div>
+          <InfoTip width={300} text={<><strong>Quem é o cérebro do bot.</strong><br />• <strong>Fluxo</strong>: o grafo de nós (que você edita) decide tudo, passo a passo — previsível.<br />• <strong>Agente</strong>: a IA decide na hora usando os módulos ligados.<br />Trocar aqui muda o que responde os clientes na próxima mensagem.</>} />
           <RuntimeSwitch value={globalConfig.runtime ?? 'flow'} onChange={setRuntime} saving={savingTab === 'runtime'} />
           <span className="text-xs font-semibold" style={bot.isActive
             ? { background: 'var(--ink)', color: 'var(--paper)', padding: '5px 14px', borderRadius: 999 }
@@ -330,7 +331,8 @@ function ConfigTab({
   return (
     <div className="space-y-9">
       {/* Connection */}
-      <ConfigSection title="Conexão WhatsApp" subtitle="Estado da instância e leitura do QR">
+      <ConfigSection title="Conexão WhatsApp" subtitle="Estado da instância e leitura do QR"
+        info={<>Liga o bot a um número de WhatsApp. <strong>Verde</strong> = conectado e respondendo. Se cair, clique em <strong>Mostrar QR Code</strong> e escaneie pelo WhatsApp do número (Aparelhos conectados).</>}>
         <div className="flex items-center gap-2 mb-4">
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: waState === 'open' ? '#22a06b' : waState === 'connecting' ? '#d9a300' : '#bcbcb8' }} className={waState === 'connecting' ? 'animate-pulse' : ''} />
           <span className="text-sm" style={{ color: 'var(--ink-soft)' }}>
@@ -361,7 +363,8 @@ function ConfigTab({
       </ConfigSection>
 
       {/* Runtime + teste */}
-      <ConfigSection title="Runtime & Teste" subtitle="Fluxo = o grafo é o cérebro · Agente = a IA orquestra (tool-calling). Números de teste usam o agente mesmo em Fluxo.">
+      <ConfigSection title="Runtime & Teste" subtitle="Fluxo = o grafo é o cérebro · Agente = a IA orquestra (tool-calling). Números de teste usam o agente mesmo em Fluxo."
+        info={<><strong>Números de teste:</strong> esses telefones falam com a <strong>IA (Agente)</strong> mesmo que o bot esteja em <strong>Fluxo</strong>. Serve pra você testar o agente sem afetar clientes reais (eles seguem no fluxo). <br /><br /><strong>Modo teste (dono):</strong> por padrão o bot ignora mensagens do próprio dono; ligue pra conseguir testar com seu número.</>}>
         <div className="grid grid-cols-2 gap-5">
           <MkSelect label="Moeda padrão" value={globalConfig.defaultCurrency ?? 'BRL'} onChange={v => set('defaultCurrency', v)}>
             <option value="BRL">BRL — Real</option>
@@ -391,7 +394,8 @@ function ConfigTab({
       </ConfigSection>
 
       {/* Roteamento */}
-      <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa.">
+      <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa."
+        info={<>Decide <strong>qual fluxo</strong> roda pra cada pessoa. As regras são lidas <strong>de cima pra baixo</strong>: o 1º cuja tag o lead tem vence. Se nenhuma casar, usa o <strong>fluxo ativo padrão</strong>. (Só vale no modo Fluxo.)</>}>
         <div className="space-y-2">
           {routingRules.length === 0 && (
             <p className="text-xs py-4 text-center rounded-xl" style={{ color: 'var(--muted)', background: 'var(--paper)', border: '1px solid var(--line)' }}>Nenhuma regra. Sempre usa o flow ativo padrão.</p>
@@ -424,7 +428,10 @@ function ConfigTab({
 
       {/* Avançado / observabilidade */}
       <div>
-        <Eyebrow className="block mb-3">Avançado</Eyebrow>
+        <div className="flex items-center gap-2 mb-3">
+          <Eyebrow>Avançado</Eyebrow>
+          <InfoTip text={<>Telas de diagnóstico (observabilidade). <strong>Capabilities</strong> = sub-fluxos legados. <strong>AI Patterns</strong> = o que a IA não entendeu e taxa de erro. <strong>Eventos</strong> = log da conversa ao vivo. Pra inspecionar, não pra configurar o dia a dia.</>} />
+        </div>
         <div className="grid grid-cols-1 gap-3">
           {[
             { label: 'Capabilities', desc: 'Sub-flows legados que a IA invocava por contexto', icon: Workflow, path: 'capabilities' },
@@ -491,7 +498,10 @@ function ModulosTab({
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="mk-display" style={{ fontSize: '1.15rem', fontWeight: 600 }}>Módulos</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="mk-display" style={{ fontSize: '1.15rem', fontWeight: 600 }}>Módulos</h2>
+            <InfoTip width={300} text={<>Máquinas prontas da plataforma — você liga/desliga e configura, sem montar nó a nó. Os 3 tipos: <strong>roteável</strong> (a IA aciona por mensagem, ex: pagar), <strong>ferramenta</strong> (a IA usa quando precisa, ex: buscar no catálogo), <strong>efeito</strong> (dispara sozinho por evento, ex: entregar após o pagamento). Desligar tira essa capacidade do bot.</>} />
+          </div>
           <p style={{ color: 'var(--muted)', fontSize: '.8rem', marginTop: 2 }}>Ligue, desligue e configure as máquinas prontas da plataforma. Desligar remove a capacidade do agente.</p>
         </div>
         <MkButton onClick={save} disabled={savingTab === 'modulos'}>
@@ -585,13 +595,15 @@ function SkillsTab({
 
   return (
     <div className="space-y-9">
-      <ConfigSection title="Como o agente age" subtitle="Regras e jeito de vender — vira o system prompt do agente. A IA propõe, o código dispõe.">
+      <ConfigSection title="Como o agente age" subtitle="Regras e jeito de vender — vira o system prompt do agente. A IA propõe, o código dispõe." badge="modo Agente"
+        info={<>Vale só quando o runtime está em <strong>Agente</strong>. São as regras de conduta da IA (como vender, o que nunca prometer). No modo <strong>Fluxo</strong>, quem manda são os nós, não isto.</>}>
         <MkTextarea label="Instruções do agente" value={globalConfig.agentInstructions ?? ''}
           onChange={v => set('agentInstructions', v)} rows={7}
           placeholder={'Ex:\n- Sempre confirme o título antes de gerar o PIX\n- Se a pessoa hesitar, ofereça o pacote\n- Nunca prometa o que o módulo não faz'} />
       </ConfigSection>
 
-      <ConfigSection title="Abertura" subtitle="Como o bot inicia a 1ª conversa. Mensagem exata tem prioridade; a orientação deixa a IA abrir com as palavras dela.">
+      <ConfigSection title="Abertura" subtitle="Como o bot inicia a 1ª conversa. Mensagem exata tem prioridade; a orientação deixa a IA abrir com as palavras dela." badge="modo Agente"
+        info={<><strong>Atenção:</strong> esta abertura só é usada no modo <strong>Agente</strong>. No modo <strong>Fluxo</strong> (atual do seu bot), quem dá as boas-vindas são os nós da habilidade <strong>"Boas-vindas"</strong> ali embaixo — não estes campos. Por isso parecem "duas aberturas": cada uma é de um modo.</>}>
         <div className="space-y-5">
           <MkTextarea label="Mensagem de abertura (exata, verbatim)" value={globalConfig.agentIntroMessage ?? ''}
             onChange={v => set('agentIntroMessage', v)} rows={3}
@@ -612,7 +624,10 @@ function SkillsTab({
       <FlowSegments flows={flows} activeFlowId={activeFlowId} />
 
       <div>
-        <Eyebrow className="block mb-3">Habilidades automáticas</Eyebrow>
+        <div className="flex items-center gap-2 mb-3">
+          <Eyebrow>Habilidades automáticas</Eyebrow>
+          <InfoTip text={<>O que cada <strong>módulo ligado</strong> já entrega à IA, sem você descrever nada. A descrição vem do próprio módulo. Para ligar/desligar, vá na aba <strong>Módulos</strong>.</>} />
+        </div>
         <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginBottom: 14 }}>O que cada módulo ligado já entrega ao agente — sem você descrever.</p>
         <div className="space-y-2">
           {modules.filter(m => m.enabled).map(m => {
@@ -698,7 +713,10 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
     <div>
       <div className="flex items-end justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <Eyebrow className="block mb-1">Habilidades do fluxo</Eyebrow>
+          <div className="flex items-center gap-2 mb-1">
+            <Eyebrow>Habilidades do fluxo</Eyebrow>
+            <InfoTip width={300} text={<>As partes do seu fluxo, nomeadas e descritas. Cada habilidade agrupa nós (ex: "Boas-vindas", "Pagamento PIX"). <strong>"Editar parte"</strong> abre só os nós daquela parte pra editar isolado. <strong>"Gerar com IA"</strong> mapeia tudo automaticamente — depois você revisa. É a abertura/comportamento real no modo <strong>Fluxo</strong>.</>} />
+          </div>
           <p style={{ color: 'var(--muted)', fontSize: '.78rem', maxWidth: 460 }}>
             O que está mapeado dentro do fluxo, em partes nomeadas + descrição. É o que a IA lê pra entender e usar cada parte. Gere com IA e revise.
           </p>
@@ -816,7 +834,8 @@ function ConhecimentoTab({
 }) {
   return (
     <div className="space-y-6">
-      <ConfigSection title="O que o bot sabe" subtitle="Fatos que o bot pode usar como verdade — ele só afirma o que está aqui, não inventa.">
+      <ConfigSection title="O que o bot sabe" subtitle="Fatos que o bot pode usar como verdade — ele só afirma o que está aqui, não inventa."
+        info={<>A base de fatos do bot (link do catálogo, prazo de entrega, garantia…). Um fato por linha. O bot trata isto como <strong>única fonte de verdade</strong>: usa quando faz sentido e <strong>não inventa</strong> o que não estiver aqui.</>}>
         <MkTextarea
           label="Conhecimento (link do catálogo, entrega, garantia…)"
           value={globalConfig.agentKnowledge ?? ''}
@@ -856,7 +875,8 @@ function TomTab({
 
   return (
     <div className="space-y-9">
-      <ConfigSection title="Identidade" subtitle="Como o bot se apresenta. Voz neutra natural — humano de verdade, sem cara de bot.">
+      <ConfigSection title="Identidade" subtitle="Como o bot se apresenta. Voz neutra natural — humano de verdade, sem cara de bot."
+        info={<><strong>Só marca</strong>: atende sem nome próprio (fala pela empresa). <strong>Com nome</strong>: usa um nome (ex: "Bia"). <strong>Nunca revelar que é IA</strong>: se perguntado, não admite ser robô. Vale tanto no Fluxo quanto no Agente.</>}>
         <div className="grid grid-cols-2 gap-5">
           <MkSelect label="Modo de identidade" value={globalConfig.assistantIdentityMode ?? 'brand_only'} onChange={v => set('assistantIdentityMode', v)}>
             <option value="brand_only">Só marca (sem nome)</option>
@@ -874,7 +894,8 @@ function TomTab({
         </div>
       </ConfigSection>
 
-      <ConfigSection title="Tom de voz" subtitle="Knobs que calibram a voz natural do agente.">
+      <ConfigSection title="Tom de voz" subtitle="Knobs que calibram a voz natural do agente." badge="modo Agente"
+        info={<>Ajustam como a <strong>IA</strong> escreve: formalidade, uso de emoji, tamanho das mensagens e gírias. A <strong>Prévia</strong> abaixo mostra exemplos reais. (Calibra o Agente; o Fluxo usa os textos fixos dos nós.)</>}>
         <div className="grid grid-cols-2 gap-5">
           <MkSelect label="Formalidade" value={tone.formality ?? 'neutro'} onChange={v => setTone({ formality: v as AgentTone['formality'] })}>
             <option value="informal">Informal</option>
@@ -1017,11 +1038,15 @@ function GhostBtn({ children, onClick, active, title }: { children: React.ReactN
   )
 }
 
-function ConfigSection({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function ConfigSection({ title, subtitle, info, badge, children }: { title: string; subtitle: string; info?: React.ReactNode; badge?: string; children: React.ReactNode }) {
   return (
     <div>
       <div className="mb-4">
-        <h2 className="mk-display" style={{ fontSize: '1.05rem', fontWeight: 600 }}>{title}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="mk-display" style={{ fontSize: '1.05rem', fontWeight: 600 }}>{title}</h2>
+          {info && <InfoTip text={info} />}
+          {badge && <span className="mk-eyebrow" style={{ fontSize: '.54rem', color: 'var(--muted)', border: '1px solid var(--line)', padding: '2px 7px', borderRadius: 999 }}>{badge}</span>}
+        </div>
         <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginTop: 2 }}>{subtitle}</p>
       </div>
       <MkCard style={{ padding: 22 }}>{children}</MkCard>

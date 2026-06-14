@@ -1,5 +1,5 @@
-import type { CSSProperties, ReactNode } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
+import { ArrowRight, Info } from 'lucide-react'
 
 // ──────────────────────────────────────────────────────────────────────────────
 // MKHUB editorial primitives (monochrome paper / ink, Sora+Inter, soft cards).
@@ -16,6 +16,31 @@ export function Eyebrow({ children, className = '', style }: { children: ReactNo
 
 export function Display({ children, className = '', style }: { children: ReactNode; className?: string; style?: CSSProperties }) {
   return <span className={`mk-display ${className}`} style={style}>{children}</span>
+}
+
+// Ícone "i" com tooltip no hover — explica um conceito sem poluir a tela.
+// Reutilizável em qualquer tela da plataforma.
+export function InfoTip({ text, width = 260, side = 'top' }: { text: ReactNode; width?: number; side?: 'top' | 'bottom' }) {
+  const [open, setOpen] = useState(false)
+  const pos: CSSProperties = side === 'bottom'
+    ? { top: 'calc(100% + 8px)' }
+    : { bottom: 'calc(100% + 8px)' }
+  return (
+    <span style={{ position: 'relative', display: 'inline-flex', verticalAlign: 'middle' }}
+      onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}
+      onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>
+      <Info size={13} strokeWidth={1.8} style={{ color: 'var(--muted)', cursor: 'help', flexShrink: 0 }} />
+      {open && (
+        <span role="tooltip" style={{
+          position: 'absolute', left: '50%', transform: 'translateX(-50%)', ...pos,
+          width, zIndex: 60, background: 'var(--ink)', color: 'var(--paper)',
+          padding: '9px 12px', borderRadius: 9, fontSize: '.72rem', lineHeight: 1.5,
+          fontWeight: 400, letterSpacing: 0, textAlign: 'left', whiteSpace: 'normal',
+          boxShadow: '0 8px 24px rgba(10,10,10,.22)', pointerEvents: 'none',
+        }}>{text}</span>
+      )}
+    </span>
+  )
 }
 
 export function MkCard({ children, hover = false, className = '', style, onClick }: {
