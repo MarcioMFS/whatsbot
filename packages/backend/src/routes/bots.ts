@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
-import type { BotRepository, FlowRepository, MessagingPort, ConversationEventRepository, BotGlobalConfig } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, ConversationEventRepository, BotGlobalConfig, AgentTraceRepository } from '@whatsbot/core'
 import type { BotService } from '../services/BotService.js'
 import { GlobalConfigSchema, buildBotPersonaPreview, invalidatePersonaCache } from '../services/BotPersonaBuilder.js'
 import { ModuleRegistry } from '../services/ModuleRegistry.js'
@@ -36,6 +36,7 @@ interface BotCtx {
   messaging: MessagingPort
   botService: BotService
   eventRepo?: ConversationEventRepository
+  agentTrace: AgentTraceRepository
 }
 
 export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
@@ -165,6 +166,15 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
       config: moduleRegistry.configFor(bot, def.id),
     }))
     return { modules }
+  })
+
+  // Trilha do agente (bot-level): feed recente de tool-calls/replies/nudges. Auditoria "quem/como".
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>('/:id/agent-trace', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.id)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+    const limit = Math.min(Number(req.query.limit ?? 100), 500)
+    return { trace: await ctx.agentTrace.listByBot(bot.id, limit) }
   })
 
   app.get<{ Params: { id: string } }>('/:id/global-config/preview', async (req, reply) => {

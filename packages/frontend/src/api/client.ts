@@ -17,6 +17,24 @@ export interface BotModule {
   config: Record<string, unknown>
 }
 
+// Trilha do agente — um passo (tool/reply/nudge/error) com input/resultado.
+export interface AgentTraceEntry {
+  conversationId: string | null
+  phoneNumber: string
+  turnMessage: string | null
+  step: number
+  kind: 'tool' | 'reply' | 'error' | 'nudge'
+  toolName: string | null
+  toolInput: Record<string, unknown> | null
+  resultCode: string | null
+  resultSuccess: boolean | null
+  text: string | null
+  stopReason: string | null
+  provider: string | null
+  latencyMs: number | null
+  occurredAt: string
+}
+
 // Segmento descrito de um flow (Habilidade) — agrupa nós sob {nome, descrição, quando usar}.
 export interface FlowSegment {
   id: string
@@ -96,6 +114,8 @@ export const api = {
       request<{ modules: BotModule[] }>(`/bots/${id}/modules`),
     events: (id: string, limit?: number) =>
       request<{ events: unknown[] }>(`/bots/${id}/events${limit ? `?limit=${limit}` : ''}`),
+    agentTrace: (id: string, limit = 150) =>
+      request<{ trace: AgentTraceEntry[] }>(`/bots/${id}/agent-trace?limit=${limit}`),
   },
   flows: {
     list: (botId: string) => request<unknown[]>(`/flows/bot/${botId}`),

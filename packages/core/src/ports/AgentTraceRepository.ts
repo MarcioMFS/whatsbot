@@ -21,4 +21,5 @@ export interface AgentTraceRecord {
 export interface AgentTraceRepository {
   save(record: AgentTraceRecord): Promise<void>
   listByConversation(conversationId: string): Promise<(AgentTraceRecord & { occurredAt: string })[]>
+  listByBot(botId: string, limit: number): Promise<(AgentTraceRecord & { occurredAt: string })[]>
 }

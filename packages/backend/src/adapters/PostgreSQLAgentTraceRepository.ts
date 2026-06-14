@@ -28,12 +28,34 @@ export class PostgreSQLAgentTraceRepository implements AgentTraceRepository {
       `SELECT * FROM agent_trace WHERE conversation_id = $1 ORDER BY occurred_at ASC, step ASC`,
       [conversationId],
     )
-    return rows.map(row => ({
-      botId: row.bot_id, conversationId: row.conversation_id, phoneNumber: row.phone_number,
-      turnMessage: row.turn_message, step: row.step, kind: row.kind,
-      toolName: row.tool_name, toolInput: row.tool_input, resultCode: row.result_code,
-      resultSuccess: row.result_success, text: row.text, stopReason: row.stop_reason,
-      provider: row.provider, latencyMs: row.latency_ms, occurredAt: row.occurred_at,
-    }))
+    return rows.map(this.toRecord)
+  }
+
+  async listByBot(botId: string, limit: number): Promise<(AgentTraceRecord & { occurredAt: string })[]> {
+    const { rows } = await this.db.query(
+      `SELECT * FROM agent_trace WHERE bot_id = $1 ORDER BY occurred_at DESC LIMIT $2`,
+      [botId, Math.min(limit, 500)],
+    )
+    return rows.map(this.toRecord)
+  }
+
+  private toRecord(row: Record<string, unknown>): AgentTraceRecord & { occurredAt: string } {
+    return {
+      botId: row.bot_id as string,
+      conversationId: row.conversation_id as string | null,
+      phoneNumber: row.phone_number as string,
+      turnMessage: row.turn_message as string | null,
+      step: row.step as number,
+      kind: row.kind as AgentTraceRecord['kind'],
+      toolName: row.tool_name as string | null,
+      toolInput: row.tool_input as Record<string, unknown> | null,
+      resultCode: row.result_code as string | null,
+      resultSuccess: row.result_success as boolean | null,
+      text: row.text as string | null,
+      stopReason: row.stop_reason as string | null,
+      provider: row.provider as string | null,
+      latencyMs: row.latency_ms as number | null,
+      occurredAt: String(row.occurred_at),
+    }
   }
 }
