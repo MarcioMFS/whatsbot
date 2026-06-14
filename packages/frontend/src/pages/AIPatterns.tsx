@@ -1,54 +1,26 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react'
-import { Layout } from '../components/ui/Layout'
+import { MkLayout } from '../components/mkhub/MkLayout.tsx'
+import { MkCard, Eyebrow } from '../components/mkhub'
 import { api } from '../api/client'
 
-// ─── Types (mirror backend AIObservationStats / AIObservation) ─────────────────
-
-interface IntentStat {
-  intent: string
-  count: number
-  escalated: number
-}
-
+interface IntentStat { intent: string; count: number; escalated: number }
 interface Stats {
-  total: number
-  aiCount: number
-  defaultCount: number
-  fallbackRate: number
-  successCount: number
-  escalatedCount: number
-  pendingCount: number
-  byIntent: IntentStat[]
+  total: number; aiCount: number; defaultCount: number; fallbackRate: number
+  successCount: number; escalatedCount: number; pendingCount: number; byIntent: IntentStat[]
 }
-
 interface Observation {
-  id: string
-  phoneNumber: string
-  userMessage: string
-  hasImage: boolean
-  phase?: string
-  selectedIntent?: string
-  method: string
-  confidence?: number
-  reasoning?: string
-  provider?: string
-  durationMs?: number
-  outcome?: string
-  createdAt: string
+  id: string; phoneNumber: string; userMessage: string; hasImage: boolean
+  phase?: string; selectedIntent?: string; method: string; confidence?: number
+  reasoning?: string; provider?: string; durationMs?: number; outcome?: string; createdAt: string
 }
 
-function pct(n: number): string {
-  return `${Math.round(n * 100)}%`
-}
-
-// ─── Page ──────────────────────────────────────────────────────────────────────
+const pct = (n: number) => `${Math.round(n * 100)}%`
 
 export function AIPatterns() {
   const { botId } = useParams<{ botId: string }>()
   const navigate = useNavigate()
-
   const [days, setDays] = useState(7)
   const [stats, setStats] = useState<Stats | null>(null)
   const [problematic, setProblematic] = useState<Observation[]>([])
@@ -58,123 +30,102 @@ export function AIPatterns() {
     if (!botId) return
     setLoading(true)
     Promise.all([
-      api.observations.stats(botId, days)
-        .then(d => setStats(d.stats as Stats))
-        .catch(() => setStats(null)),
-      api.observations.problematic(botId, days)
-        .then(d => setProblematic((d.observations as Observation[]) ?? []))
-        .catch(() => setProblematic([])),
+      api.observations.stats(botId, days).then(d => setStats(d.stats as Stats)).catch(() => setStats(null)),
+      api.observations.problematic(botId, days).then(d => setProblematic((d.observations as Observation[]) ?? [])).catch(() => setProblematic([])),
     ]).finally(() => setLoading(false))
   }, [botId, days])
 
   const maxIntent = stats && stats.byIntent.length > 0 ? stats.byIntent[0].count : 1
 
+  const outcomeColor = (o?: string) => o === 'success' ? '#1d7a52' : o === 'escalated' ? '#b42318' : 'var(--muted)'
+  const dayPill = (active: boolean) => active
+    ? { background: 'var(--ink)', color: 'var(--paper)', border: '1px solid var(--ink)' }
+    : { background: 'var(--paper-2)', color: 'var(--muted)', border: '1px solid var(--line)' }
+
   return (
-    <Layout>
-      <div className="p-6 max-w-4xl mx-auto space-y-6">
-        {/* Header */}
+    <MkLayout>
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(`/bots/${botId}/config`)}
-              className="p-2 rounded-xl text-white/40 hover:text-white hover:bg-white/5 transition-all">
-              <ArrowLeft className="w-5 h-5" />
-            </button>
+            <button onClick={() => navigate(`/bots/${botId}/config`)} className="p-2 rounded-xl hover:opacity-60" style={{ color: 'var(--muted)' }}><ArrowLeft size={20} /></button>
             <div>
-              <h1 className="text-xl font-bold text-white">AI Patterns</h1>
-              <p className="text-sm text-white/40">O que o roteador de IA decidiu — e como terminou</p>
+              <Eyebrow>Catálogo · IA</Eyebrow>
+              <h1 className="mk-display" style={{ fontSize: '1.7rem', fontWeight: 700 }}>AI Patterns</h1>
+              <p className="text-sm" style={{ color: 'var(--muted)' }}>O que o roteador de IA decidiu — e como terminou</p>
             </div>
           </div>
           <div className="flex gap-1.5">
             {[7, 30].map(d => (
-              <button key={d} onClick={() => setDays(d)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all ${
-                  days === d
-                    ? 'bg-purple-500/25 border border-purple-500/50 text-white'
-                    : 'bg-white/5 border border-white/10 text-white/60 hover:text-white'
-                }`}>
-                {d}d
-              </button>
+              <button key={d} onClick={() => setDays(d)} className="px-3 py-1.5 rounded-lg text-sm" style={dayPill(days === d)}>{d}d</button>
             ))}
           </div>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="w-6 h-6 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+            <div className="w-6 h-6 rounded-full animate-spin" style={{ border: '2px solid var(--line)', borderTopColor: 'var(--ink)' }} />
           </div>
         ) : !stats || stats.total === 0 ? (
-          <div className="text-center py-16 text-white/30">
-            <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-30" />
+          <div className="text-center py-16" style={{ color: 'var(--muted)' }}>
+            <TrendingUp size={40} strokeWidth={1.3} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
             <p className="text-sm">Nenhuma decisão de IA registrada nos últimos {days} dias.</p>
             <p className="text-xs mt-1">As observações aparecem aqui conforme as conversas passam pelo nó ai_router.</p>
           </div>
         ) : (
           <>
-            {/* Stat cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               {[
-                { label: 'Decisões', value: String(stats.total), color: 'text-blue-400', icon: TrendingUp },
-                { label: 'Fallback (regra)', value: pct(stats.fallbackRate), color: stats.fallbackRate > 0.2 ? 'text-amber-400' : 'text-white', icon: AlertTriangle },
-                { label: 'Sucesso', value: String(stats.successCount), color: 'text-green-400', icon: CheckCircle2 },
-                { label: 'Escalado', value: String(stats.escalatedCount), color: 'text-red-400', icon: XCircle },
-                { label: 'Sem desfecho', value: String(stats.pendingCount), color: 'text-white/60', icon: Clock },
+                { label: 'Decisões', value: String(stats.total), color: 'var(--ink)', icon: TrendingUp },
+                { label: 'Fallback (regra)', value: pct(stats.fallbackRate), color: stats.fallbackRate > 0.2 ? '#9a7400' : 'var(--ink)', icon: AlertTriangle },
+                { label: 'Sucesso', value: String(stats.successCount), color: '#1d7a52', icon: CheckCircle2 },
+                { label: 'Escalado', value: String(stats.escalatedCount), color: '#b42318', icon: XCircle },
+                { label: 'Sem desfecho', value: String(stats.pendingCount), color: 'var(--muted)', icon: Clock },
               ].map(({ label, value, color, icon: Icon }) => (
-                <div key={label} className="p-4 rounded-2xl border border-white/10 bg-white/5 text-center">
-                  <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
-                  <div className={`text-xl font-bold ${color}`}>{value}</div>
-                  <div className="text-xs text-white/40">{label}</div>
-                </div>
+                <MkCard key={label} style={{ padding: 16, textAlign: 'center' }}>
+                  <Icon size={18} strokeWidth={1.6} style={{ color, margin: '0 auto 6px' }} />
+                  <div className="mk-display" style={{ fontSize: '1.3rem', fontWeight: 700, color }}>{value}</div>
+                  <div className="text-xs" style={{ color: 'var(--muted)' }}>{label}</div>
+                </MkCard>
               ))}
             </div>
 
-            {/* Intent distribution */}
-            <div className="p-5 rounded-2xl border border-white/10 bg-white/5">
-              <h3 className="font-medium text-white mb-4">Intenções detectadas</h3>
+            <MkCard style={{ padding: 20 }}>
+              <h3 className="mk-display mb-4" style={{ fontWeight: 600 }}>Intenções detectadas</h3>
               <div className="space-y-2">
                 {stats.byIntent.map(i => (
                   <div key={i.intent} className="flex items-center gap-3">
-                    <span className="w-44 text-sm text-white/70 truncate">{i.intent}</span>
-                    <div className="flex-1 h-2.5 rounded-full bg-white/5 overflow-hidden">
-                      <div className="h-full rounded-full bg-gradient-to-r from-purple-500/70 to-indigo-500/70"
-                        style={{ width: `${(i.count / maxIntent) * 100}%` }} />
+                    <span className="w-44 text-sm truncate" style={{ color: 'var(--ink-soft)' }}>{i.intent}</span>
+                    <div className="flex-1 h-2.5 rounded-full overflow-hidden" style={{ background: 'var(--paper)' }}>
+                      <div className="h-full rounded-full" style={{ width: `${(i.count / maxIntent) * 100}%`, background: 'var(--ink)' }} />
                     </div>
-                    <span className="w-10 text-right text-sm text-white/60">{i.count}</span>
-                    {i.escalated > 0 && (
-                      <span className="text-xs text-amber-400 whitespace-nowrap">⚠ {i.escalated}</span>
-                    )}
+                    <span className="w-10 text-right text-sm" style={{ color: 'var(--muted)' }}>{i.count}</span>
+                    {i.escalated > 0 && <span className="text-xs whitespace-nowrap" style={{ color: '#9a7400' }}>⚠ {i.escalated}</span>}
                   </div>
                 ))}
               </div>
-            </div>
+            </MkCard>
 
-            {/* Problematic feed */}
-            <div className="p-5 rounded-2xl border border-amber-500/20 bg-amber-500/5">
+            <div className="p-5 rounded-2xl" style={{ border: '1px solid rgba(217,163,0,0.3)', background: 'rgba(217,163,0,0.05)' }}>
               <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="w-4 h-4 text-amber-400" />
-                <h3 className="font-medium text-white">Decisões problemáticas</h3>
-                <span className="text-xs text-amber-400/70">fallback ou baixa confiança</span>
+                <AlertTriangle size={15} style={{ color: '#9a7400' }} />
+                <h3 className="mk-display" style={{ fontWeight: 600 }}>Decisões problemáticas</h3>
+                <Eyebrow style={{ fontSize: '.58rem', color: '#9a7400' }}>fallback ou baixa confiança</Eyebrow>
               </div>
               {problematic.length === 0 ? (
-                <p className="text-sm text-white/40">Nada problemático no período. 🎉</p>
+                <p className="text-sm" style={{ color: 'var(--muted)' }}>Nada problemático no período. 🎉</p>
               ) : (
                 <div className="space-y-2">
                   {problematic.map(o => (
-                    <div key={o.id} className="p-3 rounded-xl bg-white/5 border border-white/5">
+                    <div key={o.id} className="p-3 rounded-xl" style={{ background: 'var(--paper-2)', border: '1px solid var(--line)' }}>
                       <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        <span className={`text-xs px-2 py-0.5 rounded-full border ${
-                          o.outcome === 'success' ? 'bg-green-500/15 text-green-300 border-green-500/30' :
-                          o.outcome === 'escalated' ? 'bg-red-500/15 text-red-300 border-red-500/30' :
-                          'bg-slate-500/15 text-slate-300 border-slate-500/30'
-                        }`}>
-                          {o.outcome ?? 'sem desfecho'}
-                        </span>
-                        <span className="text-xs font-medium text-white/80">{o.selectedIntent ?? '—'}</span>
-                        <span className="text-xs text-white/40">{o.method === 'default' ? 'regra' : o.method}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: 'var(--paper)', border: `1px solid ${outcomeColor(o.outcome)}40`, color: outcomeColor(o.outcome) }}>{o.outcome ?? 'sem desfecho'}</span>
+                        <span className="text-xs font-medium" style={{ color: 'var(--ink-soft)' }}>{o.selectedIntent ?? '—'}</span>
+                        <span className="text-xs" style={{ color: 'var(--muted)' }}>{o.method === 'default' ? 'regra' : o.method}</span>
                         {o.hasImage && <span className="text-xs">🖼</span>}
-                        <span className="ml-auto text-xs text-white/30">{new Date(o.createdAt).toLocaleString('pt-BR')}</span>
+                        <span className="ml-auto text-xs" style={{ color: 'var(--muted)' }}>{new Date(o.createdAt).toLocaleString('pt-BR')}</span>
                       </div>
-                      <p className="text-sm text-white/80 mb-1.5">"{o.userMessage}"</p>
-                      <div className="flex gap-3 text-xs text-white/40 flex-wrap">
+                      <p className="text-sm mb-1.5" style={{ color: 'var(--ink-soft)' }}>"{o.userMessage}"</p>
+                      <div className="flex gap-3 text-xs flex-wrap" style={{ color: 'var(--muted)' }}>
                         {o.phase && <span>fase: {o.phase}</span>}
                         {o.confidence != null && <span>conf: {pct(o.confidence)}</span>}
                         {o.durationMs != null && <span>{o.durationMs}ms</span>}
@@ -189,6 +140,6 @@ export function AIPatterns() {
           </>
         )}
       </div>
-    </Layout>
+    </MkLayout>
   )
 }

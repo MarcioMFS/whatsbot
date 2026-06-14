@@ -48,19 +48,30 @@ export function BaseNode({ selected, children, color, borderColor, handles }: Ba
         />
       ))}
       <div className="p-3">{children}</div>
-      {handles?.outputs?.map((h, i) => (
-        <Handle
-          key={h.id ?? i}
-          type="source"
-          position={Position.Bottom}
-          id={h.id}
-          style={{
-            bottom: -5,
-            left: '50%',
-            background: h.color ?? 'rgba(14,165,233,0.8)',
-          }}
-        />
-      ))}
+      {handles?.outputs?.map((h, i) => {
+        const n = handles.outputs!.length
+        // Spread multiple outputs evenly across the bottom edge instead of stacking them at 50%
+        const left = n === 1 ? 50 : ((i + 1) / (n + 1)) * 100
+        const bg = h.color && h.color.startsWith('rgba') ? h.color : 'rgba(14,165,233,0.85)'
+        return (
+          <div key={h.id ?? i}>
+            <Handle
+              type="source"
+              position={Position.Bottom}
+              id={h.id}
+              style={{ bottom: -5, left: `${left}%`, background: bg }}
+            />
+            {n > 1 && h.label && (
+              <span
+                className="absolute text-[8px] leading-none text-white/45 whitespace-nowrap pointer-events-none"
+                style={{ bottom: -15, left: `${left}%`, transform: 'translateX(-50%)' }}
+              >
+                {h.label}
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

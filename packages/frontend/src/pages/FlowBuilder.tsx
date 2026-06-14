@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   ReactFlow,
@@ -11,11 +11,13 @@ import {
   type Connection,
   type Edge,
   type Node,
+  type ReactFlowInstance,
   BackgroundVariant,
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+import dagre from '@dagrejs/dagre'
 import gsap from 'gsap'
-import { ArrowLeft, Save, Play, Square, AlertTriangle, X, FileDown, FileUp, Copy, Check } from 'lucide-react'
+import { ArrowLeft, Save, Play, Square, AlertTriangle, X, FileDown, FileUp, Copy, Check, LayoutGrid } from 'lucide-react'
 import { api } from '../api/client.ts'
 import { NodePalette } from '../components/flow/NodePalette.tsx'
 import { NodeConfigPanel } from '../components/flow/NodeConfigPanel.tsx'
@@ -102,6 +104,93 @@ const nodeTypes = {
   end: EndNode,
 }
 
+// Every node exposes a single DEFAULT (unnamed) input handle, so an edge with a non-null
+// targetHandle can never resolve and ReactFlow silently drops it — the line vanishes even
+// though the edge exists and the runtime (which routes by source/sourceHandle) works fine.
+// Coerce targetHandle to null so the connection renders. sourceHandle is left intact — it
+// carries branch routing on condition/router/classify/etc.
+function repairEdges(nodes: Node[], edges: Edge[]): Edge[] {
+  const typeById = new Map(nodes.map(n => [n.id, n.type]))
+  return edges.map(e => {
+    let next = e
+    // No node has named inputs → targetHandle must resolve to the single default input
+    if (next.targetHandle != null) next = { ...next, targetHandle: null }
+    // Trigger normal path: runtime treats null and 'output' identically (FES line ~806).
+    // Pin null → 'output' so it lands on the rendered handle and the line draws.
+    if (typeById.get(next.source) === 'trigger' && next.sourceHandle == null) {
+      next = { ...next, sourceHandle: 'output' }
+    }
+    return next
+  })
+}
+
+// Connectivity analysis: which nodes are "loose" — not reachable from the Trigger,
+// or missing an incoming/outgoing connection. Used to visually flag them on the canvas.
+function analyzeFlow(nodes: Node[], edges: Edge[]): Set<string> {
+  const loose = new Set<string>()
+  if (nodes.length === 0) return loose
+
+  const trigger = nodes.find(n => n.type === 'trigger')
+  const incoming = new Set(edges.map(e => e.target))
+  const outgoing = new Set(edges.map(e => e.source))
+
+  // Reachability (DFS) from the trigger following edge direction
+  const reachable = new Set<string>()
+  if (trigger) {
+    const adj = new Map<string, string[]>()
+    for (const e of edges) {
+      const list = adj.get(e.source) ?? []
+      list.push(e.target)
+      adj.set(e.source, list)
+    }
+    const stack = [trigger.id]
+    while (stack.length) {
+      const id = stack.pop()!
+      if (reachable.has(id)) continue
+      reachable.add(id)
+      for (const t of adj.get(id) ?? []) stack.push(t)
+    }
+  }
+
+  for (const n of nodes) {
+    const isTrigger = n.type === 'trigger'
+    const isEnd = n.type === 'end'
+    if (!isTrigger && !incoming.has(n.id)) loose.add(n.id)          // nothing points to it
+    if (!isEnd && !outgoing.has(n.id)) loose.add(n.id)              // goes nowhere
+    if (trigger && !isTrigger && !reachable.has(n.id)) loose.add(n.id) // no path from the trigger
+  }
+  return loose
+}
+
+// Fallback dimensions when a node hasn't been measured yet
+const NODE_W = 240
+const NODE_H = 96
+
+// Auto-layout: arrange nodes left→right with consistent spacing (dagre).
+function getLayoutedElements(nodes: Node[], edges: Edge[], direction: 'LR' | 'TB' = 'LR'): Node[] {
+  if (nodes.length === 0) return nodes
+  const g = new dagre.graphlib.Graph()
+  g.setDefaultEdgeLabel(() => ({}))
+  g.setGraph({ rankdir: direction, nodesep: 56, ranksep: 120, marginx: 48, marginy: 48 })
+
+  for (const n of nodes) {
+    g.setNode(n.id, { width: n.measured?.width ?? NODE_W, height: n.measured?.height ?? NODE_H })
+  }
+  for (const e of edges) {
+    if (g.hasNode(e.source) && g.hasNode(e.target)) g.setEdge(e.source, e.target)
+  }
+
+  dagre.layout(g)
+
+  return nodes.map(n => {
+    const p = g.node(n.id)
+    const w = n.measured?.width ?? NODE_W
+    const h = n.measured?.height ?? NODE_H
+    // dagre returns center coords; ReactFlow positions are top-left
+    return { ...n, position: { x: Math.round(p.x - w / 2), y: Math.round(p.y - h / 2) } }
+  })
+}
+
 export function FlowBuilder() {
   const { botId, flowId } = useParams<{ botId: string; flowId: string }>()
   const navigate = useNavigate()
@@ -118,6 +207,33 @@ export function FlowBuilder() {
   const [importError, setImportError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
+  const rfRef = useRef<ReactFlowInstance<Node, Edge> | null>(null)
+
+  // Auto-organize the whole graph (dagre), normalize edges to the fluid style, and re-center
+  const onLayout = useCallback(() => {
+    setNodes(nds => getLayoutedElements(nds, edges, 'LR'))
+    setEdges(eds => eds.map(e => ({ ...e, type: 'smoothstep', animated: true })))
+    setTimeout(() => rfRef.current?.fitView({ padding: 0.2, duration: 400 }), 60)
+  }, [edges, setNodes, setEdges])
+
+  // Live connectivity: nodes not properly wired into the flow
+  const looseIds = useMemo(() => analyzeFlow(nodes, edges), [nodes, edges])
+
+  // Visually flag loose nodes (dashed amber ring + dim) without touching the source state
+  const decoratedNodes = useMemo(
+    () => nodes.map(n => (looseIds.has(n.id) ? { ...n, className: 'rf-loose' } : n)),
+    [nodes, looseIds],
+  )
+
+  // Jump to and list the loose nodes
+  const showLoose = useCallback(() => {
+    if (looseIds.size === 0) return
+    setValidationErrors(
+      nodes.filter(n => looseIds.has(n.id))
+        .map(n => `"${String(n.data.label ?? n.type)}" está solto — verifique entrada/saída.`),
+    )
+    rfRef.current?.fitView({ nodes: nodes.filter(n => looseIds.has(n.id)).map(n => ({ id: n.id })), padding: 0.3, duration: 500 })
+  }, [nodes, looseIds])
 
   useEffect(() => {
     if (!botId || !flowId) return
@@ -130,7 +246,7 @@ export function FlowBuilder() {
       if (flow) {
         setFlowName(flow.name)
         setNodes(flow.nodes as ReturnType<typeof useNodesState>[0])
-        setEdges(flow.edges as ReturnType<typeof useEdgesState>[0])
+        setEdges(repairEdges(flow.nodes as Node[], flow.edges as Edge[]))
       }
     })
 
@@ -146,7 +262,7 @@ export function FlowBuilder() {
           e => e.source === connection.source && (e.sourceHandle ?? null) === (connection.sourceHandle ?? null)
         )
         if (duplicate) return eds
-        return addEdge({ ...connection, type: 'smoothstep' }, eds)
+        return addEdge({ ...connection, type: 'smoothstep', animated: true }, eds)
       })
     },
     [setEdges]
@@ -177,10 +293,14 @@ export function FlowBuilder() {
       label: { label: 'Etiqueta', labelName: '' },
       end: { label: 'End' },
     }
-    setNodes(nds => [
-      ...nds,
-      { id, type, position: { x: 200 + Math.random() * 200, y: 200 + nds.length * 80 }, data: defaults[type] ?? { label: type } },
-    ])
+    setNodes(nds => {
+      // Place the new node to the right of the current rightmost node — predictable, no overlap
+      const anchor = nds.reduce<Node | undefined>((a, n) => (!a || n.position.x > a.position.x ? n : a), undefined)
+      const position = anchor
+        ? { x: anchor.position.x + 280, y: anchor.position.y }
+        : { x: 80, y: 96 }
+      return [...nds, { id, type, position, data: defaults[type] ?? { label: type } }]
+    })
   }, [setNodes])
 
   const save = async () => {
@@ -254,7 +374,7 @@ export function FlowBuilder() {
       }
       if (parsed.name) setFlowName(parsed.name)
       setNodes(parsed.nodes)
-      setEdges(parsed.edges)
+      setEdges(repairEdges(parsed.nodes, parsed.edges))
       setJsonPanel(null)
     } catch {
       setImportError('JSON inválido — verifique a sintaxe.')
@@ -279,6 +399,28 @@ export function FlowBuilder() {
             {activateError}
           </span>
         )}
+        {nodes.length > 0 && (
+          looseIds.size === 0 ? (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg">
+              <Check size={13} /> Fluxo conectado
+            </span>
+          ) : (
+            <button
+              onClick={showLoose}
+              title="Mostrar os nós soltos"
+              className="flex items-center gap-1.5 text-xs text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all"
+            >
+              <AlertTriangle size={13} /> {looseIds.size} {looseIds.size === 1 ? 'nó solto' : 'nós soltos'}
+            </button>
+          )
+        )}
+        <button
+          onClick={onLayout}
+          title="Organizar nós automaticamente"
+          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white bg-glass-100 hover:bg-glass-200 border border-glass-border px-3 py-2 rounded-xl transition-all"
+        >
+          <LayoutGrid size={14} /> Organizar
+        </button>
         <button
           onClick={openExport}
           title="Export JSON"
@@ -333,14 +475,25 @@ export function FlowBuilder() {
 
         {/* Canvas */}
         <div className="flex-1 relative">
+          <style>{`
+            .react-flow__node.rf-loose { opacity: 0.6; }
+            .react-flow__node.rf-loose::after {
+              content: ''; position: absolute; inset: -5px; border-radius: 14px;
+              border: 1.5px dashed rgba(251, 191, 36, 0.85); pointer-events: none;
+            }
+          `}</style>
           <ReactFlow
-            nodes={nodes}
+            nodes={decoratedNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeClick={onNodeClick}
+            onInit={inst => { rfRef.current = inst }}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={{ type: 'smoothstep', animated: true }}
+            snapToGrid
+            snapGrid={[16, 16]}
             fitView
             deleteKeyCode="Delete"
           >

@@ -4,7 +4,11 @@ import { BaseNode } from './BaseNode.tsx'
 export function TriggerNode({ selected, data }: { selected?: boolean; data: Record<string, unknown> }) {
   return (
     <BaseNode selected={selected} color="rgba(14,165,233,0.15)" borderColor="border-brand-500/50"
-      handles={{ outputs: [{}] }}>
+      handles={{ outputs: [
+        { id: 'output', label: 'início', color: 'rgba(14,165,233,0.85)' },
+        { id: 'returning_user', label: 'já voltou', color: 'rgba(167,139,250,0.85)' },
+        { id: 'intent_detected', label: 'já quer comprar', color: 'rgba(52,211,153,0.85)' },
+      ] }}>
       <div className="flex items-center gap-2 mb-1">
         <div className="w-6 h-6 rounded-lg bg-brand-500/30 flex items-center justify-center">
           <Zap size={12} className="text-brand-400" />

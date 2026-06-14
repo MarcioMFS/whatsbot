@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import gsap from 'gsap'
-import { Bot } from 'lucide-react'
 import { api } from '../api/client.ts'
 import { useAuthStore } from '../stores/authStore.ts'
 import { useUIStore } from '../stores/uiStore.ts'
+import { MkPage, MkCard, MkField, MkButton, Eyebrow, Display, Sculpt } from '../components/mkhub'
 
 export function Login() {
   const [mode, setMode] = useState<'login' | 'register'>('login')
@@ -25,7 +25,7 @@ export function Login() {
   useEffect(() => {
     if (!cardRef.current) return
     gsap.fromTo(cardRef.current,
-      { opacity: 0, y: 40, scale: 0.95 },
+      { opacity: 0, y: 40, scale: 0.96 },
       { opacity: 1, y: 0, scale: 1, duration: 0.6, ease: 'power3.out' }
     )
   }, [])
@@ -48,80 +48,61 @@ export function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-radial-dark flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-glow-brand pointer-events-none" />
+    <MkPage className="flex items-center justify-center p-4" style={{ position: 'relative', overflow: 'hidden' }}>
+      <Sculpt size={420} style={{ top: -160, right: -120, opacity: 0.7 }} />
+      <Sculpt size={220} style={{ bottom: -60, left: -80, opacity: 0.5 }} />
 
-      <div ref={cardRef} className="glass w-full max-w-md p-8" style={{ boxShadow: '0 20px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1)' }}>
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center shadow-glow-sm">
-              <Bot size={20} className="text-white" />
-            </div>
+      <div ref={cardRef} style={{ width: '100%', maxWidth: 440, position: 'relative' }}>
+        <MkCard style={{ padding: 40 }}>
+          {/* Wordmark + locale */}
+          <div className="flex items-center justify-between mb-10">
             <div>
-              <h1 className="text-xl font-bold text-white glow-text">WhatsBot</h1>
-              <p className="text-xs text-slate-400">{t('aiPowered')}</p>
+              <Display style={{ fontWeight: 700, letterSpacing: '.18em', fontSize: '1.1rem' }}>WHATSBOT</Display>
+              <Eyebrow className="block mt-1.5">{t('aiPowered')}</Eyebrow>
             </div>
+            <button
+              onClick={() => setLocale(locale === 'en' ? 'pt-BR' : 'en')}
+              className="text-xs font-medium px-3 py-1.5 rounded-full"
+              style={{ border: '1px solid var(--line)', color: 'var(--ink-soft)' }}
+            >
+              {locale === 'en' ? '🇧🇷 PT' : '🇺🇸 EN'}
+            </button>
           </div>
-          <button
-            onClick={() => setLocale(locale === 'en' ? 'pt-BR' : 'en')}
-            className="text-xs font-medium px-2.5 py-1.5 rounded-lg bg-glass-200 border border-glass-border text-slate-300 hover:text-white transition-all"
-          >
-            {locale === 'en' ? '🇧🇷 PT' : '🇺🇸 EN'}
-          </button>
-        </div>
 
-        <h2 className="text-lg font-semibold text-white mb-6">
-          {mode === 'login' ? t('welcomeBack') : t('createAccount')}
-        </h2>
+          <h1 className="mk-display mb-8" style={{ fontSize: '1.9rem', fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1 }}>
+            {mode === 'login' ? t('welcomeBack') : t('createAccount')}
+          </h1>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <Input label={t('name')} type="text" value={name} onChange={setName} placeholder={t('yourName')} />
-          )}
-          <Input label={t('email')} type="email" value={email} onChange={setEmail} placeholder="you@example.com" />
-          <Input label={t('password')} type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            {mode === 'register' && (
+              <MkField label={t('name')} type="text" value={name} onChange={setName} placeholder={t('yourName')} />
+            )}
+            <MkField label={t('email')} type="email" value={email} onChange={setEmail} placeholder="voce@exemplo.com" />
+            <MkField label={t('password')} type="password" value={password} onChange={setPassword} placeholder="••••••••" />
 
-          {error && (
-            <p className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{error}</p>
-          )}
+            {error && (
+              <p className="text-sm rounded-xl px-3 py-2.5" style={{ color: '#b42318', background: 'rgba(180,35,24,0.07)', border: '1px solid rgba(180,35,24,0.18)' }}>
+                {error}
+              </p>
+            )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-200 shadow-glow-sm hover:shadow-glow-md"
-          >
-            {loading ? t('loading') : mode === 'login' ? t('signIn') : t('signUp')}
-          </button>
-        </form>
+            <MkButton type="submit" disabled={loading} className="w-full" >
+              {loading ? t('loading') : mode === 'login' ? t('signIn') : t('signUp')}
+            </MkButton>
+          </form>
 
-        <p className="text-center text-sm text-slate-400 mt-6">
-          {mode === 'login' ? t('noAccount') : t('alreadyAccount')}{' '}
-          <button
-            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-            className="text-brand-400 hover:text-brand-300 font-medium transition-colors"
-          >
-            {mode === 'login' ? t('signUp') : t('signIn')}
-          </button>
-        </p>
+          <p className="text-center text-sm mt-7" style={{ color: 'var(--muted)' }}>
+            {mode === 'login' ? t('noAccount') : t('alreadyAccount')}{' '}
+            <button
+              onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+              className="mk-link"
+              style={{ color: 'var(--ink)' }}
+            >
+              {mode === 'login' ? t('signUp') : t('signIn')}
+            </button>
+          </p>
+        </MkCard>
       </div>
-    </div>
-  )
-}
-
-function Input({ label, type, value, onChange, placeholder }: {
-  label: string; type: string; value: string
-  onChange: (v: string) => void; placeholder: string
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-slate-300 mb-1.5">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full bg-glass-100 border border-glass-border rounded-xl px-4 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-brand-500/50 focus:ring-1 focus:ring-brand-500/30 transition-all"
-      />
-    </div>
+    </MkPage>
   )
 }

@@ -12,6 +12,7 @@ import { Handoffs } from './pages/Handoffs.tsx'
 import PaymentIntents from './pages/PaymentIntents.tsx'
 import { Capabilities } from './pages/Capabilities.tsx'
 import { AIPatterns } from './pages/AIPatterns.tsx'
+import { OrchestratorPreview } from './pages/OrchestratorPreview.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/preview/orquestrador" element={<OrchestratorPreview />} />
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/bots/:botId/config" element={<ProtectedRoute><BotConfig /></ProtectedRoute>} />
       <Route path="/bots/:botId/flow/:flowId" element={<ProtectedRoute><FlowBuilder /></ProtectedRoute>} />
