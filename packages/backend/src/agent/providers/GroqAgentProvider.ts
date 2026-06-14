@@ -23,15 +23,23 @@ function safeParse(s: string): Record<string, unknown> {
 // Recuperamos a intenção parseando o nome + JSON — evita escalar pra humano por um glitch do modelo.
 function recoverToolCalls(err: unknown): ToolCall[] | null {
   const e = err as { error?: { code?: string; failed_generation?: string }; message?: string }
-  const code = e?.error?.code
+  let code = e?.error?.code
   let gen = e?.error?.failed_generation
-  if (!gen && typeof e?.message === 'string' && e.message.includes('failed_generation')) {
-    const m = e.message.match(/"failed_generation"\s*:\s*"([\s\S]*?)"\s*}/)
-    if (m) { try { gen = JSON.parse(`"${m[1]}"`) } catch { gen = m[1] } }
+  // Fallback robusto: o SDK às vezes só traz o corpo JSON dentro de err.message ("400 {...}").
+  // Parsear o JSON desescapa as aspas corretamente (regex no texto cru trunca no \").
+  if (!gen && typeof e?.message === 'string') {
+    const i = e.message.indexOf('{')
+    if (i !== -1) {
+      try {
+        const body = JSON.parse(e.message.slice(i)) as { error?: { code?: string; failed_generation?: string } }
+        code = body?.error?.code ?? code
+        gen = body?.error?.failed_generation
+      } catch { /* corpo não-JSON — ignora */ }
+    }
   }
   if (code !== 'tool_use_failed' || !gen) return null
   const calls: ToolCall[] = []
-  const re = /<function=([a-zA-Z_]\w*)\s*(\{[\s\S]*?\})/g
+  const re = /<function=([a-zA-Z_]\w*)\s*(\{[\s\S]*?\})\s*(?:<\/function>|$)/g
   let mm: RegExpExecArray | null
   while ((mm = re.exec(gen)) !== null) {
     try { calls.push({ id: `recovered_${calls.length}`, name: mm[1], input: JSON.parse(mm[2]) }) } catch { /* ignora call não-parseável */ }
