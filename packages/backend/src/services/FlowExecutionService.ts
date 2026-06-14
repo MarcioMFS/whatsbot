@@ -51,6 +51,7 @@ import {
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
+import type { VisionTitleExtractor } from './VisionTitleExtractor.js'
 import type { DeliveryService } from './DeliveryService.js'
 import type { ContextualAIRouter } from './ContextualAIRouter.js'
 import type { PaymentPhaseRouter } from './PaymentPhaseRouter.js'
@@ -93,7 +94,22 @@ export class FlowExecutionService {
     private paymentPhaseRouter?: PaymentPhaseRouter,
     private capabilityRouter?: CapabilityRouter,
     private observationRepo?: AIObservationRepository,
+    private visionTitleExtractor?: VisionTitleExtractor,
   ) {}
+
+  /**
+   * True when an incoming image must be treated as a payment receipt (do NOT run series-title vision).
+   * Gates Feature A so we never hijack the PIX receipt flow.
+   */
+  private isReceiptImageContext(conversation: Conversation, flow: Flow): boolean {
+    if (conversation.phase === 'awaiting_payment') return true
+    if (conversation.status === 'waiting') {
+      const node = flow.getNodeById(conversation.currentNodeId)
+      if (node?.type === 'ai_validate_receipt') return true
+      if (node?.type === 'capture' && (node.data as CaptureNodeData).expectedInputType === 'image') return true
+    }
+    return false
+  }
 
   private emit(botId: string, convId: string | null | undefined, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
     if (!convId) return
@@ -545,6 +561,16 @@ export class FlowExecutionService {
     conversation.setVariable('__lead_purchased_count', String(lead.purchasedTitles.length))
     if (lead.name) conversation.setVariable('__lead_name', lead.name)
     if (lead.contextSummary) conversation.setVariable('__lead_context', lead.contextSummary)
+
+    // Feature A: stray image (not a payment receipt) — read the visible series title(s) and feed
+    // them into the normal flow (classify_intent → catalog_search). Gated so the PIX receipt flow is untouched.
+    if (hasImage && imageBase64 && this.visionTitleExtractor && !this.isReceiptImageContext(conversation, flow)) {
+      const titles = await this.visionTitleExtractor.extract(imageBase64)
+      if (titles.length) {
+        flog('vision_title_extract', { phone: phoneNumber, titles })
+        message = titles.join(', ')
+      }
+    }
 
     conversation.addUserMessage(message, { msgId, sender: phoneNumber })
     if (imageBase64) conversation.setVariable('__imageBase64', imageBase64)
@@ -1026,7 +1052,62 @@ export class FlowExecutionService {
       case 'ai_validate_receipt': {
         const data = node.data as AIValidateReceiptNodeData
         const imageBase64 = conversation.variables['__imageBase64']
-        const paymentIntentId = conversation.variables[data.paymentIntentVariable]
+        const intentVar = data.paymentIntentVariable || '__rt_checkout_payment_id'
+        let paymentIntentId = conversation.variables[intentVar]
+
+        // Self-heal: the customer reached receipt capture via a shortcut path
+        // (pix_pending / payment_receipt) that skipped checkout, so no intent was
+        // created. Reconstruct one from context so the bot can validate on its own.
+        if (imageBase64 && !paymentIntentId && this.paymentIntentRepo) {
+          const pending = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
+          if (pending) {
+            // An intent already exists (var got lost) — just rebind it.
+            paymentIntentId = pending.id
+            console.log(`[FlowExecution] ai_validate_receipt: rebound pending intent=${pending.id} for ${phone}`)
+          } else {
+            // No intent, but if there's a cart we know the amount → create one now.
+            const cart = Cart.fromVariables(conversation.variables)
+            const receiverKey = bot.globalConfig?.defaultPixKey ?? ''
+            const receiverName = bot.globalConfig?.defaultReceiverName ?? ''
+            if (!cart.isEmpty && receiverKey) {
+              const offers = this.packageOfferRepo ? await this.packageOfferRepo.findByBotId(bot.id) : []
+              const pricing = PricingService.calculate(cart, offers)
+              const intent = PaymentIntent.create({
+                botId: bot.id,
+                leadId: lead?.id ?? conversation.phoneNumber,
+                conversationId: conversation.id,
+                amount: pricing.finalTotalCentavos,
+                receiverKey,
+                receiverName,
+                expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+              })
+              await this.paymentIntentRepo.save(intent)
+              paymentIntentId = intent.id
+              console.log(`[FlowExecution] ai_validate_receipt: lazy-created intent=${intent.id} (${pricing.finalTotalCentavos}c) from cart for ${phone}`)
+            }
+          }
+          if (paymentIntentId) {
+            conversation.setVariable(intentVar, paymentIntentId)
+            conversation.setVariable('__rt_checkout_payment_id', paymentIntentId)
+          }
+        }
+
+        // A receipt with an image but still no PaymentIntent means there is no cart
+        // and no amount to validate against. NEVER tell a paying customer their
+        // receipt is invalid here — escalate to a human instead.
+        if (imageBase64 && !paymentIntentId) {
+          console.warn('[FlowExecution] ai_validate_receipt: receipt image but no paymentIntentId — escalating to human (no false rejection)')
+          conversation.setVariable('__imageBase64', '') // consume
+          await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: 'Recebi seu comprovante aqui! 🙏 Só vou confirmar com a equipe e já te retorno, tá? Pode deixar que não vou te deixar na mão.' })
+          await this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '[comprovante sem pedido]' }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+          const ownerPhone = bot.globalConfig?.ownerPhone
+          if (ownerPhone) {
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: ownerPhone, message: `⚠️ Comprovante recebido SEM pedido vinculado de ${conversation.phoneNumber}. Cliente pode ter pago — confirme manualmente.` }).catch(() => {})
+          }
+          conversation.handoff()
+          lead?.addTag('needs_human')
+          return undefined
+        }
 
         if (!imageBase64 || !paymentIntentId || !this.paymentOrchestrator) {
           console.warn('[FlowExecution] ai_validate_receipt: missing image, intentId, or orchestrator — routing to rejected')

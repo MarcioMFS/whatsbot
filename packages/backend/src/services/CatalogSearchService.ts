@@ -147,12 +147,15 @@ export class CatalogSearchService {
     if (directResults.length > 0) {
       const scored = directResults.map(p => {
         const nameNorm = normalizeText(p.name)
-        const exact = nameNorm === normalized
+        // O repo pode ter retornado o produto via ALIAS — então validamos contra nome E aliases.
+        const aliasNorms = (p.aliases ?? []).map(a => normalizeText(a))
+        const exact = nameNorm === normalized || aliasNorms.includes(normalized)
         const wo = computeWordOverlap(normalized, nameNorm)
-        return { p, exact, wo }
+        const aliasPassed = aliasNorms.some(a => computeWordOverlap(normalized, a).passed)
+        return { p, exact, wo, aliasPassed }
       })
 
-      const filtered = scored.filter(({ exact, wo }) => exact || wo.passed)
+      const filtered = scored.filter(({ exact, wo, aliasPassed }) => exact || wo.passed || aliasPassed)
 
       // #3 Log each candidate with its overlap score + semantic candidates
       for (const { p, exact, wo } of scored) {
