@@ -91,7 +91,7 @@ export class CatalogSearchService {
     private auditRepo?: PostgreSQLAIDecisionRepository,
   ) {}
 
-  async search(botId: string, userMessage: string, audit?: CatalogSearchAuditCtx): Promise<CatalogSearchResult> {
+  async search(botId: string, userMessage: string, audit?: CatalogSearchAuditCtx, opts?: { genreSearch?: boolean }): Promise<CatalogSearchResult> {
     const tag = `[CatalogSearch] originalQuery="${userMessage.slice(0, 80)}"`
 
     const saveAudit = (intent: string, confidence: number, extra: Record<string, unknown> = {}) => {
@@ -104,8 +104,9 @@ export class CatalogSearchService {
       }
     }
 
-    // Genre/category request — bypass title search, use searchByCategory directly
-    const genreReq = detectGenreRequest(userMessage)
+    // Genre/category request — feature de entretenimento, opt-in por bot (catalogGenreSearch).
+    // Default OFF → verticais genéricas (curso/suplemento) caem direto na busca por nome.
+    const genreReq = opts?.genreSearch ? detectGenreRequest(userMessage) : null
     if (genreReq) {
       console.log(`${tag} decision=genre_request genre="${genreReq.genre}" typeHint="${genreReq.typeHint}"`)
       const results = await this.productRepo.searchByCategory(botId, genreReq.genre, genreReq.typeHint, 5)

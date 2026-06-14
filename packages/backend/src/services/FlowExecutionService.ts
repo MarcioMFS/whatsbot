@@ -1309,7 +1309,7 @@ export class FlowExecutionService {
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
 
-        const result = await this.catalogSearchService.search(bot.id, query, { botId: bot.id, conversationId: conversation.id, phoneNumber: phone })
+        const result = await this.catalogSearchService.search(bot.id, query, { botId: bot.id, conversationId: conversation.id, phoneNumber: phone }, { genreSearch: bot.globalConfig?.catalogGenreSearch === true })
         this.emit(bot.id, conversation.id, phone, 'catalog_searched', {
           query, found: result.products.length, unresolved: result.unresolved.length,
         })

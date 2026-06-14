@@ -232,6 +232,7 @@ export const GlobalConfigSchema = z.object({
   }).strict().optional(),
   capabilityRouterEnabled: z.boolean().optional(),   // false = desliga CapabilityRouter legado
   productNoun: z.string().trim().max(40).optional(),  // substantivo do produto (ex.: "série", "curso") — neutraliza o agente
+  catalogGenreSearch: z.boolean().optional(),         // liga busca por gênero/categoria (entretenimento). Default OFF.
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>

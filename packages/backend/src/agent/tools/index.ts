@@ -12,7 +12,7 @@ const searchCatalog: AgentTool = {
     if (!query) return { success: false, code: 'EMPTY_QUERY', message: 'query vazia' }
     const res = await ctx.services.catalogSearchService.search(ctx.bot.id, query, {
       botId: ctx.bot.id, conversationId: ctx.conversation.id, phoneNumber: ctx.conversation.phoneNumber,
-    })
+    }, { genreSearch: ctx.bot.globalConfig?.catalogGenreSearch === true })
     const products = res.products.map(p => ({ id: p.product.id, name: p.product.name, priceBRL: PricingService.formatBRL(p.product.priceCentavos), confidence: p.confidence }))
     return { success: products.length > 0, code: products.length ? 'OK' : 'NOT_FOUND', data: { products, unresolved: res.unresolved }, confidence: products[0]?.confidence }
   },
