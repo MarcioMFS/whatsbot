@@ -17,6 +17,16 @@ export interface BotModule {
   config: Record<string, unknown>
 }
 
+// Segmento descrito de um flow (Habilidade) — agrupa nós sob {nome, descrição, quando usar}.
+export interface FlowSegment {
+  id: string
+  name: string
+  description: string
+  whenToUse?: string
+  nodeIds: string[]
+  generated?: boolean
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
   const res = await fetch(`${BASE}${path}`, {
@@ -92,6 +102,13 @@ export const api = {
     update: (id: string, data: unknown) =>
       request<unknown>(`/flows/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id: string) => request<void>(`/flows/${id}`, { method: 'DELETE' }),
+    // Segmentos descritos (Habilidades) — ver Brain/spec_skills_segmentos.md
+    segments: (flowId: string) =>
+      request<{ segments: FlowSegment[] }>(`/flows/${flowId}/segments`),
+    generateSegments: (flowId: string) =>
+      request<{ segments: FlowSegment[] }>(`/flows/${flowId}/segments/generate`, { method: 'POST', body: '{}' }),
+    saveSegments: (flowId: string, segments: FlowSegment[]) =>
+      request<{ segments: FlowSegment[] }>(`/flows/${flowId}/segments`, { method: 'PUT', body: JSON.stringify({ segments }) }),
   },
   conversations: {
     list: (botId: string, limit?: number) =>

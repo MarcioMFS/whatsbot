@@ -18,14 +18,15 @@ export class PostgreSQLFlowRepository implements FlowRepository {
   async save(flow: Flow): Promise<void> {
     const data = flow.toJSON()
     await this.db.query(
-      `INSERT INTO flows (id, bot_id, name, nodes, edges, is_default, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      `INSERT INTO flows (id, bot_id, name, nodes, edges, segments, is_default, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (id) DO UPDATE SET
-         name=$3, nodes=$4, edges=$5, is_default=$6, updated_at=$8`,
+         name=$3, nodes=$4, edges=$5, segments=$6, is_default=$7, updated_at=$9`,
       [
         data.id, data.botId, data.name,
         JSON.stringify(data.nodes),
         JSON.stringify(data.edges),
+        JSON.stringify(data.segments ?? []),
         data.isDefault,
         data.createdAt,
         data.updatedAt,
@@ -44,6 +45,7 @@ export class PostgreSQLFlowRepository implements FlowRepository {
       name: row.name as string,
       nodes: row.nodes as ReturnType<Flow['toJSON']>['nodes'],
       edges: row.edges as ReturnType<Flow['toJSON']>['edges'],
+      segments: (row.segments ?? []) as ReturnType<Flow['toJSON']>['segments'],
       isDefault: row.is_default as boolean,
       createdAt: new Date(row.created_at as string),
       updatedAt: new Date(row.updated_at as string),

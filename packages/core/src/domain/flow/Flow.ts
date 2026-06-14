@@ -247,12 +247,24 @@ export interface FlowEdge {
   label?: string
 }
 
+// Segmento descrito: agrupa nós sob uma capacidade nomeada + descrição que a IA lê
+// pra entender o que aquela parte do flow faz e quando usar. Ver Brain/spec_skills_segmentos.md.
+export interface FlowSegment {
+  id: string
+  name: string             // "Pagamento PIX"
+  description: string      // o QUE faz — contrato pra IA
+  whenToUse?: string       // QUANDO usar
+  nodeIds: string[]        // nós que compõem este segmento
+  generated?: boolean      // proposto pela IA, pendente de revisão humana
+}
+
 export interface FlowProps {
   id: string
   botId: string
   name: string
   nodes: FlowNode[]
   edges: FlowEdge[]
+  segments?: FlowSegment[]
   isDefault: boolean
   createdAt: Date
   updatedAt: Date
@@ -306,6 +318,11 @@ export class Flow {
     this.props.updatedAt = new Date()
   }
 
+  setSegments(segments: FlowSegment[]): void {
+    this.props.segments = segments
+    this.props.updatedAt = new Date()
+  }
+
   getNodeById(id: string): FlowNode | undefined {
     return this.props.nodes.find(n => n.id === id)
   }
@@ -330,6 +347,7 @@ export class Flow {
   get name() { return this.props.name }
   get nodes() { return this.props.nodes }
   get edges() { return this.props.edges }
+  get segments() { return this.props.segments ?? [] }
   get isDefault() { return this.props.isDefault }
   get createdAt() { return this.props.createdAt }
   get updatedAt() { return this.props.updatedAt }

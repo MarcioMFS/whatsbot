@@ -33,6 +33,7 @@ import { TranscriptionService } from './services/TranscriptionService.js'
 import { VisionTitleExtractor } from './services/VisionTitleExtractor.js'
 import { GeminiProvider } from './agent/providers/GeminiProvider.js'
 import { GroqAgentProvider } from './agent/providers/GroqAgentProvider.js'
+import { SegmentGenerationService } from './services/SegmentGenerationService.js'
 import { AgentRuntime } from './agent/AgentRuntime.js'
 import { ModuleRegistry } from './services/ModuleRegistry.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
@@ -128,6 +129,7 @@ const flowExecService = new FlowExecutionService(
   visionTitleExtractor,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
+const segmentGen = new SegmentGenerationService(aiService)
 // Registro de Módulos — resolve liga/desliga + config por bot; alimenta tool-set do agente (F2) e efeitos (F3).
 const moduleRegistry = new ModuleRegistry()
 console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: ${moduleRegistry.definitions().map(m => m.id).join(', ')}`)
@@ -144,7 +146,7 @@ const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExe
 await app.register(authRoutes, { prefix: '/api/auth', db })
 await app.register(aiRoutes, { prefix: '/api/ai', aiService })
 await app.register(botRoutes, { prefix: '/api/bots', ...ctx })
-await app.register(flowRoutes, { prefix: '/api/flows', ...ctx })
+await app.register(flowRoutes, { prefix: '/api/flows', ...ctx, segmentGen })
 await app.register(conversationRoutes, { prefix: '/api/conversations', ...ctx })
 await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
 await app.register(productRoutes, { prefix: '/api/products', productRepo })

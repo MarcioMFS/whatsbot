@@ -10,7 +10,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow } from '../components/mkhub'
-import { api, type BotModule } from '../api/client.ts'
+import { api, type BotModule, type FlowSegment } from '../api/client.ts'
 import { useUIStore } from '../stores/uiStore.ts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ export function BotConfig() {
         )}
 
         {activeTab === 'skills' && (
-          <SkillsTab modules={modules} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
+          <SkillsTab modules={modules} flows={flows} activeFlowId={bot.activeFlowId} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
         )}
 
         {activeTab === 'conhecimento' && (
@@ -569,9 +569,9 @@ function ModulosTab({
 // ─── Tab: Skills ──────────────────────────────────────────────────────────────
 
 function SkillsTab({
-  modules, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+  modules, flows, activeFlowId, globalConfig, setGlobalConfig, saveGlobal, savingTab,
 }: {
-  modules: BotModule[]
+  modules: BotModule[]; flows: FlowData[]; activeFlowId: string | null
   globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
   saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
 }) {
@@ -608,6 +608,8 @@ function SkillsTab({
         </div>
       </ConfigSection>
 
+      <FlowSegments flows={flows} activeFlowId={activeFlowId} />
+
       <div>
         <Eyebrow className="block mb-3">Habilidades automáticas</Eyebrow>
         <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginBottom: 14 }}>O que cada módulo ligado já entrega ao agente — sem você descrever.</p>
@@ -623,10 +625,144 @@ function SkillsTab({
             )
           })}
         </div>
-        <p style={{ color: 'var(--muted)', fontSize: '.72rem', marginTop: 14, fontStyle: 'italic' }}>
-          Skills descritas (nome + exemplos + sub-fluxo) chegam numa próxima fase.
-        </p>
       </div>
+    </div>
+  )
+}
+
+// ─── Habilidades do fluxo (segmentos descritos) ──────────────────────────────
+// Transforma o flow (nós anônimos) em capacidades nomeadas + descrição que a IA lê.
+// IA gera (C), humano revisa e salva. Ver Brain/spec_skills_segmentos.md.
+
+function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId: string | null }) {
+  const [flowId, setFlowId] = useState<string>(activeFlowId ?? flows[0]?.id ?? '')
+  const [segments, setSegments] = useState<FlowSegment[]>([])
+  const [loading, setLoading] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [err, setErr] = useState('')
+
+  const selectedFlow = flows.find(f => f.id === flowId)
+  const nodeLabels = new Map<string, string>(
+    ((selectedFlow?.nodes ?? []) as { id: string; data?: { label?: string } }[])
+      .map(n => [n.id, n.data?.label ?? n.id])
+  )
+
+  useEffect(() => {
+    if (!flowId) return
+    setLoading(true); setErr(''); setDirty(false)
+    api.flows.segments(flowId)
+      .then(r => setSegments(r.segments))
+      .catch(e => setErr(e instanceof Error ? e.message : 'Falha ao carregar'))
+      .finally(() => setLoading(false))
+  }, [flowId])
+
+  const generate = async () => {
+    if (!flowId) return
+    setGenerating(true); setErr('')
+    try {
+      const r = await api.flows.generateSegments(flowId)
+      setSegments(r.segments)
+      setDirty(true)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao gerar com IA')
+    } finally { setGenerating(false) }
+  }
+
+  const saveSegs = async () => {
+    if (!flowId) return
+    setSaving(true); setErr('')
+    try {
+      const r = await api.flows.saveSegments(flowId, segments)
+      setSegments(r.segments); setDirty(false)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Falha ao salvar')
+    } finally { setSaving(false) }
+  }
+
+  const update = (i: number, patch: Partial<FlowSegment>) => {
+    setSegments(s => s.map((seg, j) => j === i ? { ...seg, ...patch } : seg)); setDirty(true)
+  }
+  const remove = (i: number) => { setSegments(s => s.filter((_, j) => j !== i)); setDirty(true) }
+  const add = () => {
+    setSegments(s => [...s, { id: crypto.randomUUID(), name: '', description: '', whenToUse: '', nodeIds: [] }]); setDirty(true)
+  }
+
+  return (
+    <div>
+      <div className="flex items-end justify-between mb-3 gap-3 flex-wrap">
+        <div>
+          <Eyebrow className="block mb-1">Habilidades do fluxo</Eyebrow>
+          <p style={{ color: 'var(--muted)', fontSize: '.78rem', maxWidth: 460 }}>
+            O que está mapeado dentro do fluxo, em partes nomeadas + descrição. É o que a IA lê pra entender e usar cada parte. Gere com IA e revise.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {flows.length > 1 && (
+            <select value={flowId} onChange={e => setFlowId(e.target.value)} className="mk-input text-xs px-2 py-2">
+              {flows.map(f => <option key={f.id} value={f.id}>{f.name}{f.id === activeFlowId ? ' (ativo)' : ''}</option>)}
+            </select>
+          )}
+          <MkButton variant="ghost" onClick={generate} disabled={generating || !flowId}>
+            {generating ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />} Gerar com IA
+          </MkButton>
+          {dirty && (
+            <MkButton onClick={saveSegs} disabled={saving}>
+              {saving ? <Loader2 size={13} className="animate-spin" /> : null} Salvar
+            </MkButton>
+          )}
+        </div>
+      </div>
+
+      {err && <p className="text-xs rounded-lg px-3 py-2.5 mb-3" style={{ background: 'rgba(217,163,0,0.08)', border: '1px solid rgba(217,163,0,0.2)', color: '#9a7400' }}>{err}</p>}
+
+      {loading ? (
+        <div className="flex items-center gap-2 py-8 justify-center" style={{ color: 'var(--muted)' }}>
+          <Loader2 size={15} className="animate-spin" /> <span className="text-sm">Carregando…</span>
+        </div>
+      ) : segments.length === 0 ? (
+        <MkCard style={{ padding: '40px 28px', textAlign: 'center' }}>
+          <Sparkles size={24} strokeWidth={1.4} style={{ margin: '0 auto 12px', color: 'var(--muted)' }} />
+          <p style={{ color: 'var(--ink-soft)', fontSize: '.9rem' }}>Nenhuma habilidade descrita ainda.</p>
+          <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginTop: 4, marginBottom: 18 }}>
+            Clique em <strong>Gerar com IA</strong> pra mapear as partes do fluxo automaticamente — depois revise.
+          </p>
+        </MkCard>
+      ) : (
+        <div className="space-y-3">
+          {segments.map((seg, i) => (
+            <MkCard key={seg.id} style={{ padding: 18 }}>
+              <div className="flex items-start gap-3">
+                <div className="flex-1 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <input value={seg.name} onChange={e => update(i, { name: e.target.value })}
+                      placeholder="Nome da habilidade (ex: Pagamento PIX)"
+                      className="mk-input text-sm font-semibold px-3 py-2 flex-1" />
+                    {seg.generated && (
+                      <span className="mk-eyebrow" style={{ fontSize: '.54rem', color: '#9a7400', background: 'rgba(217,163,0,0.1)', padding: '3px 8px', borderRadius: 999, whiteSpace: 'nowrap' }}>IA · revise</span>
+                    )}
+                  </div>
+                  <textarea value={seg.description} onChange={e => update(i, { description: e.target.value })}
+                    rows={2} placeholder="O que faz (a IA lê isso pra decidir usar)"
+                    className="mk-input w-full text-sm px-3 py-2" style={{ resize: 'vertical' }} />
+                  <input value={seg.whenToUse ?? ''} onChange={e => update(i, { whenToUse: e.target.value })}
+                    placeholder="Quando usar (gatilho)"
+                    className="mk-input w-full text-xs px-3 py-2" />
+                  {seg.nodeIds.length > 0 && (
+                    <p style={{ color: 'var(--muted)', fontSize: '.72rem' }}
+                      title={seg.nodeIds.map(id => nodeLabels.get(id) ?? id).join(', ')}>
+                      {seg.nodeIds.length} {seg.nodeIds.length === 1 ? 'nó' : 'nós'}: {seg.nodeIds.map(id => nodeLabels.get(id) ?? id).slice(0, 4).join(' · ')}{seg.nodeIds.length > 4 ? '…' : ''}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => remove(i)} style={{ color: 'var(--muted)' }} className="hover:opacity-60 mt-1"><Trash2 size={14} /></button>
+              </div>
+            </MkCard>
+          ))}
+          <MkButton variant="ghost" onClick={add}><Plus size={12} /> Adicionar habilidade</MkButton>
+        </div>
+      )}
     </div>
   )
 }
