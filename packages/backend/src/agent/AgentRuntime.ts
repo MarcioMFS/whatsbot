@@ -48,6 +48,7 @@ function toneLines(t: NonNullable<Bot['globalConfig']>['agentTone']): string[] {
 function buildSystemPrompt(bot: Bot, isFirstContact: boolean): string {
   const g = bot.globalConfig ?? {}
   const company = g.companyName ?? bot.name
+  const noun = (g.productNoun || 'produto').trim()   // substantivo do produto (neutro por vertical)
   const greeting = isFirstContact && g.agentGreeting
     ? ['', '⚡ Esta é a PRIMEIRA mensagem dessa pessoa com você. Antes de responder qualquer outra coisa, ABRA se apresentando — com as SUAS palavras, no seu tom, sem soar template. Use esta orientação como guia (não copie literal):', g.agentGreeting]
     : []
@@ -67,7 +68,7 @@ function buildSystemPrompt(bot: Bot, isFirstContact: boolean): string {
     'O que você faz (sem mostrar os bastidores):',
     '- Ajuda a pessoa a achar o que ela quer e fecha a venda de boa, no papo.',
     '- Você tem como buscar um título, cobrar no PIX e conferir o pagamento — faça isso por baixo dos panos, naturalmente, sem narrar o passo a passo.',
-    '- Se a pessoa mandar um print ou foto (capa, título, cena, cartaz de uma série/filme), OLHE a imagem: identifique o nome do título e já busque pra ela. Não peça o nome se dá pra ver na imagem. Se a imagem estiver ruim ou em dúvida entre nomes, confirme o palpite ("é a *Tal*, né?") antes de buscar.',
+    `- Se a pessoa mandar um print ou foto de um item do catálogo (ex.: ${noun} — capa, rótulo, cartaz, tela), OLHE a imagem: identifique o nome do item e já busque pra ela. Não peça o nome se dá pra ver na imagem. Se a imagem estiver ruim ou em dúvida entre nomes, confirme o palpite ("é o *Tal*, né?") antes de buscar.`,
     '- EXCEÇÃO: se a imagem for um comprovante de pagamento (recibo, print de PIX, transferência), NÃO trate como título — siga o fluxo de conferência de pagamento normalmente.',
     '',
     'AJA DE VERDADE — regra de ouro (a mais importante):',
@@ -81,7 +82,7 @@ function buildSystemPrompt(bot: Bot, isFirstContact: boolean): string {
     'Entendendo o cliente:',
     '- Número dentro do nome de um título/produto faz parte do NOME — não é quantidade nem versão. Só trate número como quantidade se vier separado ("quero 2"). Na dúvida, pergunte se o número faz parte do nome.',
     '- Entendeu o que a pessoa quer mas tem dúvida? Confirme afirmando: "acho que é *Tal*, é isso?" — nunca diga "não entendi" ou "repete". Vários itens numa mensagem? confirme todos antes de seguir.',
-    '- Só busque um título quando a pessoa disser um NOME concreto. "não sei ainda", "tem catálogo?", "o que vocês têm?", "me mostra a lista" NÃO são nomes — NÃO busque no vazio. Nesses casos: mande o link do catálogo (está no seu conhecimento abaixo) ou pergunte o gênero/estilo que ela curte. Nunca responda "não encontrei nada" pra uma pessoa que ainda nem disse o que quer.',
+    '- Só busque um item quando a pessoa disser um NOME concreto. "não sei ainda", "tem catálogo?", "o que vocês têm?", "me mostra a lista" NÃO são nomes — NÃO busque no vazio. Nesses casos: mande o link do catálogo (está no seu conhecimento abaixo) ou pergunte o que ela procura. Nunca responda "não encontrei nada" pra uma pessoa que ainda nem disse o que quer.',
     '- Espelhe o jeito do cliente a cada mensagem: curto→curto, formal→formal, solto com emoji→solto. NUNCA espelhe grosseria ou ironia; diante de raiva, mantenha a calma. Na dúvida do humor, tom neutro.',
     'Conduzindo pra venda:',
     '- Sinal de compra ("quanto", "tem tal?", "como pago", "quero") = vá direto: faça (buscar/cobrar), não fique só perguntando. Responda o sinal E abra o próximo passo ("quer que eu já gere o PIX?").',
@@ -169,7 +170,9 @@ export class AgentRuntime {
     // Tudo defaultEnabled=true → idêntico a hoje; desligar um módulo remove suas tools do agente.
     const enabledToolNames = new Set(this.moduleRegistry.toolsForBot(bot))
     const tools = AGENT_TOOLS.filter(t => enabledToolNames.has(t.name) && toolAllowed(bot, t))
-    const toolDefs: ToolDef[] = tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }))
+    // {noun} = substantivo do produto do bot (ex.: "série", "curso") — deixa as descrições neutras por vertical.
+    const productNoun = (bot.globalConfig?.productNoun || 'produto').trim()
+    const toolDefs: ToolDef[] = tools.map(t => ({ name: t.name, description: t.description.replaceAll('{noun}', productNoun), inputSchema: t.inputSchema }))
     const byName = new Map(tools.map(t => [t.name, t]))
 
     // working messages = histórico (texto) + turnos de tool deste turno

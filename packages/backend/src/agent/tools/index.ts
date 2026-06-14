@@ -4,8 +4,8 @@ import type { AgentTool, ToolContext, ToolResult } from './types.js'
 // ── search_catalog (safe) ──────────────────────────────────────────────────────
 const searchCatalog: AgentTool = {
   name: 'search_catalog',
-  description: 'Busca séries/títulos no catálogo por nome (tolera erro de escrita). Use sempre que o cliente mencionar uma série. Retorna preço — nunca invente preço.',
-  inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'nome da série que o cliente quer' } }, required: ['query'] },
+  description: 'Busca itens do catálogo por nome (ex.: {noun}). Tolera erro de escrita. Use sempre que o cliente mencionar um item pelo nome. Retorna preço — nunca invente preço.',
+  inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'nome do item que o cliente quer' } }, required: ['query'] },
   guarded: false,
   async execute(input, ctx): Promise<ToolResult> {
     const query = String(input.query ?? '').trim()
@@ -133,7 +133,7 @@ const validateProof: AgentTool = {
 // ── deliver_access (GUARDED) ───────────────────────────────────────────────────
 const deliverAccess: AgentTool = {
   name: 'deliver_access',
-  description: 'Entrega os links de acesso das séries compradas. Só funciona após o pagamento confirmado.',
+  description: 'Entrega os links de acesso do que foi comprado (ex.: {noun}). Só funciona após o pagamento confirmado.',
   inputSchema: { type: 'object', properties: {} },
   guarded: true,
   policyKey: 'can_deliver_access',
