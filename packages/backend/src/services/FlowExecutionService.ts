@@ -480,8 +480,9 @@ export class FlowExecutionService {
       }
     }
 
-    // CapabilityRouter: on new conversations (or ended), let AI pick the right flow
-    if (isNewConversation && this.capabilityRouter) {
+    // CapabilityRouter: on new conversations (or ended), let AI pick the right flow.
+    // LEGADO em aposentadoria (Brain/spec_aposentadoria_roteadores.md) — gate per-bot, default mantém.
+    if (isNewConversation && this.capabilityRouter && bot.globalConfig?.capabilityRouterEnabled !== false) {
       const cart = conversation ? Cart.fromVariables(conversation.variables) : Cart.empty()
       const capDecision = await this.capabilityRouter.route({
         botId: bot.id,

@@ -58,6 +58,7 @@ export interface BotGlobalConfig {
   // (recovery migrou pro módulo 'recover' — config mora em modules.recover.config; tipo RecoveryConfig abaixo segue exportado)
   modules?: Record<string, BotModuleState>  // Registro de Módulos: liga/desliga + config por bot. Ausente = defaults (tudo ligado).
   aiGapFill?: AiGapFillConfig                // Escape hatch — "IA cobre lacunas" (Brain/spec_escape_hatch.md). Default do bot.
+  capabilityRouterEnabled?: boolean          // false = desliga o CapabilityRouter legado (aposentadoria). Default/undefined = ligado.
 }
 
 // "IA cobre lacunas": quando a mensagem sai do roteiro, a IA responde/roteia/escala e devolve o controle.

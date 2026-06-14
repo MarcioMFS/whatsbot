@@ -459,7 +459,7 @@ function ConfigTab({
         <div className="grid grid-cols-1 gap-3">
           {[
             { label: 'Trilha do Agente', desc: 'O que a IA chamou: ferramentas, argumentos, resultados', icon: Bot, path: 'agent-trace' },
-            { label: 'Capabilities', desc: 'Sub-flows legados que a IA invocava por contexto', icon: Workflow, path: 'capabilities' },
+            { label: 'Capabilities (legado, desligado)', desc: 'Roteador antigo — aposentado; o agente assume o roteamento', icon: Workflow, path: 'capabilities' },
             { label: 'AI Patterns', desc: 'Decisões do roteador de IA e taxa de fallback', icon: Activity, path: 'patterns' },
             { label: 'Eventos', desc: 'Log de eventos da conversa em tempo real', icon: Zap, path: 'events' },
           ].map(card => (

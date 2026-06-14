@@ -230,6 +230,7 @@ export const GlobalConfigSchema = z.object({
     onUnhandled:    z.enum(['reask', 'handoff']).optional(),
     maxConsecutive: z.number().int().min(1).max(10).optional(),
   }).strict().optional(),
+  capabilityRouterEnabled: z.boolean().optional(),   // false = desliga CapabilityRouter legado
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>
