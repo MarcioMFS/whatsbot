@@ -7,7 +7,7 @@ export interface AgentTraceRecord {
   phoneNumber: string
   turnMessage?: string | null
   step: number
-  kind: 'tool' | 'reply' | 'error'
+  kind: 'tool' | 'reply' | 'error' | 'nudge'
   toolName?: string | null
   toolInput?: Record<string, unknown> | null
   resultCode?: string | null

@@ -117,6 +117,13 @@ function isTransientError(e: unknown): boolean {
   return /timeout|abort|\b429\b|\b5\d\d\b|econn|enotfound|etimedout|socket|network|fetch failed|temporar/i.test(msg)
 }
 
+// "Promessa de ação" na saída do PRÓPRIO modelo (não input de cliente — a regra no-regex-input não se aplica).
+// Usado pra detectar quando o agente anuncia que vai agir mas não chama ferramenta → auto-nudge.
+function isActionPromise(text: string): boolean {
+  const t = (text ?? '').toLowerCase()
+  return /s[óo]\s+um\s+(instante|momento|segundo|minutinho|minuto)|um\s+momento|j[áa]\s+(te|j[áa])\b|deixa\s+eu|vou\s+(buscar|adicionar|gerar|verificar|conferir|ver|pegar|colocar|providenciar|checar|procurar)|estou\s+(buscando|verificando|adicionando|gerando|procurando)|\b(buscando|adicionando|gerando|verificando|procurando)\b|aguarda|aguarde|pera[íi]|j[áa]\s+volto/.test(t)
+}
+
 export class AgentRuntime {
   constructor(
     private provider: IAgentProvider,
@@ -184,9 +191,11 @@ export class AgentRuntime {
     let finalText = ''
     let lastStop = ''
     let lastStep = 0
+    let anyToolThisTurn = false
+    let nudged = false
     // Trilha durável (auditoria): quem foi chamado, como, o que voltou. Fire-and-forget.
     const rec = (p: {
-      step: number; kind: 'tool' | 'reply' | 'error'; toolName?: string; toolInput?: Record<string, unknown>
+      step: number; kind: 'tool' | 'reply' | 'error' | 'nudge'; toolName?: string; toolInput?: Record<string, unknown>
       resultCode?: string; resultSuccess?: boolean; text?: string; stopReason?: string; latencyMs?: number
     }) => {
       void this.trace?.save({ botId: bot.id, conversationId: conversation.id, phoneNumber, turnMessage: message, provider: this.provider.name, ...p })
@@ -200,7 +209,21 @@ export class AgentRuntime {
       console.log(`[agent] step=${step} stop=${resp.stopReason} ms=${Date.now() - t0} tools=${(resp.toolCalls ?? []).map(c => c.name).join(',') || '-'} text="${(resp.text ?? '').slice(0, 60)}"`)
       lastStop = resp.stopReason; lastStep = step
 
-      if (resp.stopReason !== 'tool_use') { finalText = resp.text ?? ''; break }
+      if (resp.stopReason !== 'tool_use') {
+        finalText = resp.text ?? ''
+        // Promete-e-para: o modelo anunciou a ação mas não chamou ferramenta NENHUMA neste turno
+        // → nada acontece e o cliente trava. Cutuca UMA vez pra executar agora.
+        if (!anyToolThisTurn && !nudged && isActionPromise(finalText)) {
+          nudged = true
+          console.warn('[agent] promete-e-para detectado → auto-nudge p/ executar')
+          rec({ step, kind: 'nudge', text: finalText, stopReason: 'promise_no_action' })
+          working.push({ role: 'assistant', text: resp.text })
+          working.push({ role: 'user', text: '[sistema] Você disse que ia agir mas NÃO chamou nenhuma ferramenta — então nada aconteceu de verdade. Execute AGORA, neste turno, chamando a ferramenta necessária (ex: search_catalog → add_to_cart → generate_pix). Não responda só texto.' })
+          finalText = ''
+          continue
+        }
+        break
+      }
 
       working.push({ role: 'assistant', text: resp.text, toolCalls: resp.toolCalls })
       const results: ToolResultMsg[] = []
@@ -223,6 +246,7 @@ export class AgentRuntime {
         console.log(`[agent] tool=${call.name} → ${out.code} (success=${out.success})`)
         results.push({ toolCallId: call.id, name: call.name, output: out })
         rec({ step, kind: 'tool', toolName: call.name, toolInput: call.input as Record<string, unknown>, resultCode: out.code, resultSuccess: out.success, latencyMs: Date.now() - t0 })
+        anyToolThisTurn = true
       }
 
       if (stalled) {
