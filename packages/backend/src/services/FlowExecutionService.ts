@@ -51,7 +51,7 @@ import {
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
-import { EscapeHatchService } from './EscapeHatchService.js'
+import { EscapeHatchService, type EscapeRoute } from './EscapeHatchService.js'
 import type { VisionTitleExtractor } from './VisionTitleExtractor.js'
 import type { DeliveryService } from './DeliveryService.js'
 import type { ContextualAIRouter } from './ContextualAIRouter.js'
@@ -628,6 +628,16 @@ export class FlowExecutionService {
             // action === 'ignore' — fall through to normal rejection
           }
 
+          // Escape hatch: cliente mandou texto onde esperávamos imagem (ex: dúvida no meio).
+          // GUARDA: nunca no caminho do dinheiro (awaiting_payment fica com o PaymentPhaseRouter). Só sem interceptor.
+          if (!data.interceptor?.enabled && conversation.phase !== 'awaiting_payment') {
+            const esc = await this.runEscapeHatch(flow, conversation, lead, bot, message, [])
+            if (esc.outcome === 'answered' || esc.outcome === 'handoff') {
+              await this.convRepo.save(conversation)
+              return // respondeu/escalou e continua aguardando a imagem
+            }
+          }
+
           console.warn(
             `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
             `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=expected_image_got_text ` +
@@ -645,6 +655,15 @@ export class FlowExecutionService {
 
         // ── validationRegex check ──────────────────────────────────────────
         if (data.validationRegex && !new RegExp(data.validationRegex).test(message)) {
+          // Escape hatch: entrada não bate o formato esperado (ex: pergunta no lugar do dado). Gated, per-part.
+          if (conversation.phase !== 'awaiting_payment') {
+            const esc = await this.runEscapeHatch(flow, conversation, lead, bot, message, [])
+            if (esc.outcome === 'answered' || esc.outcome === 'handoff') {
+              await this.convRepo.save(conversation)
+              return // respondeu/escalou e continua aguardando a entrada válida
+            }
+          }
+
           console.warn(
             `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
             `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=regex_mismatch`
@@ -1817,49 +1836,19 @@ export class FlowExecutionService {
           return nextNode
         }
 
-        // ── Escape hatch (IA cobre lacunas) — gated por aiGapFill.enabled, default OFF ──
-        // Aditivo: quando ligado, cobre o caminho 'unknown' com IA por descrição (ver Brain/spec_escape_hatch.md).
-        const gap = bot.globalConfig?.aiGapFill
-        if (gap?.enabled && this.aiService) {
-          const maxConsec = gap.maxConsecutive ?? 3
-          const count = Number(conversation.variables['__rt_gapfill_count'] ?? 0)
-          if (count >= maxConsec) {
-            console.log(`[classify_intent] escape_hatch: maxConsecutive(${maxConsec}) atingido → handoff`)
-            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
-              .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
-            return flow.getNextNodes(node.id, 'unknown')[0]?.id
-          }
-
+        // ── Escape hatch (IA cobre lacunas) — per-part aware, gated, default OFF (Brain/spec_escape_hatch.md) ──
+        {
           const routes = (data.intents ?? [])
             .filter(r => r.handle && r.handle !== 'unknown')
             .map(r => ({ handle: r.handle, description: r.label ?? r.handle }))
-          const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
-          const decision = await new EscapeHatchService(this.aiService).decide({
-            message: text, history,
-            knowledge: bot.globalConfig?.agentKnowledge ?? '',
-            routes, allowAnswer: true,
-          })
-          console.log(`[classify_intent] escape_hatch: action=${decision.action} handle=${decision.handle ?? ''}`)
-
-          if (decision.action === 'answer' && decision.reply) {
-            conversation.setVariable('__rt_gapfill_count', String(count + 1))
-            conversation.setVariable('__rt_ai_responded', 'true')
-            await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: conversation.phoneNumber, message: decision.reply })
-            conversation.addAssistantMessage(decision.reply)
-            return null // responde e devolve o controle (fica no mesmo passo)
+          const esc = await this.runEscapeHatch(flow, conversation, lead, bot, text, routes)
+          if (esc.outcome === 'answered') { conversation.setVariable('__rt_ai_responded', 'true'); return null }
+          if (esc.outcome === 'routed' && esc.handle) {
+            conversation.setVariable('__rt_intent', esc.handle)
+            return flow.getNextNodes(node.id, esc.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
           }
-          if (decision.action === 'route' && decision.handle) {
-            conversation.setVariable('__rt_gapfill_count', '0')
-            conversation.setVariable('__rt_intent', decision.handle)
-            return flow.getNextNodes(node.id, decision.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
-          }
-          if (decision.action === 'handoff' || gap.onUnhandled === 'handoff') {
-            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
-              .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
-            return flow.getNextNodes(node.id, 'unknown')[0]?.id
-          }
-          // unknown + onUnhandled='reask' → conta e cai no handle unknown (que re-pergunta)
-          conversation.setVariable('__rt_gapfill_count', String(count + 1))
+          if (esc.outcome === 'handoff') return flow.getNextNodes(node.id, 'unknown')[0]?.id
+          // inactive / unknown → cai no fluxo normal abaixo
         }
 
         // No configured rules and no AI agent — fall through to unknown
@@ -2644,6 +2633,64 @@ export class FlowExecutionService {
   }
 
   // ─── AI Agent for classify_intent (unmapped scenarios) ─────────────────────
+
+  // Resolve a política do escape hatch PARA A PARTE onde a conversa está (ver Brain/spec_escape_hatch.md).
+  // escapeMode da parte sobrescreve o default do bot; 'inherit'/ausente = usa o toggle do bot.
+  private resolveEscapePolicy(flow: Flow, conversation: Conversation, bot: Bot): {
+    active: boolean; forceHandoff: boolean; hint?: string; onUnhandled: 'reask' | 'handoff'; maxConsecutive: number
+  } {
+    const gap = bot.globalConfig?.aiGapFill
+    const seg = flow.segments.find(s => s.nodeIds.includes(conversation.currentNodeId))
+    const mode = seg?.escapeMode ?? 'inherit'
+    let active = false, forceHandoff = false
+    if (mode === 'off') active = false
+    else if (mode === 'handoff') { active = true; forceHandoff = true }
+    else if (mode === 'cover') active = true
+    else active = !!gap?.enabled // inherit → default do bot
+    return {
+      active, forceHandoff, hint: seg?.escapeHint,
+      onUnhandled: gap?.onUnhandled ?? 'reask',
+      maxConsecutive: gap?.maxConsecutive ?? 3,
+    }
+  }
+
+  // Roda o escape hatch e executa os efeitos (responde / handoff), devolvendo o resultado pro caller navegar.
+  // routes = rotas disponíveis (vazio em capture). Anti-loop via __rt_gapfill_count.
+  private async runEscapeHatch(
+    flow: Flow, conversation: Conversation, lead: Lead | undefined, bot: Bot, message: string, routes: EscapeRoute[],
+  ): Promise<{ outcome: 'inactive' | 'answered' | 'routed' | 'handoff' | 'unknown'; handle?: string }> {
+    const policy = this.resolveEscapePolicy(flow, conversation, bot)
+    if (!policy.active || !this.aiService) return { outcome: 'inactive' }
+
+    const doHandoff = async () => {
+      await this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: message })
+        .catch(e => console.error('[escape_hatch] createHandoff failed:', e?.message))
+    }
+
+    const count = Number(conversation.variables['__rt_gapfill_count'] ?? 0)
+    if (count >= policy.maxConsecutive) { await doHandoff(); return { outcome: 'handoff' } }
+    if (policy.forceHandoff) { await doHandoff(); return { outcome: 'handoff' } }
+
+    const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+    const decision = await new EscapeHatchService(this.aiService).decide({
+      message, history, knowledge: bot.globalConfig?.agentKnowledge ?? '', routes, allowAnswer: true, hint: policy.hint,
+    })
+    console.log(`[escape_hatch] action=${decision.action} handle=${decision.handle ?? ''} node=${conversation.currentNodeId}`)
+
+    if (decision.action === 'answer' && decision.reply) {
+      conversation.setVariable('__rt_gapfill_count', String(count + 1))
+      await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: conversation.phoneNumber, message: decision.reply })
+      conversation.addAssistantMessage(decision.reply)
+      return { outcome: 'answered' }
+    }
+    if (decision.action === 'route' && decision.handle) {
+      conversation.setVariable('__rt_gapfill_count', '0')
+      return { outcome: 'routed', handle: decision.handle }
+    }
+    if (decision.action === 'handoff' || policy.onUnhandled === 'handoff') { await doHandoff(); return { outcome: 'handoff' } }
+    conversation.setVariable('__rt_gapfill_count', String(count + 1))
+    return { outcome: 'unknown' }
+  }
 
   private async runIntentAgent(
     text: string,
