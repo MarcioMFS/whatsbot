@@ -11,6 +11,7 @@ import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow } from '../components/mkhub'
 import { api, type BotModule, type FlowSegment } from '../api/client.ts'
+import { SegmentEditorModal } from '../components/flow/SegmentEditorModal.tsx'
 import { useUIStore } from '../stores/uiStore.ts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -642,16 +643,20 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [err, setErr] = useState('')
+  const [editing, setEditing] = useState<FlowSegment | null>(null)
+  // Cópia local do grafo do fluxo (nós/edges), atualizada quando o modal salva uma parte — evita refetch.
+  const [override, setOverride] = useState<{ id: string; nodes: unknown[]; edges: unknown[] } | null>(null)
 
   const selectedFlow = flows.find(f => f.id === flowId)
+  const flowNodes = (override?.id === flowId ? override.nodes : selectedFlow?.nodes) ?? []
+  const flowEdges = (override?.id === flowId ? override.edges : selectedFlow?.edges) ?? []
   const nodeLabels = new Map<string, string>(
-    ((selectedFlow?.nodes ?? []) as { id: string; data?: { label?: string } }[])
-      .map(n => [n.id, n.data?.label ?? n.id])
+    (flowNodes as { id: string; data?: { label?: string } }[]).map(n => [n.id, n.data?.label ?? n.id])
   )
 
   useEffect(() => {
     if (!flowId) return
-    setLoading(true); setErr(''); setDirty(false)
+    setLoading(true); setErr(''); setDirty(false); setOverride(null)
     api.flows.segments(flowId)
       .then(r => setSegments(r.segments))
       .catch(e => setErr(e instanceof Error ? e.message : 'Falha ao carregar'))
@@ -769,6 +774,13 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
                       </div>
                     </div>
                   )}
+                  <div className="pt-1">
+                    <button onClick={() => setEditing(seg)}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
+                      style={{ border: '1px solid var(--line)', color: 'var(--ink)', background: 'var(--paper-2)' }}>
+                      <GitBranch size={13} strokeWidth={1.9} /> Editar parte
+                    </button>
+                  </div>
                 </div>
                 <button onClick={() => remove(i)} style={{ color: 'var(--muted)' }} className="hover:opacity-60 mt-1"><Trash2 size={14} /></button>
               </div>
@@ -776,6 +788,19 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
           ))}
           <MkButton variant="ghost" onClick={add}><Plus size={12} /> Adicionar habilidade</MkButton>
         </div>
+      )}
+
+      {editing && flowId && (
+        <SegmentEditorModal
+          flowId={flowId}
+          flowName={selectedFlow?.name ?? 'Flow'}
+          fullNodes={flowNodes as never}
+          fullEdges={flowEdges as never}
+          segment={segments.find(s => s.id === editing.id) ?? editing}
+          allSegments={segments}
+          onClose={() => setEditing(null)}
+          onSaved={({ segments: segs, nodes, edges }) => { setSegments(segs); setOverride({ id: flowId, nodes, edges }) }}
+        />
       )}
     </div>
   )
