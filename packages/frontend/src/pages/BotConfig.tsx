@@ -48,6 +48,7 @@ interface GlobalConfig {
   tone?: 'acolhedor' | 'profissional' | 'casual' | 'formal'
   locale?: 'pt-BR' | 'en-US' | 'es-ES'
   modules?: Record<string, { enabled: boolean; config?: Record<string, unknown> }>
+  aiGapFill?: { enabled?: boolean; onUnhandled?: 'reask' | 'handoff'; maxConsecutive?: number }
 }
 
 interface PersonaPreview {
@@ -390,6 +391,29 @@ function ConfigTab({
           <MkButton onClick={saveBasics} disabled={savingTab === 'config'}>
             {savingTab === 'config' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
           </MkButton>
+        </div>
+      </ConfigSection>
+
+      {/* Inteligência — escape hatch */}
+      <ConfigSection title="Inteligência do bot" badge="cobre Fluxo"
+        subtitle="Quando o cliente sai do roteiro, a IA responde e devolve o controle pro fluxo. Você descreve as partes; a IA cobre as lacunas."
+        info={<><strong>IA cobre lacunas</strong>: o fluxo continua mandando no roteiro; a IA só entra quando a mensagem <strong>não encaixa</strong> no passo atual — responde uma dúvida/objeção (do Conhecimento) e devolve o controle, ou roteia pra parte certa. Custa 1 chamada barata só quando sai do roteiro. <strong>Default desligado</strong> — nada muda até você ligar. Por parte, dá pra blindar (aba Skills → cada habilidade).</>}>
+        <div className="space-y-5">
+          <ToggleRow on={!!globalConfig.aiGapFill?.enabled}
+            onChange={() => set('aiGapFill', { ...globalConfig.aiGapFill, enabled: !globalConfig.aiGapFill?.enabled })}
+            title="IA cobre lacunas" desc={globalConfig.aiGapFill?.enabled ? 'IA entra quando o cliente sai do roteiro' : 'Desligado — só o roteiro responde'} />
+          {globalConfig.aiGapFill?.enabled && (
+            <MkSelect label="Quando a IA não souber" value={globalConfig.aiGapFill?.onUnhandled ?? 'reask'}
+              onChange={v => set('aiGapFill', { ...globalConfig.aiGapFill, onUnhandled: v as 'reask' | 'handoff' })}>
+              <option value="reask">Re-perguntar (continua a conversa)</option>
+              <option value="handoff">Chamar humano (escala)</option>
+            </MkSelect>
+          )}
+          <div>
+            <MkButton onClick={() => saveGlobal({ aiGapFill: globalConfig.aiGapFill }, 'gapfill')} disabled={savingTab === 'gapfill'}>
+              {savingTab === 'gapfill' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+            </MkButton>
+          </div>
         </div>
       </ConfigSection>
 
@@ -792,13 +816,29 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
                       </div>
                     </div>
                   )}
-                  <div className="pt-1">
+                  <div className="pt-1 flex flex-wrap items-center gap-3">
                     <button onClick={() => setEditing(seg)}
                       className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg transition-all"
                       style={{ border: '1px solid var(--line)', color: 'var(--ink)', background: 'var(--paper-2)' }}>
                       <GitBranch size={13} strokeWidth={1.9} /> Editar parte
                     </button>
+                    <span className="flex items-center gap-1.5">
+                      <label className="mk-eyebrow" style={{ fontSize: '.56rem' }}>IA nas lacunas</label>
+                      <InfoTip text={<>O que a IA faz se o cliente sair do roteiro <strong>nesta parte</strong>. <strong>Herdar</strong> = usa o padrão do bot. <strong>Desligado</strong> = parte sagrada, IA não entra. <strong>Cobre</strong> = IA responde e devolve. <strong>Só humano</strong> = qualquer desvio escala.</>} />
+                      <select value={seg.escapeMode ?? 'inherit'} onChange={e => update(i, { escapeMode: e.target.value as FlowSegment['escapeMode'] })}
+                        className="mk-input text-xs px-2 py-1.5">
+                        <option value="inherit">Herdar do bot</option>
+                        <option value="off">Desligado</option>
+                        <option value="cover">Cobre</option>
+                        <option value="handoff">Só humano</option>
+                      </select>
+                    </span>
                   </div>
+                  {seg.escapeMode && seg.escapeMode !== 'off' && seg.escapeMode !== 'inherit' && (
+                    <input value={seg.escapeHint ?? ''} onChange={e => update(i, { escapeHint: e.target.value })}
+                      placeholder="Dica: quando sair do roteiro aqui… (ex: se perguntarem de reembolso, explique a política)"
+                      className="mk-input w-full text-xs px-3 py-2" />
+                  )}
                 </div>
                 <button onClick={() => remove(i)} style={{ color: 'var(--muted)' }} className="hover:opacity-60 mt-1"><Trash2 size={14} /></button>
               </div>

@@ -224,6 +224,12 @@ export const GlobalConfigSchema = z.object({
     enabled: z.boolean(),
     config:  z.record(z.unknown()).optional(),
   }).strict()).optional(),
+  // Escape hatch — "IA cobre lacunas" (ver Brain/spec_escape_hatch.md). Default do bot; parte pode sobrescrever.
+  aiGapFill: z.object({
+    enabled:        z.boolean().optional(),
+    onUnhandled:    z.enum(['reask', 'handoff']).optional(),
+    maxConsecutive: z.number().int().min(1).max(10).optional(),
+  }).strict().optional(),
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>

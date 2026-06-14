@@ -29,6 +29,8 @@ const SegmentsSchema = z.object({
     whenToUse: z.string().max(500).optional(),
     nodeIds: z.array(z.string()).max(200),
     generated: z.boolean().optional(),
+    escapeMode: z.enum(['inherit', 'off', 'cover', 'handoff']).optional(),
+    escapeHint: z.string().max(500).optional(),
   })).max(40),
 })
 

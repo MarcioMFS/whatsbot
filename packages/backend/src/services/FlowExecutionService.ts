@@ -51,6 +51,7 @@ import {
 import type { AIGenerationService } from './AIGenerationService.js'
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
+import { EscapeHatchService } from './EscapeHatchService.js'
 import type { VisionTitleExtractor } from './VisionTitleExtractor.js'
 import type { DeliveryService } from './DeliveryService.js'
 import type { ContextualAIRouter } from './ContextualAIRouter.js'
@@ -1814,6 +1815,51 @@ export class FlowExecutionService {
           const nextNode = flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
           console.log(`[classify_intent] ai_agent: action=route handle=${handle} title="${agentDecision.titleDetected ?? ''}" next=${nextNode}`)
           return nextNode
+        }
+
+        // ── Escape hatch (IA cobre lacunas) — gated por aiGapFill.enabled, default OFF ──
+        // Aditivo: quando ligado, cobre o caminho 'unknown' com IA por descrição (ver Brain/spec_escape_hatch.md).
+        const gap = bot.globalConfig?.aiGapFill
+        if (gap?.enabled && this.aiService) {
+          const maxConsec = gap.maxConsecutive ?? 3
+          const count = Number(conversation.variables['__rt_gapfill_count'] ?? 0)
+          if (count >= maxConsec) {
+            console.log(`[classify_intent] escape_hatch: maxConsecutive(${maxConsec}) atingido → handoff`)
+            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
+              .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+            return flow.getNextNodes(node.id, 'unknown')[0]?.id
+          }
+
+          const routes = (data.intents ?? [])
+            .filter(r => r.handle && r.handle !== 'unknown')
+            .map(r => ({ handle: r.handle, description: r.label ?? r.handle }))
+          const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+          const decision = await new EscapeHatchService(this.aiService).decide({
+            message: text, history,
+            knowledge: bot.globalConfig?.agentKnowledge ?? '',
+            routes, allowAnswer: true,
+          })
+          console.log(`[classify_intent] escape_hatch: action=${decision.action} handle=${decision.handle ?? ''}`)
+
+          if (decision.action === 'answer' && decision.reply) {
+            conversation.setVariable('__rt_gapfill_count', String(count + 1))
+            conversation.setVariable('__rt_ai_responded', 'true')
+            await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: conversation.phoneNumber, message: decision.reply })
+            conversation.addAssistantMessage(decision.reply)
+            return null // responde e devolve o controle (fica no mesmo passo)
+          }
+          if (decision.action === 'route' && decision.handle) {
+            conversation.setVariable('__rt_gapfill_count', '0')
+            conversation.setVariable('__rt_intent', decision.handle)
+            return flow.getNextNodes(node.id, decision.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          }
+          if (decision.action === 'handoff' || gap.onUnhandled === 'handoff') {
+            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: text })
+              .catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
+            return flow.getNextNodes(node.id, 'unknown')[0]?.id
+          }
+          // unknown + onUnhandled='reask' → conta e cai no handle unknown (que re-pergunta)
+          conversation.setVariable('__rt_gapfill_count', String(count + 1))
         }
 
         // No configured rules and no AI agent — fall through to unknown

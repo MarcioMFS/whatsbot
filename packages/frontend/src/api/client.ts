@@ -25,6 +25,8 @@ export interface FlowSegment {
   whenToUse?: string
   nodeIds: string[]
   generated?: boolean
+  escapeMode?: 'inherit' | 'off' | 'cover' | 'handoff'
+  escapeHint?: string
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {

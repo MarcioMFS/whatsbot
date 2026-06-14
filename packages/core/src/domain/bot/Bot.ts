@@ -57,6 +57,14 @@ export interface BotGlobalConfig {
   agentTone?: AgentTone        // knobs de tom — calibram a voz NATURAL (sem cara de bot)
   // (recovery migrou pro módulo 'recover' — config mora em modules.recover.config; tipo RecoveryConfig abaixo segue exportado)
   modules?: Record<string, BotModuleState>  // Registro de Módulos: liga/desliga + config por bot. Ausente = defaults (tudo ligado).
+  aiGapFill?: AiGapFillConfig                // Escape hatch — "IA cobre lacunas" (Brain/spec_escape_hatch.md). Default do bot.
+}
+
+// "IA cobre lacunas": quando a mensagem sai do roteiro, a IA responde/roteia/escala e devolve o controle.
+export interface AiGapFillConfig {
+  enabled?: boolean
+  onUnhandled?: 'reask' | 'handoff'   // o que fazer quando a IA não sabe
+  maxConsecutive?: number             // máx de respostas seguidas antes de forçar handoff (anti-loop)
 }
 
 // Recuperação genérica de lead/carrinho — re-engajamento parametrizável por vertical.

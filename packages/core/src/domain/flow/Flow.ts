@@ -256,6 +256,9 @@ export interface FlowSegment {
   whenToUse?: string       // QUANDO usar
   nodeIds: string[]        // nós que compõem este segmento
   generated?: boolean      // proposto pela IA, pendente de revisão humana
+  // Escape hatch por parte (ver Brain/spec_escape_hatch.md). Default 'inherit' = usa o do bot.
+  escapeMode?: 'inherit' | 'off' | 'cover' | 'handoff'
+  escapeHint?: string      // dica de "quando sair do roteiro" pra IA, opcional
 }
 
 export interface FlowProps {
