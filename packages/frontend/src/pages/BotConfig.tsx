@@ -750,10 +750,24 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
                     placeholder="Quando usar (gatilho)"
                     className="mk-input w-full text-xs px-3 py-2" />
                   {seg.nodeIds.length > 0 && (
-                    <p style={{ color: 'var(--muted)', fontSize: '.72rem' }}
-                      title={seg.nodeIds.map(id => nodeLabels.get(id) ?? id).join(', ')}>
-                      {seg.nodeIds.length} {seg.nodeIds.length === 1 ? 'nó' : 'nós'}: {seg.nodeIds.map(id => nodeLabels.get(id) ?? id).slice(0, 4).join(' · ')}{seg.nodeIds.length > 4 ? '…' : ''}
-                    </p>
+                    <div className="pt-1">
+                      <span className="mk-eyebrow block mb-1.5" style={{ fontSize: '.56rem' }}>
+                        {seg.nodeIds.length} {seg.nodeIds.length === 1 ? 'nó' : 'nós'}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {seg.nodeIds.map(id => {
+                          const known = nodeLabels.has(id)
+                          return (
+                            <span key={id} title={known ? id : 'nó não encontrado no fluxo atual'}
+                              className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md"
+                              style={{ background: 'var(--paper-2)', border: '1px solid var(--line)', color: known ? 'var(--ink-soft)' : 'var(--muted)', textDecoration: known ? 'none' : 'line-through' }}>
+                              <GitBranch size={10} strokeWidth={1.8} style={{ opacity: 0.5, flexShrink: 0 }} />
+                              {nodeLabels.get(id) ?? id}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
                 <button onClick={() => remove(i)} style={{ color: 'var(--muted)' }} className="hover:opacity-60 mt-1"><Trash2 size={14} /></button>
