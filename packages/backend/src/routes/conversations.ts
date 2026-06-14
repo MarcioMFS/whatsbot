@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify'
-import type { ConversationRepository, BotRepository } from '@whatsbot/core'
+import type { ConversationRepository, BotRepository, AgentTraceRepository } from '@whatsbot/core'
 import { buildConversationStateView } from '../services/ConversationStateView.js'
 
 interface ConvCtx {
   conversationRepo: ConversationRepository
   botRepo: BotRepository
+  agentTrace: AgentTraceRepository
 }
 
 export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
@@ -29,6 +30,16 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
     const conversation = await ctx.conversationRepo.findById(req.params.id)
     if (!conversation) return reply.code(404).send({ error: 'Not found' })
     return conversation.toJSON()
+  })
+
+  // Trilha do agente: quem foi chamado, com quais args, o que voltou (auditoria durável).
+  app.get<{ Params: { id: string } }>('/:id/agent-trace', async (req, reply) => {
+    const user = req.user as { id: string }
+    const conversation = await ctx.conversationRepo.findById(req.params.id)
+    if (!conversation) return reply.code(404).send({ error: 'Not found' })
+    const bot = await ctx.botRepo.findById(conversation.botId)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+    return { trace: await ctx.agentTrace.listByConversation(req.params.id) }
   })
 
   // Debug state view — current_phase, locked_state, cart, intent, etc.

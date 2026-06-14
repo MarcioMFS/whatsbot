@@ -1,5 +1,5 @@
 import { Conversation, Cart, MODULE_IDS } from '@whatsbot/core'
-import type { Bot, MessagingPort, ConversationRepository, LeadRepository, AgentPolicy } from '@whatsbot/core'
+import type { Bot, MessagingPort, ConversationRepository, LeadRepository, AgentPolicy, AgentTraceRepository } from '@whatsbot/core'
 import type { IAgentProvider, AgentMessage, ToolDef, ToolResultMsg } from './providers/types.js'
 import { AGENT_TOOLS } from './tools/index.js'
 import type { ModuleRegistry } from '../services/ModuleRegistry.js'
@@ -125,6 +125,7 @@ export class AgentRuntime {
     private messaging: MessagingPort,
     private services: ToolServices,
     private moduleRegistry: ModuleRegistry,
+    private trace?: AgentTraceRepository,   // auditoria durável (opcional, non-blocking)
   ) {}
 
   async handleIncomingMessage(bot: Bot, phoneNumber: string, message: string, imageBase64?: string, opts?: { isLastAttempt?: boolean }): Promise<void> {
@@ -181,6 +182,15 @@ export class AgentRuntime {
     const system = buildSystemPrompt(bot, isFirstContact)
     const callCounts = new Map<string, number>()
     let finalText = ''
+    let lastStop = ''
+    let lastStep = 0
+    // Trilha durável (auditoria): quem foi chamado, como, o que voltou. Fire-and-forget.
+    const rec = (p: {
+      step: number; kind: 'tool' | 'reply' | 'error'; toolName?: string; toolInput?: Record<string, unknown>
+      resultCode?: string; resultSuccess?: boolean; text?: string; stopReason?: string; latencyMs?: number
+    }) => {
+      void this.trace?.save({ botId: bot.id, conversationId: conversation.id, phoneNumber, turnMessage: message, provider: this.provider.name, ...p })
+    }
 
     console.log(`[agent] start phone=${phoneNumber} bot=${bot.evolutionConfig.instanceName} msg="${message.slice(0, 60)}" hasImage=${!!imageBase64}`)
     try {
@@ -188,6 +198,7 @@ export class AgentRuntime {
       const t0 = Date.now()
       const resp = await this.provider.complete({ system, messages: working, tools: toolDefs, maxTokens: 1024 })
       console.log(`[agent] step=${step} stop=${resp.stopReason} ms=${Date.now() - t0} tools=${(resp.toolCalls ?? []).map(c => c.name).join(',') || '-'} text="${(resp.text ?? '').slice(0, 60)}"`)
+      lastStop = resp.stopReason; lastStep = step
 
       if (resp.stopReason !== 'tool_use') { finalText = resp.text ?? ''; break }
 
@@ -211,6 +222,7 @@ export class AgentRuntime {
         }
         console.log(`[agent] tool=${call.name} → ${out.code} (success=${out.success})`)
         results.push({ toolCallId: call.id, name: call.name, output: out })
+        rec({ step, kind: 'tool', toolName: call.name, toolInput: call.input as Record<string, unknown>, resultCode: out.code, resultSuccess: out.success, latencyMs: Date.now() - t0 })
       }
 
       if (stalled) {
@@ -239,6 +251,7 @@ export class AgentRuntime {
       console.error(`[agent] ERRO phone=${phoneNumber}:`, errMsg)
       conversation.handoff()
       finalText = 'Tive um probleminha aqui 😅 já chamei alguém da equipe pra te ajudar.'
+      rec({ step: lastStep, kind: 'error', text: errMsg, stopReason: 'error' })
     }
 
     // Rede de segurança da ENTREGA: pagamento confirmado mas os links não saíram?
@@ -252,6 +265,7 @@ export class AgentRuntime {
       }
     }
 
+    rec({ step: lastStep, kind: 'reply', text: finalText, stopReason: lastStop })
     console.log(`[agent] reply phone=${phoneNumber} text="${finalText.slice(0, 80)}"`)
     await this.messaging.sendMessage({
       instanceName: bot.evolutionConfig.instanceName,

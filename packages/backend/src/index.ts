@@ -39,6 +39,7 @@ import { ModuleRegistry } from './services/ModuleRegistry.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
 import { PaymentPhaseRouter } from './services/PaymentPhaseRouter.js'
 import { PostgreSQLAIDecisionRepository } from './adapters/PostgreSQLAIDecisionRepository.js'
+import { PostgreSQLAgentTraceRepository } from './adapters/PostgreSQLAgentTraceRepository.js'
 import { PostgreSQLDeliveryAuditRepository } from './adapters/PostgreSQLDeliveryAuditRepository.js'
 import { PaymentOrchestrator } from './payment/PaymentOrchestrator.js'
 import { ReceiptExtractorAI } from './payment/ReceiptExtractorAI.js'
@@ -104,6 +105,7 @@ const packageOfferRepo = new PostgreSQLPackageOfferRepository(db)
 const handoffRepo = new PostgreSQLHandoffRepository(db)
 
 const aiService = new AIGenerationService(aiProviders)
+const agentTrace = new PostgreSQLAgentTraceRepository(db)
 const aiDecisionRepo = new PostgreSQLAIDecisionRepository(db)
 const observationRepo = new PostgreSQLAIObservationRepository(db)
 const catalogSearchService = new CatalogSearchService(productRepo, aiService, aiDecisionRepo)
@@ -141,7 +143,7 @@ await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
 await app.register(jwt, { secret: process.env.JWT_SECRET! })
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
-const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExecService, messaging, redis, eventRepo }
+const ctx = { botRepo, flowRepo, conversationRepo, leadRepo, botService, flowExecService, messaging, redis, eventRepo, agentTrace }
 
 await app.register(authRoutes, { prefix: '/api/auth', db })
 await app.register(aiRoutes, { prefix: '/api/ai', aiService })
@@ -171,6 +173,7 @@ const agentRuntime = new AgentRuntime(
   messaging,
   { catalogSearchService, productRepo, paymentIntentRepo, packageOfferRepo, paymentOrchestrator },
   moduleRegistry,
+  agentTrace,
 )
 
 startMessageWorker(redis, flowExecService, botRepo, transcriptionService, agentRuntime)
