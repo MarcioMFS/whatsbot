@@ -196,6 +196,12 @@ export const GlobalConfigSchema = z.object({
   allowIdentityDisclosure:  z.boolean().optional(),
   tone:                     z.enum(['acolhedor', 'profissional', 'casual', 'formal']).optional(),
   locale:                   z.enum(['pt-BR', 'en-US', 'es-ES']).optional(),
+  // Registro de Módulos (liga/desliga + config por bot) — a config de recuperação mora em modules.recover.config
+
+  modules: z.record(z.object({
+    enabled: z.boolean(),
+    config:  z.record(z.unknown()).optional(),
+  }).strict()).optional(),
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>

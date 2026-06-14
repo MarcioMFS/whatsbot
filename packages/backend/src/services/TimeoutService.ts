@@ -1,4 +1,13 @@
-import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository, LeadRepository } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository, LeadRepository, RecoveryConfig } from '@whatsbot/core'
+import { MODULE_IDS } from '@whatsbot/core'
+import type { ModuleRegistry } from './ModuleRegistry.js'
+
+// Mensagens de recuperação padrão (PIX legado) — usadas quando o bot não configurou recovery.messages.
+const DEFAULT_RECOVERY_MESSAGES = [
+  'Oi 😊 Seu Pix ainda está pendente! Quer que eu gere um novo link?',
+  'Olá! Não vimos seu comprovante ainda. Posso gerar um novo Pix pra você? 🎬',
+  'Ainda dá tempo de finalizar! Me envia o comprovante ou peço um novo Pix 😊',
+]
 import type { CaptureNodeData } from '@whatsbot/core'
 import type { RedisConversationRepository } from '../adapters/RedisConversationRepository.js'
 import type { FlowExecutionService } from './FlowExecutionService.js'
@@ -12,6 +21,7 @@ export class TimeoutService {
     private flowExec: FlowExecutionService,
     private leadRepo?: LeadRepository,
     private eventRepo?: ConversationEventRepository,
+    private moduleRegistry?: ModuleRegistry,
   ) {}
 
   start(): void {
@@ -83,11 +93,15 @@ export class TimeoutService {
   private async checkAbandonedPix(): Promise<void> {
     if (!this.leadRepo) return
     try {
+      const registry = this.moduleRegistry
+      if (!registry) return   // Recuperar é módulo; sem o registro injetado, não roda (index sempre injeta).
       const bots = await this.botRepo.findAllActive()
       for (const bot of bots) {
         if (!bot.activeFlowId) continue
+        if (!registry.isEnabled(bot, MODULE_IDS.RECOVER)) continue   // módulo Recuperar desligado p/ este bot
+        const recovery = registry.configFor(bot, MODULE_IDS.RECOVER) as RecoveryConfig
         const { instanceName, instanceId } = bot.evolutionConfig as { instanceName: string; instanceId?: string }
-        await this.checkAbandonedPixForBot(bot.id, instanceName, instanceId).catch(err =>
+        await this.checkAbandonedPixForBot(bot.id, instanceName, instanceId, recovery).catch(err =>
           console.error('[TimeoutService] recovery error for bot', bot.id, err)
         )
       }
@@ -96,27 +110,26 @@ export class TimeoutService {
     }
   }
 
-  async checkAbandonedPixForBot(botId: string, instanceName: string, instanceId?: string): Promise<void> {
+  async checkAbandonedPixForBot(botId: string, instanceName: string, instanceId?: string, recovery?: RecoveryConfig): Promise<void> {
     if (!this.leadRepo) return
-    const IDLE_MS = 30 * 60_000
-    const MAX_ATTEMPTS = 2
+    // Defaults reproduzem o comportamento legado (PIX): 30min ocioso, 2 nudges, mensagens PIX.
+    const idleMs = (recovery?.idleMinutes ?? 30) * 60_000
+    const maxAttempts = recovery?.maxAttempts ?? 2
+    const recoveryMessages = recovery?.messages?.length ? recovery.messages : DEFAULT_RECOVERY_MESSAGES
 
-    const recoveryMessages = [
-      'Oi 😊 Seu Pix ainda está pendente! Quer que eu gere um novo link?',
-      'Olá! Não vimos seu comprovante ainda. Posso gerar um novo Pix pra você? 🎬',
-      'Ainda dá tempo de finalizar! Me envia o comprovante ou peço um novo Pix 😊',
-    ]
-
-    const abandoned = await this.leadRepo.findAbandonedPix(botId, IDLE_MS)
+    const abandoned = await this.leadRepo.findAbandonedPix(botId, idleMs, {
+      triggerTags: recovery?.triggerTags,
+      excludeTags: recovery?.excludeTags,
+    })
     for (const lead of abandoned) {
       try {
-        if (lead.abandonedPixCount >= MAX_ATTEMPTS) {
+        if (lead.abandonedPixCount >= maxAttempts) {
           lead.addTag('lost')
           lead.setLastState('abandoned_max_attempts')
           await this.leadRepo.save(lead)
           continue
         }
-        if (!lead.needsRecovery(IDLE_MS)) continue
+        if (!lead.needsRecovery(idleMs)) continue
 
         const msg = recoveryMessages[lead.abandonedPixCount % recoveryMessages.length]
         await this.messaging.sendMessage({ instanceName, instanceId, phoneNumber: lead.phoneNumber, message: msg })

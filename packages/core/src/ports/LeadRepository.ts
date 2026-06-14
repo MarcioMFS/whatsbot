@@ -6,5 +6,10 @@ export interface LeadRepository {
   findByTag(botId: string, tag: string): Promise<Lead[]>
   countByBotId(botId: string): Promise<number>
   save(lead: Lead): Promise<void>
-  findAbandonedPix(botId: string, idleThresholdMs: number, maxCount?: number): Promise<Lead[]>
+  // Recuperação: leads parados num ponto de interesse. opts default = comportamento legado (PIX).
+  findAbandonedPix(
+    botId: string,
+    idleThresholdMs: number,
+    opts?: { triggerTags?: string[]; excludeTags?: string[]; maxCount?: number },
+  ): Promise<Lead[]>
 }

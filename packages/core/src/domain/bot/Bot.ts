@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto'
+import type { BotModuleState } from '../module/Module.js'
 
 export type AIProvider = 'claude' | 'groq'
 
@@ -45,6 +46,50 @@ export interface BotGlobalConfig {
   allowIdentityDisclosure?: boolean  // allow "Sou um assistente virtual" — default: false
   tone?: 'acolhedor' | 'profissional' | 'casual' | 'formal'
   locale?: string              // e.g. 'pt-BR', 'en-US', 'es-ES' — default: 'pt-BR'
+  // v2 — Agent runtime
+  runtime?: 'flow' | 'agent'   // default 'flow'. 'agent' = tool-calling agent loop (lab)
+  agentTestNumbers?: string[]  // whitelist: estes telefones usam o agente MESMO com runtime='flow'. Resto segue flow (produção). Kill switch = esvaziar.
+  agentInstructions?: string   // prompt principal / regras do agente (Instruções)
+  agentGreeting?: string       // orientação de abertura (LLM) — usada no 1º contato quando NÃO há agentIntroMessage. O agente apresenta com as palavras dele.
+  agentKnowledge?: string      // "coisas que o bot deve saber" — fatos que o agente PODE usar (link do catálogo, entrega, garantia…). Ele só afirma o que está aqui; fora disso, não inventa.
+  agentIntroMessage?: string   // mensagem de abertura VERBATIM (determinística) — enviada literal no 1º contato. Use quando a copy/preços precisam ser exatos (não passa pela IA). Tem prioridade sobre agentGreeting.
+  agentPolicy?: AgentPolicy    // permissões nível 1 (a IA consulta, nunca edita)
+  agentTone?: AgentTone        // knobs de tom — calibram a voz NATURAL (sem cara de bot)
+  // (recovery migrou pro módulo 'recover' — config mora em modules.recover.config; tipo RecoveryConfig abaixo segue exportado)
+  modules?: Record<string, BotModuleState>  // Registro de Módulos: liga/desliga + config por bot. Ausente = defaults (tudo ligado).
+}
+
+// Recuperação genérica de lead/carrinho — re-engajamento parametrizável por vertical.
+// SEM config (undefined) = comportamento legado: trigger 'pix_generated', 30min ocioso, 2 nudges, mensagens PIX.
+export interface RecoveryConfig {
+  enabled?: boolean               // default true (ligado). false = desliga recuperação pra este bot.
+  triggerTags?: string[]          // tags que marcam "travou em ponto interessante". default ['pix_generated']
+  excludeTags?: string[]          // tags que encerram (não cutuca mais). default ['buyer','lost']
+  idleMinutes?: number            // ocioso antes de cutucar (e gap entre nudges). default 30
+  maxAttempts?: number            // máx de nudges por ciclo. default 2
+  cadenceMinutes?: number[]       // (F3) gap mínimo antes de cada nudge; sobrepõe idleMinutes por tentativa
+  messages?: string[]             // templates por tentativa, vars {nome}/{item}. default = mensagens PIX legadas
+  quietHours?: { start: number; end: number }  // (F3) janela sem cutucar (hora 0-23)
+}
+
+// Botões de tom do agente — voz neutra natural (humano de verdade, sem fingir ser ninguém).
+// Cada knob vira instrução de estilo no system prompt. Defaults = WhatsApp humano, curto, pouco emoji.
+export interface AgentTone {
+  formality?: 'informal' | 'neutro' | 'formal'   // default 'neutro'
+  emoji?: 'nenhum' | 'raro' | 'moderado'         // default 'raro'
+  length?: 'curtas' | 'medias'                    // default 'curtas'
+  slang?: boolean                                 // gírias/regionalismos leves — default false
+}
+
+// Permissões por bot — "A IA propõe; o código dispõe". Default seguro = financeiro sensível OFF.
+export interface AgentPolicy {
+  can_generate_pix?: boolean       // default true
+  can_validate_proof?: boolean     // default true
+  can_deliver_access?: boolean     // default true
+  can_transfer_human?: boolean     // default true
+  can_apply_discount?: boolean     // default false
+  can_refund?: boolean             // default false
+  can_cancel_order?: boolean       // default false
 }
 
 export interface BotProps {

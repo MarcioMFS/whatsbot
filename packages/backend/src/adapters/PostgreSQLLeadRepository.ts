@@ -37,18 +37,25 @@ export class PostgreSQLLeadRepository implements LeadRepository {
     return parseInt(rows[0].count, 10)
   }
 
-  async findAbandonedPix(botId: string, idleThresholdMs: number, maxCount = 50): Promise<Lead[]> {
+  async findAbandonedPix(
+    botId: string,
+    idleThresholdMs: number,
+    opts: { triggerTags?: string[]; excludeTags?: string[]; maxCount?: number } = {},
+  ): Promise<Lead[]> {
+    // Defaults reproduzem o comportamento legado (PIX): trigger 'pix_generated', exclui buyer/lost.
+    const triggerTags = opts.triggerTags?.length ? opts.triggerTags : ['pix_generated']
+    const excludeTags = opts.excludeTags?.length ? opts.excludeTags : ['buyer', 'lost']
+    const maxCount = opts.maxCount ?? 50
     const cutoff = new Date(Date.now() - idleThresholdMs)
     const { rows } = await this.db.query(
       `SELECT * FROM leads
        WHERE bot_id = $1
-         AND 'pix_generated' = ANY(tags)
-         AND NOT ('buyer' = ANY(tags))
-         AND NOT ('lost' = ANY(tags))
-         AND last_seen_at < $2
+         AND tags && $2::text[]
+         AND NOT (tags && $3::text[])
+         AND last_seen_at < $4
        ORDER BY last_seen_at ASC
-       LIMIT $3`,
-      [botId, cutoff, maxCount]
+       LIMIT $5`,
+      [botId, triggerTags, excludeTags, cutoff, maxCount]
     )
     return rows.map(r => this.toDomain(r))
   }

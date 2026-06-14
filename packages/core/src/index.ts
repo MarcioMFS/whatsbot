@@ -1,4 +1,5 @@
 export * from './domain/bot/Bot.js'
+export * from './domain/module/Module.js'
 export * from './domain/flow/Flow.js'
 export * from './domain/conversation/Conversation.js'
 export * from './domain/conversation/ConversationEvent.js'
