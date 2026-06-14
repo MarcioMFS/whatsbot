@@ -524,12 +524,21 @@ export class FlowExecutionService {
       }
     }
 
-    const flowId = isNewConversation
-      ? (bot.resolveFlowId(lead?.tags ?? []) ?? bot.activeFlowId)
-      : conversation!.flowId
+    let flowId: string | null | undefined
+    let flowReason: string
+    if (isNewConversation) {
+      const routed = bot.resolveFlowId(lead?.tags ?? [])
+      flowId = routed ?? bot.activeFlowId
+      flowReason = (routed && routed !== bot.activeFlowId) ? 'regra_de_tag' : 'flow_ativo_padrao'
+    } else {
+      flowId = conversation!.flowId
+      flowReason = 'conversa_em_andamento'
+    }
 
     const flow = await this.flowRepo.findById(flowId!)
     if (!flow) return
+    // Observabilidade: QUAL fluxo está sendo chamado AGORA e POR QUÊ (regra de tag vs default vs em andamento).
+    console.log(`[FES:flow_resolved] phone="${phoneNumber}" flow="${flow.name}" id=${flow.id} reason=${flowReason} isNew=${isNewConversation} tags=[${(lead?.tags ?? []).join(',')}]`)
 
     if (!conversation || conversation.status === 'ended') {
       if (!this.matchesTrigger(flow, message)) return
@@ -733,7 +742,7 @@ export class FlowExecutionService {
     })
 
     if (isStart) {
-      this.emit(bot.id, conversation.id, conversation.phoneNumber, 'flow_started', { flowId: flow.id })
+      this.emit(bot.id, conversation.id, conversation.phoneNumber, 'flow_started', { flowId: flow.id, flowName: flow.name })
     }
 
     try {
