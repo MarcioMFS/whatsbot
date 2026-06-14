@@ -18,6 +18,27 @@ function safeParse(s: string): Record<string, unknown> {
   try { return JSON.parse(s || '{}') } catch { return {} }
 }
 
+// Groq/llama às vezes emite a tool-call em sintaxe quebrada (`<function=nome{json}</function>`)
+// e a API responde 400 tool_use_failed com o texto bruto em `failed_generation`.
+// Recuperamos a intenção parseando o nome + JSON — evita escalar pra humano por um glitch do modelo.
+function recoverToolCalls(err: unknown): ToolCall[] | null {
+  const e = err as { error?: { code?: string; failed_generation?: string }; message?: string }
+  const code = e?.error?.code
+  let gen = e?.error?.failed_generation
+  if (!gen && typeof e?.message === 'string' && e.message.includes('failed_generation')) {
+    const m = e.message.match(/"failed_generation"\s*:\s*"([\s\S]*?)"\s*}/)
+    if (m) { try { gen = JSON.parse(`"${m[1]}"`) } catch { gen = m[1] } }
+  }
+  if (code !== 'tool_use_failed' || !gen) return null
+  const calls: ToolCall[] = []
+  const re = /<function=([a-zA-Z_]\w*)\s*(\{[\s\S]*?\})/g
+  let mm: RegExpExecArray | null
+  while ((mm = re.exec(gen)) !== null) {
+    try { calls.push({ id: `recovered_${calls.length}`, name: mm[1], input: JSON.parse(mm[2]) }) } catch { /* ignora call não-parseável */ }
+  }
+  return calls.length ? calls : null
+}
+
 function toOpenAIMessages(system: string, messages: AgentMessage[]): OpenAIMsg[] {
   const out: OpenAIMsg[] = [{ role: 'system', content: system }]
   for (const m of messages) {
@@ -81,6 +102,12 @@ export class GroqAgentProvider implements IAgentProvider {
         }
       } catch (err: unknown) {
         const status = (err as { status?: number })?.status
+        // tool-call malformada do llama → recupera a intenção em vez de escalar
+        const recovered = status === 400 ? recoverToolCalls(err) : null
+        if (recovered) {
+          console.warn(`[GroqAgentProvider] tool_use_failed → recuperado: ${recovered.map(c => c.name).join(',')}`)
+          return { stopReason: 'tool_use', text: undefined, toolCalls: recovered, usage: {} }
+        }
         if (status === 429 || status === 503) {
           console.warn(`[GroqAgentProvider] key[${this.idx}] ${status} — rotating`)
           this.idx = (this.idx + 1) % this.clients.length
