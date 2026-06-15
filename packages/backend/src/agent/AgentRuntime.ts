@@ -1,5 +1,5 @@
 import { Conversation, Cart, MODULE_IDS, PricingService } from '@whatsbot/core'
-import type { Bot, MessagingPort, ConversationRepository, LeadRepository, AgentPolicy, AgentTraceRepository } from '@whatsbot/core'
+import type { Bot, MessagingPort, ConversationRepository, LeadRepository, AgentPolicy, AgentTraceRepository, MessageSplitConfig } from '@whatsbot/core'
 import type { IAgentProvider, AgentMessage, ToolDef, ToolResultMsg } from './providers/types.js'
 import { AGENT_TOOLS } from './tools/index.js'
 import type { ModuleRegistry } from '../services/ModuleRegistry.js'
@@ -117,6 +117,33 @@ function isTransientError(e: unknown): boolean {
   const msg = e instanceof Error ? e.message : String(e)
   if (/auth failed|GOOGLE_SA|api key|unauthorized|\b401\b|\b403\b/i.test(msg)) return false
   return /timeout|abort|\b429\b|\b5\d\d\b|econn|enotfound|etimedout|socket|network|fetch failed|temporar/i.test(msg)
+}
+
+// Entrega humana: quebra a resposta nas linhas em branco (onde a IA separou ideias), funde
+// pedaços minúsculos e limita. Cada pedaço vira uma mensagem separada no WhatsApp.
+function splitForDelivery(text: string, cfg: MessageSplitConfig): string[] {
+  if (cfg.enabled === false) return [text]
+  let parts = text.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean)
+  const merged: string[] = []
+  for (const p of parts) {
+    if (merged.length && (p.length < 20 || merged[merged.length - 1].length < 20)) {
+      merged[merged.length - 1] += '\n\n' + p
+    } else merged.push(p)
+  }
+  parts = merged
+  const max = cfg.maxChunks ?? 4
+  if (parts.length > max) {
+    const head = parts.slice(0, max - 1)
+    head.push(parts.slice(max - 1).join('\n\n'))
+    parts = head
+  }
+  return parts.length ? parts : [text]
+}
+
+// Delay de "digitando" proporcional ao tamanho (parametrizável → metrificável).
+function typingDelay(chunk: string, cfg: MessageSplitConfig): number {
+  const ms = chunk.length * (cfg.msPerChar ?? 30)
+  return Math.min(cfg.maxMs ?? 2500, Math.max(cfg.minMs ?? 700, ms))
 }
 
 // "Promessa de ação" na saída do PRÓPRIO modelo (não input de cliente — a regra no-regex-input não se aplica).
@@ -299,13 +326,23 @@ export class AgentRuntime {
     }
 
     rec({ step: lastStep, kind: 'reply', text: finalText, stopReason: lastStop })
-    console.log(`[agent] reply phone=${phoneNumber} text="${finalText.slice(0, 80)}"`)
-    await this.messaging.sendMessage({
-      instanceName: bot.evolutionConfig.instanceName,
-      instanceId: bot.evolutionConfig.instanceId ?? '',
-      phoneNumber,
-      message: finalText,
-    })
+    // Entrega humana: quebra em mensagens separadas + delay de digitando (parametrizável).
+    const splitCfg = bot.globalConfig?.messageSplit ?? {}
+    const chunks = splitForDelivery(finalText, splitCfg)
+    console.log(`[agent] reply phone=${phoneNumber} chunks=${chunks.length} text="${finalText.slice(0, 80)}"`)
+    for (let i = 0; i < chunks.length; i++) {
+      if (i > 0) {
+        const d = typingDelay(chunks[i], splitCfg)
+        console.log(`[agent] chunk ${i + 1}/${chunks.length} delay=${d}ms len=${chunks[i].length}`)
+        await new Promise(r => setTimeout(r, d))
+      }
+      await this.messaging.sendMessage({
+        instanceName: bot.evolutionConfig.instanceName,
+        instanceId: bot.evolutionConfig.instanceId ?? '',
+        phoneNumber,
+        message: chunks[i],
+      })
+    }
     conversation.addAssistantMessage(finalText)
     await this.convRepo.save(conversation)
   }

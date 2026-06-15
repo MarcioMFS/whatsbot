@@ -234,6 +234,13 @@ export const GlobalConfigSchema = z.object({
   productNoun: z.string().trim().max(40).optional(),  // substantivo do produto (ex.: "série", "curso") — neutraliza o agente
   catalogGenreSearch: z.boolean().optional(),         // liga busca por gênero/categoria (entretenimento). Default OFF.
   aiRouterMode: z.enum(['contextual', 'escape_hatch']).optional(),  // nó ai_router: legado vs escape hatch genérico
+  messageSplit: z.object({                            // agente: quebra resposta em mensagens + delay de digitando
+    enabled:   z.boolean().optional(),
+    msPerChar: z.number().min(0).max(500).optional(),
+    minMs:     z.number().min(0).max(10000).optional(),
+    maxMs:     z.number().min(0).max(15000).optional(),
+    maxChunks: z.number().int().min(1).max(8).optional(),
+  }).strict().optional(),
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>

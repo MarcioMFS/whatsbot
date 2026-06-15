@@ -62,6 +62,17 @@ export interface BotGlobalConfig {
   productNoun?: string                        // substantivo do que o bot vende (ex.: "série", "curso", "suplemento"). Default genérico "produto". Deixa o agente neutro p/ qualquer vertical.
   catalogGenreSearch?: boolean                // true = liga a busca por gênero/categoria (feature de entretenimento). Default OFF (genérico).
   aiRouterMode?: 'contextual' | 'escape_hatch' // nó ai_router: 'contextual' (legado, default) ou 'escape_hatch' (genérico, governado por aiGapFill). Fase 2 da aposentadoria.
+  messageSplit?: MessageSplitConfig            // agente: quebra a resposta em mensagens separadas (humano no WhatsApp), com delay de "digitando". Default ligado.
+}
+
+// Entrega humana: quebra a resposta do agente nas linhas em branco (a IA decide onde) e envia
+// cada pedaço como mensagem separada, com delay proporcional ao tamanho. Tudo parametrizável.
+export interface MessageSplitConfig {
+  enabled?: boolean       // default true
+  msPerChar?: number      // "digitando" por caractere (default 30)
+  minMs?: number          // delay mínimo entre mensagens (default 700)
+  maxMs?: number          // delay máximo (default 2500)
+  maxChunks?: number      // máx de mensagens por resposta (default 4)
 }
 
 // "IA cobre lacunas": quando a mensagem sai do roteiro, a IA responde/roteia/escala e devolve o controle.
