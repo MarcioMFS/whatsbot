@@ -397,11 +397,11 @@ function ConfigTab({
       {/* Inteligência — escape hatch */}
       <ConfigSection title="Inteligência do bot" badge="cobre Fluxo"
         subtitle="Quando o cliente sai do roteiro, a IA responde e devolve o controle pro fluxo. Você descreve as partes; a IA cobre as lacunas."
-        info={<><strong>IA cobre lacunas</strong>: o fluxo continua mandando no roteiro; a IA só entra quando a mensagem <strong>não encaixa</strong> no passo atual — responde uma dúvida/objeção (do Conhecimento) e devolve o controle, ou roteia pra parte certa. Custa 1 chamada barata só quando sai do roteiro. <strong>Default desligado</strong> — nada muda até você ligar. Por parte, dá pra blindar (aba Skills → cada habilidade).</>}>
+        info={<><strong>IA cobre lacunas (escape hatch)</strong>: camada que entra quando a mensagem <strong>não encaixa</strong> no passo atual — responde dúvida/objeção (do Conhecimento) e devolve o controle, ou roteia. Custa 1 chamada barata só quando sai do roteiro. <strong>Default desligado</strong>. <br/><br/>⚠️ <strong>Importante:</strong> controla SÓ esta camada. Se o seu fluxo tiver <strong>nós de IA próprios</strong> (ex.: AI Router, Responder Dúvida), eles respondem independente deste toggle. A unificação (toggle único pra toda IA off-script) é a Fase 2 do plano.</>}>
         <div className="space-y-5">
           <ToggleRow on={!!globalConfig.aiGapFill?.enabled}
             onChange={() => set('aiGapFill', { ...globalConfig.aiGapFill, enabled: !globalConfig.aiGapFill?.enabled })}
-            title="IA cobre lacunas" desc={globalConfig.aiGapFill?.enabled ? 'IA entra quando o cliente sai do roteiro' : 'Desligado — só o roteiro responde'} />
+            title="IA cobre lacunas (escape hatch)" desc={globalConfig.aiGapFill?.enabled ? 'IA entra quando o cliente sai do roteiro' : 'Desligado — esta camada não entra. (Atenção: se o seu fluxo tiver nós de IA próprios, ex. AI Router, eles seguem ativos — este toggle não os controla.)'} />
           {globalConfig.aiGapFill?.enabled && (
             <MkSelect label="Quando a IA não souber" value={globalConfig.aiGapFill?.onUnhandled ?? 'reask'}
               onChange={v => set('aiGapFill', { ...globalConfig.aiGapFill, onUnhandled: v as 'reask' | 'handoff' })}>
