@@ -1869,8 +1869,13 @@ export class FlowExecutionService {
       case 'ai_router': {
         const data = node.data as import('@whatsbot/core').AiRouterNodeData
 
-        // ── Fase 2 (gated): roteador unificado via escape hatch (genérico, governado pelo toggle aiGapFill) ──
-        // Default = ContextualAIRouter abaixo (zero mudança até aiRouterMode='escape_hatch').
+        // ── Fase 2 (gated) — ⚠️ INCOMPLETA / NÃO USAR (testada e quebrou 2026-06-15) ──
+        // O ai_router NÃO é só roteador: carrega cola determinística do fluxo (contexto sim/não →
+        // confirma+adiciona ao carrinho, extração multi-título, ai_router_confirm). Este branch
+        // retorna no topo e PULA tudo isso → confirmação some, carrinho não enche, checkout vazio.
+        // Reescrever só substituindo a CHAMADA do ContextualAIRouter (preservando a cola), OU
+        // abandonar (caminho B: migrar pro agente, que não tem ai_router). Ver Brain/spec_aposentadoria_roteadores.md.
+        // Default = ContextualAIRouter abaixo. Nenhum bot deve ter aiRouterMode='escape_hatch'.
         if (bot.globalConfig?.aiRouterMode === 'escape_hatch' && this.aiService) {
           const userMessage = conversation.getLastUserMessage() ?? ''
           // toggle "IA cobre lacunas" OFF → sem IA aqui, segue determinístico
