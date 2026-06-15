@@ -1,4 +1,4 @@
-import { Conversation, Cart, MODULE_IDS } from '@whatsbot/core'
+import { Conversation, Cart, MODULE_IDS, PricingService } from '@whatsbot/core'
 import type { Bot, MessagingPort, ConversationRepository, LeadRepository, AgentPolicy, AgentTraceRepository } from '@whatsbot/core'
 import type { IAgentProvider, AgentMessage, ToolDef, ToolResultMsg } from './providers/types.js'
 import { AGENT_TOOLS } from './tools/index.js'
@@ -45,7 +45,7 @@ function toneLines(t: NonNullable<Bot['globalConfig']>['agentTone']): string[] {
   return out
 }
 
-function buildSystemPrompt(bot: Bot, isFirstContact: boolean): string {
+function buildSystemPrompt(bot: Bot, isFirstContact: boolean, packagesText = ''): string {
   const g = bot.globalConfig ?? {}
   const company = g.companyName ?? bot.name
   const noun = (g.productNoun || 'produto').trim()   // substantivo do produto (neutro por vertical)
@@ -105,6 +105,7 @@ function buildSystemPrompt(bot: Bot, isFirstContact: boolean): string {
     '- Só libere o acesso depois do pagamento confirmado.',
     '- Nunca afirme que algo NÃO existe (um link, um catálogo, um recurso) a menos que o seu conhecimento abaixo diga isso. Se você não sabe, não invente "não temos" — ofereça ajudar de outro jeito.',
     g.agentKnowledge ? `\nO que você sabe (use SOMENTE estes fatos como verdade; envie o link/dado quando fizer sentido; se algo não estiver aqui, não invente):\n${g.agentKnowledge}` : '',
+    packagesText ? `\nPacotes/preços disponíveis (ofereça quando fizer sentido pra fechar mais; o desconto é aplicado AUTOMATICAMENTE no carrinho — nunca calcule preço na mão):\n${packagesText}` : '',
     g.agentInstructions ? `\nOrientações do dono:\n${g.agentInstructions}` : '',
   ]
   return base.filter((l) => l !== undefined).join('\n')
@@ -189,7 +190,12 @@ export class AgentRuntime {
       }
     }
 
-    const system = buildSystemPrompt(bot, isFirstContact)
+    // Pacotes do bot (do banco) → prompt: o agente oferta/responde preço sem depender do intro. Genérico.
+    const offers = await this.services.packageOfferRepo.findByBotId(bot.id).catch(() => [])
+    const packagesText = offers.length
+      ? offers.map(o => `- ${o.name}: ${o.quantity} por ${PricingService.formatBRL(o.priceCentavos)}`).join('\n')
+      : ''
+    const system = buildSystemPrompt(bot, isFirstContact, packagesText)
     const callCounts = new Map<string, number>()
     let finalText = ''
     let lastStop = ''
