@@ -77,7 +77,7 @@ interface FlowData { id: string; name: string; nodes: unknown[]; edges: unknown[
 
 const TABS = [
   { id: 'config',       label: 'Config',       icon: Settings2 },
-  { id: 'automacao',    label: 'Flows',        icon: GitBranch },
+  { id: 'automacao',    label: 'Flows',        icon: GitBranch, mode: 'flow' },   // só Fluxo
   { id: 'modulos',      label: 'Módulos',      icon: Layers },
   { id: 'skills',       label: 'Skills',       icon: Sparkles },
   { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
@@ -103,7 +103,7 @@ export function BotConfig() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { setCurrentBot } = useUIStore()
 
-  const activeTab: TabId = (searchParams.get('tab') as TabId) ?? 'config'
+  const rawTab: TabId = (searchParams.get('tab') as TabId) ?? 'config'
 
   const [bot, setBot] = useState<BotData | null>(null)
   const [flows, setFlows] = useState<FlowData[]>([])
@@ -229,6 +229,11 @@ export function BotConfig() {
 
   if (!bot) return null
 
+  // Em modo Agente, as opções SÓ-do-Fluxo somem (grafo, escape hatch, roteamento por tag, capabilities, habilidades do fluxo).
+  const isAgent = (globalConfig.runtime ?? 'flow') === 'agent'
+  const visibleTabs = TABS.filter(t => !(((t as { mode?: string }).mode === 'flow') && isAgent))
+  const activeTab: TabId = visibleTabs.some(t => t.id === rawTab) ? rawTab : 'config'
+
   return (
     <MkLayout>
       <div className="max-w-4xl mx-auto">
@@ -260,7 +265,7 @@ export function BotConfig() {
 
         {/* Tab bar */}
         <div className="flex gap-7 mb-8 overflow-x-auto" style={{ borderBottom: '1px solid var(--line)' }}>
-          {TABS.map(tab => {
+          {visibleTabs.map(tab => {
             const active = activeTab === tab.id
             return (
               <button key={tab.id} onClick={() => setTab(tab.id)}
@@ -275,7 +280,7 @@ export function BotConfig() {
 
         {activeTab === 'config' && (
           <ConfigTab
-            bot={bot} flows={flows} botId={botId!} navigate={navigate}
+            bot={bot} flows={flows} botId={botId!} navigate={navigate} isAgent={isAgent}
             globalConfig={globalConfig} setGlobalConfig={setGlobalConfig}
             saveGlobal={saveGlobal} savingTab={savingTab}
             routingRules={routingRules} setRoutingRules={setRoutingRules} routingSaving={routingSaving} saveRouting={saveRouting}
@@ -292,7 +297,7 @@ export function BotConfig() {
         )}
 
         {activeTab === 'skills' && (
-          <SkillsTab modules={modules} flows={flows} activeFlowId={bot.activeFlowId} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
+          <SkillsTab modules={modules} flows={flows} activeFlowId={bot.activeFlowId} isAgent={isAgent} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
         )}
 
         {activeTab === 'conhecimento' && (
@@ -311,11 +316,11 @@ export function BotConfig() {
 // ─── Tab: Config ──────────────────────────────────────────────────────────────
 
 function ConfigTab({
-  bot, flows, botId, navigate, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+  bot, flows, botId, navigate, isAgent, globalConfig, setGlobalConfig, saveGlobal, savingTab,
   routingRules, setRoutingRules, routingSaving, saveRouting,
   waState, qrLoading, qrError, showQR, qrCode, loadQR,
 }: {
-  bot: BotData; flows: FlowData[]; botId: string; navigate: (p: string) => void
+  bot: BotData; flows: FlowData[]; botId: string; navigate: (p: string) => void; isAgent: boolean
   globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
   saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
   routingRules: RoutingRule[]; setRoutingRules: React.Dispatch<React.SetStateAction<RoutingRule[]>>
@@ -394,8 +399,8 @@ function ConfigTab({
         </div>
       </ConfigSection>
 
-      {/* Inteligência — escape hatch */}
-      <ConfigSection title="Inteligência do bot" badge="cobre Fluxo"
+      {/* Inteligência — escape hatch (só Fluxo) */}
+      {!isAgent && <ConfigSection title="Inteligência do bot" badge="cobre Fluxo"
         subtitle="Quando o cliente sai do roteiro, a IA responde e devolve o controle pro fluxo. Você descreve as partes; a IA cobre as lacunas."
         info={<><strong>IA cobre lacunas (escape hatch)</strong>: camada que entra quando a mensagem <strong>não encaixa</strong> no passo atual — responde dúvida/objeção (do Conhecimento) e devolve o controle, ou roteia. Custa 1 chamada barata só quando sai do roteiro. <strong>Default desligado</strong>. <br/><br/>⚠️ <strong>Importante:</strong> controla SÓ esta camada. Se o seu fluxo tiver <strong>nós de IA próprios</strong> (ex.: AI Router, Responder Dúvida), eles respondem independente deste toggle. A unificação (toggle único pra toda IA off-script) é a Fase 2 do plano.</>}>
         <div className="space-y-5">
@@ -415,10 +420,10 @@ function ConfigTab({
             </MkButton>
           </div>
         </div>
-      </ConfigSection>
+      </ConfigSection>}
 
-      {/* Roteamento */}
-      <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa."
+      {/* Roteamento (só Fluxo) */}
+      {!isAgent && <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa."
         info={<>Decide <strong>qual fluxo</strong> roda pra cada pessoa. As regras são lidas <strong>de cima pra baixo</strong>: o 1º cuja tag o lead tem vence. Se nenhuma casar, usa o <strong>fluxo ativo padrão</strong>. (Só vale no modo Fluxo.)</>}>
         <div className="space-y-2">
           {routingRules.length === 0 && (
@@ -448,7 +453,7 @@ function ConfigTab({
             {routingSaving ? <Loader2 size={12} className="animate-spin" /> : null} Salvar regras
           </MkButton>
         </div>
-      </ConfigSection>
+      </ConfigSection>}
 
       {/* Avançado / observabilidade */}
       <div>
@@ -462,7 +467,7 @@ function ConfigTab({
             { label: 'Capabilities (legado, desligado)', desc: 'Roteador antigo — aposentado; o agente assume o roteamento', icon: Workflow, path: 'capabilities' },
             { label: 'AI Patterns', desc: 'Decisões do roteador de IA e taxa de fallback', icon: Activity, path: 'patterns' },
             { label: 'Eventos', desc: 'Log de eventos da conversa em tempo real', icon: Zap, path: 'events' },
-          ].map(card => (
+          ].filter(card => !(isAgent && (card.path === 'capabilities' || card.path === 'patterns'))).map(card => (
             <MkCard key={card.path} hover onClick={() => navigate(`/bots/${botId}/${card.path}`)} style={{ padding: 16 }}>
               <div className="flex items-center gap-4">
                 <div style={{ width: 36, height: 36, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -605,9 +610,9 @@ function ModulosTab({
 // ─── Tab: Skills ──────────────────────────────────────────────────────────────
 
 function SkillsTab({
-  modules, flows, activeFlowId, globalConfig, setGlobalConfig, saveGlobal, savingTab,
+  modules, flows, activeFlowId, isAgent, globalConfig, setGlobalConfig, saveGlobal, savingTab,
 }: {
-  modules: BotModule[]; flows: FlowData[]; activeFlowId: string | null
+  modules: BotModule[]; flows: FlowData[]; activeFlowId: string | null; isAgent: boolean
   globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
   saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
 }) {
@@ -646,7 +651,7 @@ function SkillsTab({
         </div>
       </ConfigSection>
 
-      <FlowSegments flows={flows} activeFlowId={activeFlowId} />
+      {!isAgent && <FlowSegments flows={flows} activeFlowId={activeFlowId} />}
 
       <div>
         <div className="flex items-center gap-2 mb-3">
