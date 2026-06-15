@@ -5,7 +5,7 @@ import {
   Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, GitBranch,
   Trash2, Settings2, Package, ChevronRight, ArrowRight, Bot, Copy,
   Layers, Sparkles, BookOpen, MessageCircle, CreditCard, LifeBuoy,
-  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap,
+  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
@@ -334,6 +334,12 @@ function ConfigTab({
     agentTestNumbers: globalConfig.agentTestNumbers,
   }, 'config')
 
+  const [showHatchHelp, setShowHatchHelp] = useState(false)
+  // Fluxo ativo já tem IA própria? (aí o escape hatch é redundante — o modal recomenda)
+  const activeFlow = flows.find(f => f.id === bot.activeFlowId)
+  const flowHasAI = ((activeFlow?.nodes ?? []) as { type?: string; data?: { aiAgent?: { enabled?: boolean } } }[])
+    .some(n => n.type === 'ai_router' || n.type === 'ai_response' || (n.type === 'classify_intent' && !!n.data?.aiAgent?.enabled))
+
   return (
     <div className="space-y-9">
       {/* Connection */}
@@ -414,13 +420,16 @@ function ConfigTab({
               <option value="handoff">Chamar humano (escala)</option>
             </MkSelect>
           )}
-          <div>
+          <div className="flex items-center gap-3">
             <MkButton onClick={() => saveGlobal({ aiGapFill: globalConfig.aiGapFill }, 'gapfill')} disabled={savingTab === 'gapfill'}>
               {savingTab === 'gapfill' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
             </MkButton>
+            <MkButton variant="ghost" onClick={() => setShowHatchHelp(true)}>Vale a pena pro meu bot?</MkButton>
           </div>
         </div>
       </ConfigSection>}
+
+      {showHatchHelp && <EscapeHatchHelp flowHasAI={flowHasAI} onClose={() => setShowHatchHelp(false)} />}
 
       {/* Roteamento (só Fluxo) */}
       {!isAgent && <ConfigSection title="Roteamento por Tag" subtitle="Lead com tag → redireciona para flow específico. Ordem importa."
@@ -1081,6 +1090,51 @@ function GhostBtn({ children, onClick, active, title }: { children: React.ReactN
         : { border: '1px solid var(--line)', color: 'var(--ink-soft)', background: 'var(--paper-2)' }}>
       {children}
     </button>
+  )
+}
+
+// Modal explicativo do escape hatch — ajuda o cliente a decidir se vale ligar (recomendação contextual).
+function EscapeHatchHelp({ flowHasAI, onClose }: { flowHasAI: boolean; onClose: () => void }) {
+  const liCls = 'flex gap-2'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,11,15,0.45)', backdropFilter: 'blur(2px)' }} onClick={onClose}>
+      <div onClick={e => e.stopPropagation()} className="rounded-2xl" style={{ width: 'min(560px, 94vw)', maxHeight: '88vh', overflowY: 'auto', background: 'var(--paper)', border: '1px solid var(--line)' }}>
+        <div className="flex items-center gap-3 px-6 py-4" style={{ borderBottom: '1px solid var(--line)' }}>
+          <div className="flex-1">
+            <Eyebrow>IA cobre lacunas</Eyebrow>
+            <h2 className="mk-display" style={{ fontSize: '1.2rem', fontWeight: 700 }}>Vale a pena pro seu bot?</h2>
+          </div>
+          <button onClick={onClose} style={{ color: 'var(--muted)' }} className="hover:opacity-60"><X size={18} /></button>
+        </div>
+        <div className="px-6 py-5 space-y-5 text-sm" style={{ color: 'var(--ink-soft)', lineHeight: 1.55 }}>
+          <p><strong>O que é:</strong> quando o cliente foge do roteiro (pergunta algo que o fluxo não previu), a IA responde — usando o seu <strong>Conhecimento</strong> — e <strong>devolve a conversa pro roteiro</strong>. Você descreve as partes; a IA cobre o resto. Custa <strong>1 chamada barata</strong>, e só quando sai do script (mensagem dentro do roteiro = zero IA).</p>
+          <div>
+            <p className="font-semibold mb-2" style={{ color: '#1d7a52' }}>✓ Vale a pena se…</p>
+            <ul className="space-y-1.5">
+              <li className={liCls}><span>•</span><span>seu fluxo é roteirizado e às vezes o cliente pergunta algo fora do script;</span></li>
+              <li className={liCls}><span>•</span><span>você quer um toque de IA <strong>sem montar nós de IA</strong> no grafo;</span></li>
+              <li className={liCls}><span>•</span><span>quer pagar IA só quando o cliente realmente foge do roteiro.</span></li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-semibold mb-2" style={{ color: '#b42318' }}>✗ Provavelmente NÃO precisa se…</p>
+            <ul className="space-y-1.5">
+              <li className={liCls}><span>•</span><span>seu fluxo <strong>já tem IA própria</strong> (nós AI Router / Responder Dúvida) — ela já cobre o off-script;</span></li>
+              <li className={liCls}><span>•</span><span>o bot está em <strong>modo Agente</strong> — aí a IA já é o cérebro inteiro.</span></li>
+            </ul>
+          </div>
+          <div className="rounded-xl p-4" style={{ border: `1px solid ${flowHasAI ? 'rgba(180,35,24,0.25)' : 'rgba(29,122,82,0.25)'}`, background: flowHasAI ? 'rgba(180,35,24,0.06)' : 'rgba(29,122,82,0.06)' }}>
+            <p className="mk-eyebrow mb-1" style={{ fontSize: '.6rem' }}>Pro seu bot</p>
+            {flowHasAI
+              ? <p>⚠️ Seu fluxo <strong>já tem IA própria</strong> (AI Router / Responder Dúvida) — ela já trata o off-script. Ligar isto adiciona uma <strong>segunda camada</strong> de IA (redundante). <strong>Provavelmente você não precisa.</strong></p>
+              : <p>✅ Seu fluxo é <strong>determinístico</strong> (sem IA). Ligar isto dá a ele uma <strong>rede de IA</strong> pras perguntas fora do script — sem você montar nó nenhum.</p>}
+          </div>
+        </div>
+        <div className="px-6 py-4 flex justify-end" style={{ borderTop: '1px solid var(--line)' }}>
+          <MkButton onClick={onClose}>Entendi</MkButton>
+        </div>
+      </div>
+    </div>
   )
 }
 
