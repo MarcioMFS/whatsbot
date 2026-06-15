@@ -241,6 +241,10 @@ export const GlobalConfigSchema = z.object({
     maxMs:     z.number().min(0).max(15000).optional(),
     maxChunks: z.number().int().min(1).max(8).optional(),
   }).strict().optional(),
+  autoHandoff: z.object({                             // rede de segurança: cliente travado num capture → escala pro humano
+    enabled:        z.boolean().optional(),
+    captureRejects: z.number().int().min(1).max(10).optional(),
+  }).strict().optional(),
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>

@@ -9,6 +9,7 @@ export type HandoffReason =
   | 'pix_failed'
   | 'series_not_found'
   | 'user_request'
+  | 'capture_stuck'
   | 'escalated'
   | 'custom'
 

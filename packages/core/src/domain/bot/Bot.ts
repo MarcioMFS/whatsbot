@@ -63,6 +63,15 @@ export interface BotGlobalConfig {
   catalogGenreSearch?: boolean                // true = liga a busca por gênero/categoria (feature de entretenimento). Default OFF (genérico).
   aiRouterMode?: 'contextual' | 'escape_hatch' // nó ai_router: 'contextual' (legado, default) ou 'escape_hatch' (genérico, governado por aiGapFill). Fase 2 da aposentadoria.
   messageSplit?: MessageSplitConfig            // agente: quebra a resposta em mensagens separadas (humano no WhatsApp), com delay de "digitando". Default ligado.
+  autoHandoff?: AutoHandoffConfig              // rede de segurança: cliente travado num capture (N rejeições seguidas) → escala pro humano. Sinal comportamental, sem keyword-guessing.
+}
+
+// Rede de segurança: quando o cliente fica preso num nó de captura (manda texto onde se espera imagem,
+// ou não bate o formato) N vezes seguidas, o bot escala pro humano + avisa o dono + pausa a conversa.
+// Sinal COMPORTAMENTAL (capture travado), não adivinhação de palavra-chave (regra no-regex).
+export interface AutoHandoffConfig {
+  enabled?: boolean        // default true
+  captureRejects?: number  // rejeições consecutivas de capture antes de escalar. default 2
 }
 
 // Entrega humana: quebra a resposta do agente nas linhas em branco (a IA decide onde) e envia

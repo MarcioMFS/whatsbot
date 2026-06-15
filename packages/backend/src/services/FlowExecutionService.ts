@@ -653,6 +653,11 @@ export class FlowExecutionService {
             `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=expected_image_got_text ` +
             `msg="${message.slice(0, 80)}"`
           )
+          // Rede de segurança: se o cliente travar aqui N vezes, escala pro humano (não fica em loop).
+          if (await this.maybeAutoHandoffOnCaptureReject({ bot, conversation, lead, reason: 'expected_image_got_text', lastMessage: message })) {
+            await this.convRepo.save(conversation)
+            return
+          }
           await this.messaging.sendMessage({
             instanceName: instance,
             instanceId,
@@ -678,6 +683,11 @@ export class FlowExecutionService {
             `[FlowExecution] capture_rejected: node=${currentNode.id} conv=${conversation.id} ` +
             `phone=${phoneNumber} msgId=${msgId ?? 'n/a'} reason=regex_mismatch`
           )
+          // Rede de segurança: se o cliente travar aqui N vezes, escala pro humano (não fica em loop).
+          if (await this.maybeAutoHandoffOnCaptureReject({ bot, conversation, lead, reason: 'regex_mismatch', lastMessage: message })) {
+            await this.convRepo.save(conversation)
+            return
+          }
           await this.messaging.sendMessage({
             instanceName: instance,
             instanceId,
@@ -691,6 +701,7 @@ export class FlowExecutionService {
         // ── accept: store value + audit metadata ───────────────────────────
         const capturedValue = hasImage ? (imageBase64 ? '[image]' : message) : message
         conversation.setVariable(data.variableName, capturedValue)
+        conversation.setVariable('__capture_reject_count', '0')  // aceitou → zera a rede de segurança (auto-handoff)
         conversation.setVariable(`__capture_meta_${data.variableName}`, JSON.stringify({
           msgId: msgId ?? null,
           direction: 'inbound',
@@ -2321,6 +2332,65 @@ export class FlowExecutionService {
       last5Messages: last5,
     })
     console.log(`[FlowExecution] handoff_created for ${params.conversation.phoneNumber} reason=${params.reason}`)
+  }
+
+  /**
+   * Rede de segurança (auto-handoff): conta rejeições CONSECUTIVAS de um nó de captura.
+   * Ao bater o threshold → escala pro humano (`createHandoff`) + avisa o dono + pausa a conversa (`handoff()`).
+   * Sinal COMPORTAMENTAL (cliente preso no capture), NÃO keyword-guessing do input (regra no-regex).
+   * Roda independente da fase — cobre `awaiting_payment`, onde o escape hatch é desligado de propósito.
+   * Retorna true se escalou (o caller deve parar e NÃO mandar a mensagem de erro de novo).
+   * O contador zera quando o capture é aceito (ver bloco capture_accepted).
+   */
+  private async maybeAutoHandoffOnCaptureReject(params: {
+    bot: Bot
+    conversation: Conversation
+    lead: Lead | null
+    reason: 'expected_image_got_text' | 'regex_mismatch'
+    lastMessage: string
+  }): Promise<boolean> {
+    const cfg = params.bot.globalConfig?.autoHandoff
+    if ((cfg?.enabled ?? true) === false) return false
+    const threshold = cfg?.captureRejects ?? 2
+
+    const key = '__capture_reject_count'
+    const count = Number(params.conversation.variables[key] ?? 0) + 1
+    params.conversation.setVariable(key, String(count))
+    if (count < threshold) return false
+
+    // bateu o threshold → escala. Zera o contador p/ não re-disparar handoff em loop.
+    params.conversation.setVariable(key, '0')
+
+    await this.createHandoff({
+      bot: params.bot,
+      conversation: params.conversation,
+      lead: params.lead,
+      reason: 'capture_stuck',
+      lastMessage: params.lastMessage,
+    }).catch(e => console.error('[auto_handoff] createHandoff failed:', e?.message))
+
+    // Avisa o dono (createHandoff só salva+emite evento; a notificação é aqui).
+    const ownerPhone = params.bot.globalConfig?.ownerPhone
+    if (ownerPhone) {
+      await this.messaging.sendMessage({
+        instanceName: params.bot.evolutionConfig.instanceName,
+        instanceId: params.bot.evolutionConfig.instanceId,
+        phoneNumber: ownerPhone,
+        message:
+          `🆘 *Cliente travado* — ${params.conversation.phoneNumber} ` +
+          `não conseguiu enviar o esperado (${params.reason}) ${threshold}x seguidas. ` +
+          `Conversa pausada e escalada — assuma manualmente.`,
+      }).catch(() => {})
+    }
+
+    // Pausa o bot (status='handoff' → mensagens seguintes não passam pelo flow; humano assume).
+    params.conversation.handoff()
+
+    console.warn(
+      `[auto_handoff] capture_stuck conv=${params.conversation.id} phone=${params.conversation.phoneNumber} ` +
+      `reason=${params.reason} count=${count}/${threshold}`
+    )
+    return true
   }
 
   private extractQuantity(input: string): number | null {
