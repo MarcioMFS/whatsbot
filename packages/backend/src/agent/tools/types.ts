@@ -1,4 +1,4 @@
-import type { Bot, Lead, Conversation, PaymentIntentRepository, PackageOfferRepository, ProductRepository } from '@whatsbot/core'
+import type { Bot, Lead, Conversation, PaymentIntentRepository, PackageOfferRepository, ProductRepository, OrderRepository } from '@whatsbot/core'
 import type { CatalogSearchService } from '../../services/CatalogSearchService.js'
 import type { PaymentOrchestrator } from '../../payment/PaymentOrchestrator.js'
 
@@ -17,6 +17,7 @@ export interface ToolServices {
   paymentIntentRepo: PaymentIntentRepository
   packageOfferRepo: PackageOfferRepository
   paymentOrchestrator: PaymentOrchestrator
+  orderRepo: OrderRepository
 }
 
 export interface ToolContext {

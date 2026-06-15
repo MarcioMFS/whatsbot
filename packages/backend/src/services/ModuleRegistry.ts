@@ -23,8 +23,8 @@ const MODULE_DEFS: ModuleMeta[] = [
   },
   {
     id: MODULE_IDS.DELIVERY, name: 'Entrega do acesso', type: 'effect',
-    description: 'Entrega o acesso automaticamente após o pagamento confirmado.',
-    toolNames: ['deliver_access'], effectOn: 'payment_confirmed',
+    description: 'Entrega o acesso automaticamente após o pagamento confirmado; reenvia compras anteriores quando o cliente pede.',
+    toolNames: ['deliver_access', 'resend_access'], effectOn: 'payment_confirmed',
     policyKeys: ['can_deliver_access'], dependsOn: [MODULE_IDS.PAYMENT_PIX], defaultEnabled: true,
   },
   {

@@ -26,6 +26,16 @@ export class PostgreSQLOrderRepository implements OrderRepository {
     return rows.map(r => this.toDomain(r))
   }
 
+  async findByLead(botId: string, leadId: string): Promise<Order[]> {
+    const { rows } = await this.db.query(
+      `SELECT * FROM orders WHERE bot_id = $1 AND lead_id = $2
+         AND status IN ('paid','delivery_pending','delivered')
+       ORDER BY created_at DESC`,
+      [botId, leadId],
+    )
+    return rows.map(r => this.toDomain(r))
+  }
+
   async save(order: Order): Promise<void> {
     const d = order.toJSON()
     await this.db.query(

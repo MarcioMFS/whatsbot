@@ -161,6 +161,22 @@ const humanHandoff: AgentTool = {
   },
 }
 
+// ── resend_access (safe) — reenvio de acesso pra quem JÁ comprou (returning buyer) ──────────────
+// Genérico: busca os pedidos pagos/entregues do cliente (pelo lead) e devolve os links de acesso.
+const resendAccess: AgentTool = {
+  name: 'resend_access',
+  description: 'Reenvia os links de acesso de compras ANTERIORES já pagas do cliente (ex.: "manda meus links de novo", "não recebi o acesso", "perdi o link"). Não gera cobrança.',
+  inputSchema: { type: 'object', properties: {} },
+  guarded: false,
+  async execute(_input, ctx): Promise<ToolResult> {
+    if (!ctx.lead) return { success: false, code: 'NO_LEAD', message: 'sem histórico de compra neste número' }
+    const orders = await ctx.services.orderRepo.findByLead(ctx.bot.id, ctx.lead.id)
+    const links = orders.flatMap(o => o.itemsWithLinks.map(i => ({ name: i.name, accessLink: i.accessLink })))
+    if (links.length === 0) return { success: false, code: 'NO_PAID_ORDERS', message: 'nenhuma compra paga encontrada neste número' }
+    return { success: true, code: 'OK', data: { count: links.length, items: links } }
+  },
+}
+
 export const AGENT_TOOLS: AgentTool[] = [
-  searchCatalog, addToCart, cartSummary, generatePix, validateProof, deliverAccess, humanHandoff,
+  searchCatalog, addToCart, cartSummary, generatePix, validateProof, deliverAccess, resendAccess, humanHandoff,
 ]

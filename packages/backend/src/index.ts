@@ -171,7 +171,7 @@ const agentRuntime = new AgentRuntime(
   conversationRepo,
   leadRepo,
   messaging,
-  { catalogSearchService, productRepo, paymentIntentRepo, packageOfferRepo, paymentOrchestrator },
+  { catalogSearchService, productRepo, paymentIntentRepo, packageOfferRepo, paymentOrchestrator, orderRepo },
   moduleRegistry,
   agentTrace,
 )
