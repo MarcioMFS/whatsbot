@@ -434,15 +434,12 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
         {node.type === 'classify_intent' && (
           <>
             <div className="p-3 rounded-xl bg-cyan-400/5 border border-cyan-400/20 mb-2">
-              <p className="text-xs text-cyan-300 font-semibold mb-1">Classify Intent — Híbrido</p>
-              <p className="text-xs text-slate-400">Regras determinísticas primeiro. IA entra como fallback quando nenhuma regra bate.</p>
+              <p className="text-xs text-cyan-300 font-semibold mb-1">Entendimento do cliente</p>
+              <p className="text-xs text-slate-400">O bot reconhece o que a pessoa quer pela mensagem e segue pro caminho certo. Se nada bater e a IA estiver ligada, ela ajuda.</p>
             </div>
-            <Field label="Variável com o texto (opcional)" value={String(node.data.messageVariable ?? '')} onChange={v => set('messageVariable', v)}
-              placeholder="deixe vazio = última mensagem do cliente"
-              hint="Ex: user_initial_message" />
 
             <div className="border-t border-white/5 pt-3 mt-1">
-              <p className="text-xs font-semibold text-cyan-400 mb-2">📋 Regras (executadas em ordem)</p>
+              <p className="text-xs font-semibold text-cyan-400 mb-2">Situações que o bot reconhece <span className="text-slate-500 font-normal">(checa de cima pra baixo)</span></p>
               <IntentRuleList
                 rules={(node.data.intents as IntentRule[] | undefined) ?? []}
                 onChange={rules => set('intents', rules)}
@@ -450,8 +447,8 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
             </div>
 
             <div className="border-t border-white/5 pt-3 mt-1">
-              <p className="text-xs font-semibold text-purple-400 mb-2">🤖 AI Agent (fallback)</p>
-              <Toggle label="Ativar AI Agent"
+              <p className="text-xs font-semibold text-purple-400 mb-2">🤖 IA de apoio <span className="text-slate-500 font-normal">(quando nada bate)</span></p>
+              <Toggle label="Ativar IA de apoio"
                 checked={Boolean((node.data.aiAgent as IntentAiAgent | undefined)?.enabled)}
                 onChange={v => set('aiAgent', { ...((node.data.aiAgent as IntentAiAgent) ?? { systemPrompt: '' }), enabled: v })} />
               {(node.data.aiAgent as IntentAiAgent | undefined)?.enabled && (
@@ -476,7 +473,6 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
               )}
             </div>
 
-            <p className="text-xs text-slate-500 mt-2">Runtime vars: <span className="text-cyan-300 font-mono">__rt_intent</span> · <span className="text-cyan-300 font-mono">__rt_confidence</span> · <span className="text-cyan-300 font-mono">__rt_intent_qty</span> · <span className="text-cyan-300 font-mono">__rt_sentiment</span> · <span className="text-cyan-300 font-mono">__rt_ai_responded</span></p>
           </>
         )}
 
@@ -525,41 +521,64 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
 
 function IntentRuleList({ rules, onChange }: { rules: IntentRule[]; onChange: (r: IntentRule[]) => void }) {
   const inputCls = "bg-transparent border border-glass-border rounded-lg px-2 py-1 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-brand-500/40"
+  const [adv, setAdv] = useState<Set<number>>(new Set())
+  const toggleAdv = (i: number) => setAdv(s => { const n = new Set(s); n.has(i) ? n.delete(i) : n.add(i); return n })
   const update = (i: number, patch: Partial<IntentRule>) => { const n = [...rules]; n[i] = { ...n[i], ...patch }; onChange(n) }
   const remove = (i: number) => onChange(rules.filter((_, idx) => idx !== i))
   const add = () => onChange([...rules, { handle: '' }])
   return (
     <div className="space-y-2">
-      {rules.map((rule, i) => (
-        <div key={i} className="p-2.5 rounded-xl bg-glass-100 border border-glass-border space-y-1.5">
+      {rules.map((rule, i) => {
+        const showAdv = adv.has(i) || !rule.handle   // handle vazio (regra nova) → abre o avançado pra configurar o destino
+        return (
+        <div key={i} className="p-2.5 rounded-xl bg-glass-100 border border-glass-border space-y-2">
+          {/* Vai para — nome amigável */}
           <div className="flex items-center gap-1.5">
-            <input value={rule.handle} onChange={e => update(i, { handle: e.target.value })}
-              placeholder="handle" className={`w-28 font-mono text-cyan-300 ${inputCls}`} />
+            <span className="text-xs text-slate-500 shrink-0">Vai para</span>
             <input value={rule.label ?? ''} onChange={e => update(i, { label: e.target.value })}
-              placeholder="label (opcional)" className={`flex-1 ${inputCls}`} />
+              placeholder="ex: Pagamento, Catálogo, Dúvidas" className={`flex-1 text-white ${inputCls}`} />
             <button onClick={() => remove(i)} className="text-slate-600 hover:text-red-400 transition-colors px-1">✕</button>
           </div>
-          <input value={(rule.patterns ?? []).join(', ')}
-            onChange={e => update(i, { patterns: e.target.value.split(',').map(p => p.trim()).filter(Boolean) })}
-            placeholder="patterns: oi, bom dia (OR — qualquer bate)"
-            className={`w-full ${inputCls}`} />
-          <input value={(rule.keywords ?? []).join(', ')}
-            onChange={e => update(i, { keywords: e.target.value.split(',').map(k => k.trim()).filter(Boolean) })}
-            placeholder="keywords: quero, comprar (AND — todos devem aparecer)"
-            className={`w-full ${inputCls}`} />
+          {/* Frases do cliente */}
+          <div>
+            <span className="text-xs text-slate-500 block mb-1">Quando o cliente diz coisas como:</span>
+            <textarea value={(rule.patterns ?? []).join(', ')}
+              onChange={e => update(i, { patterns: e.target.value.split(',').map(p => p.trim()).filter(Boolean) })}
+              placeholder="ex: quero pagar, fiz o pix, manda a chave" rows={2}
+              className={`w-full ${inputCls}`} style={{ resize: 'vertical' }} />
+            <span className="text-[10px] text-slate-600">separe por vírgula — qualquer uma que aparecer já reconhece</span>
+          </div>
+          {/* Opções amigáveis */}
           <div className="flex items-center gap-4 pt-0.5">
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={Boolean(rule.extractNumber)} onChange={e => update(i, { extractNumber: e.target.checked })} className="rounded" />
-              <span className="text-xs text-slate-400">Extrair número → <span className="font-mono text-cyan-300">__rt_intent_qty</span></span>
+              <span className="text-xs text-slate-400">detectar quantidade (ex: "quero 3")</span>
             </label>
             <label className="flex items-center gap-1.5 cursor-pointer">
               <input type="checkbox" checked={Boolean(rule.isDefault)} onChange={e => update(i, { isDefault: e.target.checked })} className="rounded" />
-              <span className="text-xs text-slate-400">Fallback (antes da IA)</span>
+              <span className="text-xs text-slate-400">usar quando nada mais bater</span>
             </label>
           </div>
+          {/* Avançado: destino técnico + palavras obrigatórias */}
+          <button onClick={() => toggleAdv(i)} className="text-[10px] text-slate-500 hover:text-slate-300 transition-colors">{showAdv ? '▾' : '▸'} Avançado</button>
+          {showAdv && (
+            <div className="space-y-2 pl-2 border-l border-white/5">
+              <div>
+                <span className="text-[10px] text-slate-500 block mb-0.5">Destino no fluxo (handle) — pra onde a saída conecta</span>
+                <input value={rule.handle} onChange={e => update(i, { handle: e.target.value })}
+                  placeholder="ex: pay, catalog, doubt" className={`w-full font-mono text-cyan-300 ${inputCls}`} />
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-500 block mb-0.5">Exigir TODAS estas palavras (opcional) — restringe ainda mais</span>
+                <input value={(rule.keywords ?? []).join(', ')} onChange={e => update(i, { keywords: e.target.value.split(',').map(k => k.trim()).filter(Boolean) })}
+                  placeholder="ex: quero, comprar" className={`w-full ${inputCls}`} />
+              </div>
+            </div>
+          )}
         </div>
-      ))}
-      <button onClick={add} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">+ Adicionar regra</button>
+        )
+      })}
+      <button onClick={add} className="text-xs text-cyan-400 hover:text-cyan-300 transition-colors">+ Adicionar situação</button>
     </div>
   )
 }
