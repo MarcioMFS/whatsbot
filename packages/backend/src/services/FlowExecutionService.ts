@@ -1869,6 +1869,42 @@ export class FlowExecutionService {
       case 'ai_router': {
         const data = node.data as import('@whatsbot/core').AiRouterNodeData
 
+        // ── Fase 2 (gated): roteador unificado via escape hatch (genérico, governado pelo toggle aiGapFill) ──
+        // Default = ContextualAIRouter abaixo (zero mudança até aiRouterMode='escape_hatch').
+        if (bot.globalConfig?.aiRouterMode === 'escape_hatch' && this.aiService) {
+          const userMessage = conversation.getLastUserMessage() ?? ''
+          // toggle "IA cobre lacunas" OFF → sem IA aqui, segue determinístico
+          if (!bot.globalConfig?.aiGapFill?.enabled) {
+            console.log('[ai_router] escape_hatch mode + aiGapFill OFF → determinístico (continue/ack)')
+            return flow.getNextNodes(node.id, 'continue')[0]?.id ?? flow.getNextNodes(node.id, 'ack')[0]?.id
+          }
+          const HANDLE_DESC: Record<string, string> = {
+            checkout: 'cliente quer finalizar/pagar/fechar o pedido', catalog: 'cliente quer ver o catálogo/lista',
+            doubt: 'cliente tem dúvida sobre funcionamento, entrega, como funciona', title_search: 'cliente menciona o nome de um item pra buscar',
+            ack: 'confirmação simples (ok, sim, beleza)', continue: 'seguir o fluxo, nada específico',
+            price_issue: 'reclamação, fraude, problema, quer dinheiro de volta', returning_user: 'cliente retornando',
+            payment_receipt: 'cliente enviou ou menciona comprovante de pagamento', negative_finish: 'cliente desistiu ou recusou', handoff: 'quer falar com humano',
+          }
+          const handles = [...new Set(flow.edges.filter(e => e.source === node.id && e.sourceHandle).map(e => e.sourceHandle as string))]
+          const routes = handles.map(h => ({ handle: h, description: HANDLE_DESC[h] ?? h }))
+          const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+          const decision = await new EscapeHatchService(this.aiService).decide({ message: userMessage, history, knowledge: bot.globalConfig?.agentKnowledge ?? '', routes, allowAnswer: true })
+          console.log(`[ai_router] escape_hatch: action=${decision.action} handle=${decision.handle ?? ''}`)
+          if (decision.action === 'answer' && decision.reply) {
+            await this.messaging.sendMessage({ instanceName: bot.evolutionConfig.instanceName, instanceId: bot.evolutionConfig.instanceId, phoneNumber: phone, message: decision.reply })
+            conversation.addAssistantMessage(decision.reply)
+            return null
+          }
+          if (decision.action === 'route' && decision.handle) {
+            return flow.getNextNodes(node.id, decision.handle)[0]?.id ?? flow.getNextNodes(node.id, 'continue')[0]?.id
+          }
+          if (decision.action === 'handoff') {
+            this.createHandoff({ bot, conversation, lead, reason: 'unknown_intent', lastMessage: userMessage }).catch(e => console.error('[ai_router] createHandoff failed:', e?.message))
+            return flow.getNextNodes(node.id, 'handoff')[0]?.id ?? flow.getNextNodes(node.id, 'continue')[0]?.id
+          }
+          return flow.getNextNodes(node.id, 'continue')[0]?.id ?? flow.getNextNodes(node.id, 'ack')[0]?.id
+        }
+
         if (!this.contextualAIRouter) {
           console.warn('[ai_router] ContextualAIRouter not injected — falling through to ack')
           return flow.getNextNodes(node.id, 'ack')[0]?.id

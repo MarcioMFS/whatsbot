@@ -61,6 +61,7 @@ export interface BotGlobalConfig {
   capabilityRouterEnabled?: boolean          // false = desliga o CapabilityRouter legado (aposentadoria). Default/undefined = ligado.
   productNoun?: string                        // substantivo do que o bot vende (ex.: "série", "curso", "suplemento"). Default genérico "produto". Deixa o agente neutro p/ qualquer vertical.
   catalogGenreSearch?: boolean                // true = liga a busca por gênero/categoria (feature de entretenimento). Default OFF (genérico).
+  aiRouterMode?: 'contextual' | 'escape_hatch' // nó ai_router: 'contextual' (legado, default) ou 'escape_hatch' (genérico, governado por aiGapFill). Fase 2 da aposentadoria.
 }
 
 // "IA cobre lacunas": quando a mensagem sai do roteiro, a IA responde/roteia/escala e devolve o controle.
