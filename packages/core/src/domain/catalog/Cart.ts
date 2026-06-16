@@ -66,6 +66,12 @@ export class Cart {
   }
 
   addItem(item: CartItem): void {
+    // #fix cart-dup (cobrança 2×): não adiciona o mesmo produto duas vezes. Dedup por productId,
+    // ou por nome quando não há id. Cobre o caso de add do mesmo título em turnos diferentes.
+    const key = item.productId || item.name
+    if (key && this._items.some(i => (i.productId || i.name) === key)) {
+      return // já está no carrinho — ignora silenciosamente
+    }
     if (this._items.length >= MAX_ITEMS) {
       throw new CartGuardrailError(`Carrinho cheio (máximo ${MAX_ITEMS} itens). Finalize o pedido antes de adicionar mais.`)
     }

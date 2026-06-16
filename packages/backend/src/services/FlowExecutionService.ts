@@ -318,9 +318,11 @@ export class FlowExecutionService {
         }
         case 'edit_order': {
           // Cancel the active PaymentIntent in the DB so the old Pix is invalid
+          let hadActiveIntent = false
           if (this.paymentIntentRepo) {
             const activeIntent = await this.paymentIntentRepo.findPendingByConversation(conversation.id)
             if (activeIntent) {
+              hadActiveIntent = true
               activeIntent.cancel()
               await this.paymentIntentRepo.save(activeIntent)
               console.log(`[PaymentPhaseRouter] cancelled payment_intent=${activeIntent.id} for conv=${conversation.id}`)
@@ -328,7 +330,8 @@ export class FlowExecutionService {
           }
 
           // Clear payment vars (keep cart — user can add more or swap below)
-          const pixCancelled = !!conversation.variables['__rt_checkout_payment_id']
+          // #fix phantom-pix: só dizemos "Cancelei o Pix" se realmente havia um (intent pendente OU var de pagamento setada).
+          const pixCancelled = hadActiveIntent || !!conversation.variables['__rt_checkout_payment_id']
           conversation.setVariable('__rt_checkout_payment_id', '')
           conversation.setVariable('paymentIntentId', '')
           this.transitionPhase(conversation, 'browsing_catalog', 'edit_order_intent')
@@ -363,7 +366,8 @@ export class FlowExecutionService {
             cartInfo = `\n\nSeu carrinho atual:\n${items}\n\nMe diz o que quer mudar — pode adicionar, trocar ou tirar séries 😊`
           }
 
-          const reply = `Sem problema 😊 Cancelei o Pix gerado.${cartInfo || '\n\nMe fala quais séries você quer deixar!'}`
+          const cancelLine = pixCancelled ? ' Cancelei o Pix gerado.' : ''
+          const reply = `Sem problema 😊${cancelLine}${cartInfo || '\n\nMe fala quais séries você quer deixar!'}`
           await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
           conversation.addAssistantMessage(reply)
           await this.convRepo.save(conversation)
@@ -618,8 +622,30 @@ export class FlowExecutionService {
             if (ic.action === 'answer' && ic.message) {
               console.log(`[capture_interceptor] inline answer node=${currentNode.id} msg="${message.slice(0, 60)}"`)
               await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: ic.message })
+              conversation.addAssistantMessage(ic.message)  // #fix history-drift: a resposta do interceptor precisa entrar no histórico
               await this.convRepo.save(conversation)
               return // stay in waiting — still expects the image
+            }
+
+            // #fix interceptor-handoff: reclamação pós-venda ("não abre", reembolso, irritado) entrava como
+            // "answer" e nunca era contada como rejeição → o auto-handoff (capture rejeitado N×) NUNCA disparava.
+            // Aqui o interceptor escala direto: createHandoff + avisa o dono + suspende (bot pausa).
+            if (ic.action === 'handoff') {
+              console.warn(`[capture_interceptor] handoff node=${currentNode.id} phone=${phoneNumber} msg="${message.slice(0, 80)}"`)
+              // Persiste o handoff PRIMEIRO e SEM engolir o erro: se o save falhar, a exceção propaga,
+              // a fila re-tenta a mensagem (idempotente — createHandoff dedup handoff aberto) e NÃO marcamos
+              // handoff() sem registro (evita órfão: status pausado sem ninguém saber).
+              await this.createHandoff({ bot, conversation, lead, reason: 'user_request', lastMessage: message })
+              const ownerPhone = bot.globalConfig?.ownerPhone
+              if (ownerPhone) {
+                await this.messaging.sendMessage({
+                  instanceName: instance, instanceId, phoneNumber: ownerPhone,
+                  message: `🆘 *Suporte pós-venda* — ${phoneNumber} relatou um problema durante a espera de comprovante: "${message.slice(0, 120)}". Conversa pausada e escalada — assuma.`,
+                }).catch(() => {})  // notificação ao dono é best-effort; o registro no DB é a fonte de verdade
+              }
+              conversation.handoff()
+              await this.convRepo.save(conversation)
+              return
             }
 
             if (ic.action === 'redirect' && ic.handle) {
@@ -999,8 +1025,10 @@ export class FlowExecutionService {
         if (desc) lines.push(`Descrição: ${desc}`)
         if (receiverName) lines.push(`Favorecido: ${receiverName}`)
         lines.push(``, `_Copie a chave abaixo e pague pelo seu banco._`)
-        await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: lines.join('\n') })
+        const pixMsg = lines.join('\n')
+        await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
+        conversation.addAssistantMessage(pixMsg)  // #fix history-drift: a IA precisa saber que o PIX já foi enviado
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
       }
@@ -1139,8 +1167,10 @@ export class FlowExecutionService {
         if (imageBase64 && !paymentIntentId) {
           console.warn('[FlowExecution] ai_validate_receipt: receipt image but no paymentIntentId — escalating to human (no false rejection)')
           conversation.setVariable('__imageBase64', '') // consume
+          // Persiste o handoff ANTES de prometer ao cliente e SEM engolir o erro: se o save falhar, a exceção
+          // propaga, a fila re-tenta (idempotente) e a promessa "vou confirmar" NÃO é dada sem registro.
+          await this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '[comprovante sem pedido]' })
           await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: 'Recebi seu comprovante aqui! 🙏 Só vou confirmar com a equipe e já te retorno, tá? Pode deixar que não vou te deixar na mão.' })
-          await this.createHandoff({ bot, conversation, lead, reason: 'pix_failed', lastMessage: conversation.getLastUserMessage() ?? '[comprovante sem pedido]' }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           const ownerPhone = bot.globalConfig?.ownerPhone
           if (ownerPhone) {
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: ownerPhone, message: `⚠️ Comprovante recebido SEM pedido vinculado de ${conversation.phoneNumber}. Cliente pode ter pago — confirme manualmente.` }).catch(() => {})
@@ -1555,6 +1585,7 @@ export class FlowExecutionService {
             conversation.setVariable('__rt_checkout_pix_key', receiverKey)
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
+            conversation.addAssistantMessage(pixMsg)  // #fix history-drift: IA precisa saber que o PIX foi enviado
           }
 
           this.emit(bot.id, conversation.id, phone, 'checkout_initiated', {
@@ -1653,6 +1684,7 @@ export class FlowExecutionService {
             conversation.setVariable('__rt_checkout_pix_key', receiverKey)
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
+            conversation.addAssistantMessage(pixMsg)  // #fix history-drift: IA precisa saber que o PIX foi enviado
           }
 
           this.emit(bot.id, conversation.id, phone, 'payment_requested', {
@@ -1763,7 +1795,7 @@ export class FlowExecutionService {
           const intent = conversation.variables['__rt_intent'] ?? 'unknown'
           // Try the exact handle first, then legacy mapping
           const directEdge = flow.getNextNodes(node.id, intent)[0]
-          const handle = directEdge ? intent : this.intentToHandle(intent)
+          const handle = this.guardReceiptHandle(directEdge ? intent : this.intentToHandle(intent), conversation)
           console.log(`[classify_intent] p3_fast_path: intent=${intent} handle=${handle}`)
           return flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
         }
@@ -1816,8 +1848,9 @@ export class FlowExecutionService {
             return null // suspend — conversation stays open for operator takeover
           }
 
-          const nextNode = flow.getNextNodes(node.id, ruleMatch.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
-          console.log(`[classify_intent] rule_match: handle=${ruleMatch.handle} confidence=${ruleMatch.confidence} next=${nextNode}`)
+          const guardedHandle = this.guardReceiptHandle(ruleMatch.handle, conversation)
+          const nextNode = flow.getNextNodes(node.id, guardedHandle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+          console.log(`[classify_intent] rule_match: handle=${guardedHandle} confidence=${ruleMatch.confidence} next=${nextNode}`)
           return nextNode
         }
 
@@ -1851,7 +1884,7 @@ export class FlowExecutionService {
           }
 
           // action === 'route'
-          const handle = agentDecision.handle ?? 'unknown'
+          const handle = this.guardReceiptHandle(agentDecision.handle ?? 'unknown', conversation)
           const nextNode = flow.getNextNodes(node.id, handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
           console.log(`[classify_intent] ai_agent: action=route handle=${handle} title="${agentDecision.titleDetected ?? ''}" next=${nextNode}`)
           return nextNode
@@ -1865,8 +1898,9 @@ export class FlowExecutionService {
           const esc = await this.runEscapeHatch(flow, conversation, lead, bot, text, routes)
           if (esc.outcome === 'answered') { conversation.setVariable('__rt_ai_responded', 'true'); return null }
           if (esc.outcome === 'routed' && esc.handle) {
-            conversation.setVariable('__rt_intent', esc.handle)
-            return flow.getNextNodes(node.id, esc.handle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
+            const escHandle = this.guardReceiptHandle(esc.handle, conversation)
+            conversation.setVariable('__rt_intent', escHandle)
+            return flow.getNextNodes(node.id, escHandle)[0]?.id ?? flow.getNextNodes(node.id, 'unknown')[0]?.id
           }
           if (esc.outcome === 'handoff') return flow.getNextNodes(node.id, 'unknown')[0]?.id
           // inactive / unknown → cai no fluxo normal abaixo
@@ -2016,7 +2050,9 @@ export class FlowExecutionService {
           ? Math.floor((Date.now() - new Date(lastUserMsg.timestamp).getTime()) / 60_000)
           : 0
         const cart = Cart.fromVariables(conversation.variables)
-        const hasPendingPayment = !!conversation.variables['__pending_pix_id']
+        // #fix var-morta: __pending_pix_id NUNCA é escrita; a var real é __rt_checkout_payment_id (?? paymentIntentId).
+        // Antes hasPendingPayment vinha sempre false → degradava as decisões de pagamento do router.
+        const hasPendingPayment = !!(conversation.variables['__rt_checkout_payment_id'] || conversation.variables['paymentIntentId'])
 
         const decision = await this.contextualAIRouter.route({
           userMessage,
@@ -2361,13 +2397,15 @@ export class FlowExecutionService {
     // bateu o threshold → escala. Zera o contador p/ não re-disparar handoff em loop.
     params.conversation.setVariable(key, '0')
 
+    // SEM .catch: se o save do handoff falhar, a exceção propaga (a fila re-tenta, idempotente pelo
+    // dedup de handoff aberto) e NÃO marcamos handoff() sem registro no DB (evita órfão).
     await this.createHandoff({
       bot: params.bot,
       conversation: params.conversation,
       lead: params.lead,
       reason: 'capture_stuck',
       lastMessage: params.lastMessage,
-    }).catch(e => console.error('[auto_handoff] createHandoff failed:', e?.message))
+    })
 
     // Avisa o dono (createHandoff só salva+emite evento; a notificação é aqui).
     const ownerPhone = params.bot.globalConfig?.ownerPhone
@@ -2449,7 +2487,16 @@ export class FlowExecutionService {
 
   private interpolate(template: string, variables: Record<string, string>): string {
     if (!template) return ''
-    return template.replace(/{{(\w+)}}/g, (_, key) => variables[key] ?? `{{${key}}}`)
+    // #fix interpolate-leak: NUNCA ecoar `{{var}}` cru pro cliente quando a variável está ausente
+    // (acontece quando o estado foi limpo/resetado). Substitui por '' e loga pra rastrear o template dependente.
+    return template.replace(/{{(\w+)}}/g, (_, key) => {
+      const v = variables[key]
+      if (v === undefined || v === null) {
+        console.warn(`[interpolate] var ausente "${key}" — renderizando vazio (template dependia de estado não setado)`)
+        return ''
+      }
+      return v
+    })
   }
 
   private parseAmountToCentavos(raw: string): number | null {
@@ -2632,6 +2679,22 @@ export class FlowExecutionService {
       conversation.setVariable('__rt_objection_type', result.objectionType)
     }
     conversation.setVariable('__rt_intent_result', JSON.stringify(result))
+  }
+
+  /**
+   * #fix regex-state-blind (raiz do "phantom receipt"): "paguei/comprovante" (paidPatterns) classifica
+   * pix_pending com conf 0.92 SEM olhar estado. Um comprador recorrente com carrinho VAZIO e SEM pix pendente
+   * era jogado em capture_receipt e depois ACUSADO quando mandava o print (sem paymentIntentId). Aqui, se o
+   * handle é de comprovante mas não há pagamento pendente NEM carrinho, redireciona pra 'unknown' (clarify/AI),
+   * em vez de exigir comprovante de nada. Sinal de ESTADO, não de palavra-chave.
+   */
+  private guardReceiptHandle(handle: string, conversation: Conversation): string {
+    if (handle !== 'pix_pending' && handle !== 'payment_receipt') return handle
+    const hasPending = !!(conversation.variables['__rt_checkout_payment_id'] || conversation.variables['paymentIntentId'])
+    if (hasPending) return handle
+    if (!Cart.fromVariables(conversation.variables).isEmpty) return handle
+    console.warn(`[classify_intent] guard_receipt: "${handle}" sem pix pendente e carrinho vazio → 'unknown' (evita phantom-receipt)`)
+    return 'unknown'
   }
 
   private intentToHandle(intent: string): string {
@@ -2876,7 +2939,7 @@ Regra: só use "respond" se a resposta for factual e curta. Para qualquer ação
     conversation: Conversation,
     lead: Lead | undefined,
     bot: Bot,
-  ): Promise<{ action: 'answer' | 'redirect' | 'ignore'; message?: string; handle?: string }> {
+  ): Promise<{ action: 'answer' | 'redirect' | 'ignore' | 'handoff'; message?: string; handle?: string }> {
     if (!this.aiService) return { action: 'ignore' }
 
     const history = conversation.history.slice(-6).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
@@ -2907,9 +2970,10 @@ ${redirectsJson}
 Decida o que fazer. Retorne SOMENTE JSON válido:
 - Responder a dúvida inline e continuar aguardando: {"action":"answer","message":"<resposta curta e amigável>"}
 - Redirecionar para um caminho do fluxo: {"action":"redirect","handle":"<handle>"}
+- Escalar para um humano: {"action":"handoff"}
 - Ignorar e deixar o bot rejeitar normalmente: {"action":"ignore"}
 
-Regra: "answer" só para dúvidas factuais rápidas. "redirect" quando o cliente claramente quer mudar de ação (ex: trocar série, cancelar). "ignore" quando a mensagem é ruído ou incompreensível.`
+Regra: "answer" só para dúvidas factuais rápidas. "redirect" quando o cliente claramente quer mudar de ação (ex: trocar série, cancelar). "handoff" quando é um PROBLEMA que o bot não resolve — reclamação de pós-venda, "minha série não abre/não recebi/link quebrado/não funciona", pedido de reembolso, ou cliente irritado. "ignore" quando a mensagem é ruído ou incompreensível.`
 
     try {
       const provider = interceptor.provider ?? 'groq'
