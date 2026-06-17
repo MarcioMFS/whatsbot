@@ -47,6 +47,7 @@ export interface AIObservationStats {
 
 export interface AIObservationRepository {
   save(observation: AIObservation): Promise<void>
+  findById(id: string): Promise<AIObservation | null>
   findByBotId(botId: string, limit?: number): Promise<AIObservation[]>
   findProblematic(botId: string, days: number): Promise<AIObservation[]>
   getStats(botId: string, days: number): Promise<AIObservationStats>

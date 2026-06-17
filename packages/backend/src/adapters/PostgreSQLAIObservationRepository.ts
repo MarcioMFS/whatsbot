@@ -41,6 +41,11 @@ export class PostgreSQLAIObservationRepository implements AIObservationRepositor
     )
   }
 
+  async findById(id: string): Promise<AIObservation | null> {
+    const { rows } = await this.db.query('SELECT * FROM ai_observations WHERE id = $1', [id])
+    return rows[0] ? this.toDomain(rows[0]) : null
+  }
+
   async findByBotId(botId: string, limit = 100): Promise<AIObservation[]> {
     const { rows } = await this.db.query(
       'SELECT * FROM ai_observations WHERE bot_id = $1 ORDER BY created_at DESC LIMIT $2',
