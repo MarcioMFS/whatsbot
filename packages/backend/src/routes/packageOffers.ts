@@ -32,6 +32,15 @@ interface Ctx {
 export async function packageOfferRoutes(app: FastifyInstance, ctx: Ctx) {
   app.addHook('preHandler', async (req) => { await req.jwtVerify() })
 
+  // #sec: carrega a oferta garantindo que o dono logado é o do bot. null = não autorizado.
+  const ownedOffer = async (offerId: string, userId: string): Promise<PackageOffer | null> => {
+    const offer = await ctx.packageOfferRepo.findById(offerId)
+    if (!offer) return null
+    const bot = await ctx.botRepo.findById(offer.botId)
+    if (!bot || bot.ownerId !== userId) return null
+    return offer
+  }
+
   // List offers for a bot
   app.get<{ Params: { botId: string }; Querystring: { includeInactive?: string } }>(
     '/bot/:botId',
@@ -62,10 +71,12 @@ export async function packageOfferRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Update offer
   app.put<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    const user = req.user as { id: string }
     const parsed = UpdateSchema.safeParse(req.body)
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() })
 
-    const offer = await ctx.packageOfferRepo.findById(req.params.id)
+    // #sec: exige dono — antes qualquer user editava o PREÇO de pacote de qualquer bot por UUID
+    const offer = await ownedOffer(req.params.id, user.id)
     if (!offer) return reply.code(404).send({ error: 'Not found' })
 
     offer.update(parsed.data)
@@ -75,7 +86,8 @@ export async function packageOfferRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Toggle active
   app.patch<{ Params: { id: string } }>('/:id/toggle', async (req, reply) => {
-    const offer = await ctx.packageOfferRepo.findById(req.params.id)
+    const user = req.user as { id: string }
+    const offer = await ownedOffer(req.params.id, user.id)
     if (!offer) return reply.code(404).send({ error: 'Not found' })
 
     offer.update({ isActive: !offer.isActive })
@@ -85,6 +97,10 @@ export async function packageOfferRoutes(app: FastifyInstance, ctx: Ctx) {
 
   // Delete offer
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    const user = req.user as { id: string }
+    const offer = await ownedOffer(req.params.id, user.id)
+    if (!offer) return reply.code(404).send({ error: 'Not found' })
+
     await ctx.packageOfferRepo.delete(req.params.id)
     return reply.code(204).send()
   })
