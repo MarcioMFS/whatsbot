@@ -78,10 +78,12 @@ export async function flowRoutes(app: FastifyInstance, ctx: FlowCtx) {
   })
 
   app.put<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    const user = req.user as { id: string }
     const parsed = SaveFlowSchema.safeParse(req.body)
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() })
 
-    const flow = await ctx.flowRepo.findById(req.params.id)
+    // #sec: exige dono do bot — antes qualquer user autenticado sobrescrevia flow alheio por UUID
+    const flow = await ownedFlow(req.params.id, user.id)
     if (!flow) return reply.code(404).send({ error: 'Not found' })
 
     flow.updateNodes(parsed.data.nodes as ReturnType<Flow['toJSON']>['nodes'], parsed.data.edges as ReturnType<Flow['toJSON']>['edges'])
@@ -133,6 +135,11 @@ export async function flowRoutes(app: FastifyInstance, ctx: FlowCtx) {
   })
 
   app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    const user = req.user as { id: string }
+    // #sec: exige dono do bot — antes deletava flow de qualquer bot só com o UUID, sem checagem
+    const flow = await ownedFlow(req.params.id, user.id)
+    if (!flow) return reply.code(404).send({ error: 'Not found' })
+
     await ctx.flowRepo.delete(req.params.id)
     return reply.code(204).send()
   })
