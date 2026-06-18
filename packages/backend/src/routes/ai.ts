@@ -3,7 +3,8 @@ import { z } from 'zod'
 import type { AIGenerationService } from '../services/AIGenerationService.js'
 
 const GenerateSchema = z.object({
-  description: z.string().min(10).max(5000),
+  // landing page inteira cabe (preço/garantia costumam estar no fim → não truncar). 20k chars ≈ 5k tokens, ok p/ Groq/Claude.
+  description: z.string().min(10).max(20000),
   language: z.string().default('en'),
   provider: z.enum(['claude', 'groq']).default('groq'),
 })
