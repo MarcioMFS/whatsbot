@@ -1,8 +1,8 @@
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { timingSafeEqual } from 'crypto'
 import { Queue } from 'bullmq'
 import type Redis from 'ioredis'
-import type { BotRepository } from '@whatsbot/core'
+import type { BotRepository, Bot } from '@whatsbot/core'
 
 interface WebhookCtx {
   botRepo: BotRepository
@@ -14,13 +14,10 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
     connection: { url: process.env.REDIS_URL!, maxRetriesPerRequest: null },
   })
 
-  app.post<{ Params: { botId: string } }>(
-    '/evolution/:botId',
-    { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } },
-    async (req, reply) => {
-      const bot = await ctx.botRepo.findById(req.params.botId)
-      if (!bot) return reply.code(404).send({ error: 'Bot not found' })
-
+  // #sec C2: handler compartilhado. O canal de AUTH do webhook é o TOKEN no path (rota nova abaixo);
+  // a gateway evolution-go não envia headers customizados, então assinatura-por-header não funciona.
+  const processEvolutionWebhook = async (bot: Bot, req: FastifyRequest, reply: FastifyReply) => {
+      // Header legado opcional — honrado se enviado (não é o canal de auth real; ver token no path).
       const signature = req.headers['x-webhook-secret'] as string | undefined
       if (signature && !verifySecret(signature, bot.webhookSecret)) {
         return reply.code(401).send({ error: 'Invalid signature' })
@@ -126,8 +123,28 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         backoff: { type: 'exponential', delay: 1500 }, // 1.5,3,6,12,24,48,96s
       })
       return reply.code(200).send({ ok: true })
+  }
+
+  const rl = { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } }
+
+  // Legado (sem token) — mantido funcionando até a migração (passos 2/3). Auth virá via token no path.
+  app.post<{ Params: { botId: string } }>('/evolution/:botId', rl, async (req, reply) => {
+    const bot = await ctx.botRepo.findById(req.params.botId)
+    if (!bot) return reply.code(404).send({ error: 'Bot not found' })
+    return processEvolutionWebhook(bot, req, reply)
+  })
+
+  // #sec C2 passo 1 (additivo): token no path = bot.webhookSecret (timing-safe). Nenhum bot usa esta URL
+  // ainda; quando os webhooks forem re-registrados com ela (passo 2) e a legada for desativada (passo 3),
+  // só requisições com o token válido passam — fecha a forja anônima.
+  app.post<{ Params: { botId: string; token: string } }>('/evolution/:botId/:token', rl, async (req, reply) => {
+    const bot = await ctx.botRepo.findById(req.params.botId)
+    if (!bot) return reply.code(404).send({ error: 'Bot not found' })
+    if (!verifySecret(req.params.token, bot.webhookSecret)) {
+      return reply.code(401).send({ error: 'Invalid webhook token' })
     }
-  )
+    return processEvolutionWebhook(bot, req, reply)
+  })
 }
 
 const MAX_UNWRAP_DEPTH = 5

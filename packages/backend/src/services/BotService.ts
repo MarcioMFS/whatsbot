@@ -28,7 +28,10 @@ export class BotService {
       ownerId: params.ownerId,
     })
 
-    const webhookUrl = `${params.webhookBaseUrl}/webhooks/evolution/${bot.id}`
+    // #sec C2: secret no path (gateway evolution-go não envia header). Guard p/ secret vazio (não muta bot).
+    const webhookUrl = bot.webhookSecret
+      ? `${params.webhookBaseUrl}/webhooks/evolution/${bot.id}/${bot.webhookSecret}`
+      : `${params.webhookBaseUrl}/webhooks/evolution/${bot.id}`
     const result = await this.messaging.createInstance(
       params.evolutionConfig.instanceName,
       webhookUrl,
@@ -73,7 +76,10 @@ export class BotService {
     if (!bot) throw new Error('Bot not found')
 
     const instanceName = bot.evolutionConfig.instanceName
-    const webhookUrl = `${webhookBaseUrl}/webhooks/evolution/${bot.id}`
+    // #sec C2: secret no path (ver createBot). Guard p/ secret vazio.
+    const webhookUrl = bot.webhookSecret
+      ? `${webhookBaseUrl}/webhooks/evolution/${bot.id}/${bot.webhookSecret}`
+      : `${webhookBaseUrl}/webhooks/evolution/${bot.id}`
 
     try {
       const { qrCode } = await this.messaging.connectInstance(instanceName, webhookUrl)
