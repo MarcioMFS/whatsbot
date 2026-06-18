@@ -37,6 +37,7 @@ import { VisionTitleExtractor } from './services/VisionTitleExtractor.js'
 import { GeminiProvider } from './agent/providers/GeminiProvider.js'
 import { GroqAgentProvider } from './agent/providers/GroqAgentProvider.js'
 import { SegmentGenerationService } from './services/SegmentGenerationService.js'
+import { ImproverService } from './services/ImproverService.js'
 import { AgentRuntime } from './agent/AgentRuntime.js'
 import { ModuleRegistry } from './services/ModuleRegistry.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
@@ -131,6 +132,7 @@ const deliveryService = new DeliveryService(messaging, eventRepo, deliveryAuditR
 const capabilityRepo = new PostgreSQLCapabilityRepository(db)
 const capabilityRouter = new CapabilityRouter(capabilityRepo, aiService, observationRepo)
 const patternDetector = new PatternDetector(db)
+const improver = new ImproverService(db, patternDetector, aiService, proposalRepo)
 const flowExecService = new FlowExecutionService(
   flowRepo, conversationRepo, leadRepo, messaging, aiService,
   eventRepo, paymentOrchestrator, paymentIntentRepo,
@@ -167,7 +169,7 @@ await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRe
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo, botRepo })
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector, botRepo })
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
-await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, db })
+await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, improver, db })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.

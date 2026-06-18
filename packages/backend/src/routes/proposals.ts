@@ -4,6 +4,7 @@ import type { FlowRepository, BotRepository, FlowSegment } from '@whatsbot/core'
 import type { PostgreSQLProposalRepository } from '../adapters/PostgreSQLProposalRepository.js'
 import type { PostgreSQLFlowVersionRepository } from '../adapters/PostgreSQLFlowVersionRepository.js'
 import type { SegmentGenerationService } from '../services/SegmentGenerationService.js'
+import type { ImproverService } from '../services/ImproverService.js'
 
 interface ProposalCtx {
   proposalRepo: PostgreSQLProposalRepository
@@ -11,6 +12,7 @@ interface ProposalCtx {
   flowRepo: FlowRepository
   botRepo: BotRepository
   segmentGen: SegmentGenerationService
+  improver: ImproverService
   db: Pool
 }
 
@@ -78,6 +80,22 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
       return reply.code(201).send(p)
     }
     return reply.code(400).send({ error: `geração do kind "${kind}" ainda não suportada (passo 3 = generate_segments)` })
+  })
+
+  // IMPROVER (passo 4): observa sinais reais (mensagens não-entendidas + escalações) → IA propõe melhorias.
+  app.post<{ Body: { botId: string; days?: number } }>('/improve', async (req, reply) => {
+    const user = req.user as { id: string }
+    const { botId, days } = req.body ?? {}
+    if (!botId) return reply.code(400).send({ error: 'botId é obrigatório' })
+    if (!await ownsBot(botId, user.id)) return reply.code(404).send({ error: 'Not found' })
+    try {
+      const { proposal, reason } = await ctx.improver.scan(botId, days ?? 7)
+      if (!proposal) return reply.code(200).send({ proposal: null, reason })
+      return reply.code(201).send(proposal)
+    } catch (err) {
+      req.log.error(err)
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'falha no improver' })
+    }
   })
 
   // Aprova: valida dono → checa staleness → SNAPSHOT (flow_versions) → apply por kind → marca applied.

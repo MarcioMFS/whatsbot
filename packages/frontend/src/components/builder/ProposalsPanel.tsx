@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Check, X, Loader2, Inbox } from 'lucide-react'
+import { Sparkles, Check, X, Loader2, Inbox, Stethoscope } from 'lucide-react'
 import { MkButton, Eyebrow, InfoTip } from '../mkhub'
 import { api, type FlowProposal } from '../../api/client.ts'
 
@@ -28,6 +28,16 @@ export function ProposalsPanel({ botId, activeFlowId }: { botId: string; activeF
     } catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'falha na geração' }) }
     finally { setBusy(null) }
   }
+  const improve = async () => {
+    setBusy('improve'); setMsg(null)
+    try {
+      const r = await api.proposals.improve(botId)
+      if (r && 'proposal' in r && r.proposal === null) setMsg({ kind: 'ok', text: r.reason ?? 'Sem sugestões no momento.' })
+      else setMsg({ kind: 'ok', text: 'A IA analisou os sinais reais e propôs melhorias — veja abaixo.' })
+      await load()
+    } catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'falha ao sugerir' }) }
+    finally { setBusy(null) }
+  }
   const approve = async (id: string) => {
     setBusy(id); setMsg(null)
     try { const r = await api.proposals.approve(id); setMsg({ kind: 'ok', text: `Aprovada e aplicada (${r.applied ?? 'ok'}, snapshot v${r.snapshotVersion ?? '?'}).` }); await load() }
@@ -48,10 +58,16 @@ export function ProposalsPanel({ botId, activeFlowId }: { botId: string; activeF
           <Eyebrow>Propostas da IA</Eyebrow>
           <InfoTip text={<>A IA <strong>propõe</strong> melhorias (de graça, modelo NVIDIA); nada é aplicado sem você <strong>aprovar</strong>. Ao aprovar, um snapshot do flow é salvo antes (rollback).</>} />
         </div>
-        <MkButton onClick={generate} disabled={busy === 'generate' || !activeFlowId}>
-          {busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-          Gerar com IA
-        </MkButton>
+        <div className="flex items-center gap-2">
+          <MkButton variant="ghost" onClick={improve} disabled={busy === 'improve'}>
+            {busy === 'improve' ? <Loader2 size={14} className="animate-spin" /> : <Stethoscope size={14} />}
+            Sugerir melhorias
+          </MkButton>
+          <MkButton onClick={generate} disabled={busy === 'generate' || !activeFlowId}>
+            {busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            Gerar habilidades
+          </MkButton>
+        </div>
       </div>
 
       {msg && (
@@ -89,7 +105,10 @@ const STATUS_STYLE: Record<string, { bg: string; fg: string; label: string }> = 
 function ProposalCard({ p, busy, onApprove, onReject }: { p: FlowProposal; busy: boolean; onApprove: () => void; onReject: () => void }) {
   const st = STATUS_STYLE[p.status] ?? { bg: '#f1f1f1', fg: '#6b7280', label: p.status }
   const segments = (p.proposedContent?.segments as Array<{ name?: string; description?: string; whenToUse?: string; nodeIds?: string[] }> | undefined) ?? []
+  const suggestions = (p.proposedContent?.suggestions as Array<{ title?: string; problem?: string; recommendation?: string }> | undefined) ?? []
+  const summary = typeof p.proposedContent?.summary === 'string' ? p.proposedContent.summary : ''
   const isPending = p.status === 'pending'
+  const applicable = p.kind === 'generate_segments' // só esse aplica automático; resto é advisory
 
   return (
     <div className="rounded-2xl p-4" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
@@ -101,8 +120,14 @@ function ProposalCard({ p, busy, onApprove, onReject }: { p: FlowProposal; busy:
         </div>
         {isPending && (
           <div className="flex items-center gap-2">
-            <MkButton variant="ghost" onClick={onReject} disabled={busy}><X size={14} /> Rejeitar</MkButton>
-            <MkButton onClick={onApprove} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprovar</MkButton>
+            {applicable ? (
+              <>
+                <MkButton variant="ghost" onClick={onReject} disabled={busy}><X size={14} /> Rejeitar</MkButton>
+                <MkButton onClick={onApprove} disabled={busy}>{busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Aprovar</MkButton>
+              </>
+            ) : (
+              <MkButton variant="ghost" onClick={onReject} disabled={busy}><X size={14} /> Dispensar</MkButton>
+            )}
           </div>
         )}
       </div>
@@ -114,6 +139,19 @@ function ProposalCard({ p, busy, onApprove, onReject }: { p: FlowProposal; busy:
               <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{s.name} <span className="text-xs font-normal" style={{ color: 'var(--muted)' }}>· {s.nodeIds?.length ?? 0} nós</span></div>
               {s.description && <div className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>{s.description}</div>}
               {s.whenToUse && <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Quando usar: {s.whenToUse}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {summary && <p className="text-sm mb-2" style={{ color: 'var(--ink-soft)' }}>{summary}</p>}
+      {suggestions.length > 0 && (
+        <div className="space-y-1.5">
+          {suggestions.map((s, i) => (
+            <div key={i} className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)', background: 'var(--paper)' }}>
+              <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{s.title}</div>
+              {s.problem && <div className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>Problema: {s.problem}</div>}
+              {s.recommendation && <div className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>→ {s.recommendation}</div>}
             </div>
           ))}
         </div>

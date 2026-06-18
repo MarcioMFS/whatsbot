@@ -244,6 +244,8 @@ export const api = {
       request<{ proposals: FlowProposal[] }>(`/proposals/bot/${botId}${status ? `?status=${status}` : ''}`),
     generate: (botId: string, flowId: string, kind = 'generate_segments') =>
       request<FlowProposal>('/proposals/generate', { method: 'POST', body: JSON.stringify({ botId, flowId, kind }) }),
+    improve: (botId: string, days?: number) =>
+      request<FlowProposal | { proposal: null; reason?: string }>('/proposals/improve', { method: 'POST', body: JSON.stringify({ botId, days }) }),
     approve: (id: string) =>
       request<{ ok: boolean; applied?: string; snapshotVersion?: number }>(`/proposals/${id}/approve`, { method: 'POST', body: '{}' }),
     reject: (id: string) =>
