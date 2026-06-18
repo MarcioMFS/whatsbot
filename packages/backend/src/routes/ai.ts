@@ -12,19 +12,27 @@ interface AICtx {
   aiService: AIGenerationService
 }
 
-const META_PROMPT = `You are an expert chatbot designer. Given a product/service description, generate a bot configuration.
+const META_PROMPT = `Você é especialista em montar BOTS DE VENDA no WhatsApp que CONVERTEM. A partir da descrição de um produto/serviço (pode ser o texto colado de uma landing page), gere a configuração de um bot VENDEDOR.
 
-Return ONLY a raw JSON object (no markdown, no code fences) with exactly this structure:
-{"productName":"...","persona":"...","systemPrompt":"...","suggestedFlow":[{"type":"trigger","description":"..."},{"type":"text_message","description":"..."},{"type":"ai_response","description":"..."}],"welcomeMessage":"..."}
+Retorne SOMENTE um objeto JSON cru (sem markdown, sem cercas) com EXATAMENTE esta estrutura:
+{"productName":"...","persona":"...","systemPrompt":"...","suggestedFlow":[{"type":"...","description":"..."}],"welcomeMessage":"..."}
 
-Rules:
-- productName: 2-4 words
-- persona: one short sentence
-- systemPrompt: 2-4 sentences max, specific to the product, include what the bot should NOT do, end with "Always respond in [language]."
-- suggestedFlow: exactly 3 items
-- welcomeMessage: one friendly sentence
-- No newlines inside string values — use spaces instead
-- Output ONLY the JSON, nothing else`
+PLAYBOOK DE VENDA — o systemPrompt DEVE codificar estas regras (é o que faz vender):
+- Sinal de compra ("quero","quanto","como pago","tem?") => AJA: apresente a oferta / gere o próximo passo. NÃO empilhe argumentos com quem já quer.
+- Micro-compromisso: ofereça ESCOLHA em vez de sim/não; reafirme o "sim" antes de cobrar ("então é X por R$Y, fechado?").
+- Objeção (ARC): Reconhece -> responde curto e honesto -> volta pra ação. "tá caro" => reforça valor / oferece a opção mais acessível (NUNCA invente desconto). "vou pensar" => sonda o bloqueio real.
+- Espelhe o tom/tamanho/emoji do cliente a cada mensagem; diante de raiva mantenha a calma; NUNCA espelhe grosseria.
+- Urgência só VERDADEIRA (a real do produto: oferta do dia, garantia) — nunca invente prazo nem contagem regressiva.
+- AJA, não prometa: toda ação anunciada acontece no mesmo turno; se falta dado, pergunte.
+- Use prova social / garantia / bônus / preço REAIS da descrição. NUNCA invente fato. Nunca exponha erro técnico.
+
+REGRAS DE SAÍDA:
+- productName: 2-4 palavras (o nome do produto).
+- persona: 1 frase — quem o bot é (nome + tom) coerente com o público do produto.
+- systemPrompt: instruções COMPLETAS do bot vendedor (longo, várias frases separadas por ponto, SEM quebra de linha crua): o que ele vende usando os diferenciais/preço/garantia/bônus REAIS da descrição; como conduzir a venda seguindo o PLAYBOOK acima; o que NUNCA fazer (inventar preço/prazo/garantia, expor erro). Termine com a frase "Sempre responda em <idioma do bot>.".
+- welcomeMessage: a 1a mensagem que ABRE a venda — calorosa, ancora o valor/oferta e conduz pro próximo passo.
+- suggestedFlow: os ESTÁGIOS de venda (entre 5 e 8): abertura, apresentar valor/prova social, oferta+preço, quebrar objeção, fechar/pagamento, entrega, recuperação. Cada item {"type","description"}.
+- SEM quebras de linha cruas dentro de strings (separe por ". "). Saída SÓ o JSON, nada mais.`
 
 export async function aiRoutes(app: FastifyInstance, ctx: AICtx) {
   app.addHook('preHandler', async (req) => {
@@ -42,12 +50,12 @@ export async function aiRoutes(app: FastifyInstance, ctx: AICtx) {
     try {
       const result = await ctx.aiService.generate(provider, {
         systemPrompt: META_PROMPT,
-        promptTemplate: `Product/Service Description:\n${description}\n\nLanguage to use in the bot: ${language}\n\nGenerate the bot configuration JSON now.`,
+        promptTemplate: `Descrição do produto/serviço (pode ser texto de landing page):\n${description}\n\nIdioma do bot: ${language}\n\nGere o JSON da configuração do bot vendedor agora.`,
         history: [],
         userMessage: '',
         variables: {},
         temperature: 0.4,
-        maxTokens: 2048,
+        maxTokens: 3000,
         cacheSystemPrompt: true,
       })
 
