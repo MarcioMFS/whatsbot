@@ -167,7 +167,7 @@ await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRe
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo, botRepo })
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector, botRepo })
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
-await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, db })
+await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, db })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.

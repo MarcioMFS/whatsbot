@@ -22,8 +22,8 @@ export class SegmentGenerationService {
       'Responda APENAS um JSON: {"segments":[{"name","description","whenToUse","nodeIds":[]}]}. Sem texto fora do JSON.',
     ].join('\n')
 
-    const provider = this.ai.getAvailableProviders().includes('claude') ? 'claude' : 'groq'
-    const result = await this.ai.generate(provider as 'claude' | 'groq', {
+    // Builder/Improver: roda na cadeia FREE (NVIDIA→Groq), nunca no provider pago — preserva o budget.
+    const result = await this.ai.generateBuilder({
       systemPrompt,
       promptTemplate: `Flow "${flow.name}". Nós (id · tipo · rótulo · trecho):\n${summary}`,
       history: [],

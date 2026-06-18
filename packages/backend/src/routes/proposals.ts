@@ -3,12 +3,14 @@ import type { Pool } from 'pg'
 import type { FlowRepository, BotRepository, FlowSegment } from '@whatsbot/core'
 import type { PostgreSQLProposalRepository } from '../adapters/PostgreSQLProposalRepository.js'
 import type { PostgreSQLFlowVersionRepository } from '../adapters/PostgreSQLFlowVersionRepository.js'
+import type { SegmentGenerationService } from '../services/SegmentGenerationService.js'
 
 interface ProposalCtx {
   proposalRepo: PostgreSQLProposalRepository
   flowVersionRepo: PostgreSQLFlowVersionRepository
   flowRepo: FlowRepository
   botRepo: BotRepository
+  segmentGen: SegmentGenerationService
   db: Pool
 }
 
@@ -50,6 +52,33 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
       return reply.code(201).send(p)
     },
   )
+
+  // GERAÇÃO (passo 3): a IA cria uma proposta via cadeia FREE (NVIDIA→Groq), NÃO aplica — cai pending.
+  app.post<{ Body: { botId: string; flowId: string; kind: string } }>('/generate', async (req, reply) => {
+    const user = req.user as { id: string }
+    const { botId, flowId, kind } = req.body ?? {}
+    if (!botId || !flowId || !kind) return reply.code(400).send({ error: 'botId, flowId e kind são obrigatórios' })
+    if (!await ownsBot(botId, user.id)) return reply.code(404).send({ error: 'Not found' })
+    const flow = await ctx.flowRepo.findById(flowId)
+    if (!flow || flow.botId !== botId) return reply.code(404).send({ error: 'Not found' })
+
+    if (kind === 'generate_segments') {
+      let segments
+      try {
+        segments = await ctx.segmentGen.generate(flow) // via generateBuilder (NVIDIA free)
+      } catch (err) {
+        req.log.error(err)
+        return reply.code(502).send({ error: 'Falha na geração pela IA' })
+      }
+      if (!segments.length) return reply.code(502).send({ error: 'IA não retornou segmentos válidos' })
+      const p = await ctx.proposalRepo.create({
+        botId, flowId, kind, targetRuntime: 'flow',
+        proposedContent: { segments }, baselineStamp: await flowStamp(flowId), createdBy: 'ai',
+      })
+      return reply.code(201).send(p)
+    }
+    return reply.code(400).send({ error: `geração do kind "${kind}" ainda não suportada (passo 3 = generate_segments)` })
+  })
 
   // Aprova: valida dono → checa staleness → SNAPSHOT (flow_versions) → apply por kind → marca applied.
   app.post<{ Params: { id: string } }>('/:id/approve', async (req, reply) => {
