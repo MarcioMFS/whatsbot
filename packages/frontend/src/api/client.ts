@@ -47,6 +47,21 @@ export interface FlowSegment {
   escapeHint?: string
 }
 
+// Proposta do Builder/Improver — IA propõe (não aplica) até aprovação humana.
+export interface FlowProposal {
+  id: string
+  botId: string
+  flowId: string | null
+  kind: string
+  targetRuntime: string | null
+  proposedContent: Record<string, unknown>
+  status: 'pending' | 'approved' | 'applied' | 'rejected' | 'stale'
+  createdBy: string
+  reviewedBy: string | null
+  createdAt: string
+  reviewedAt: string | null
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token
   const res = await fetch(`${BASE}${path}`, {
@@ -222,5 +237,16 @@ export const api = {
         method: 'PATCH',
         body: JSON.stringify({ outcome, reason }),
       }),
+  },
+  // Builder/Improver — fila de propostas da IA (gate humano).
+  proposals: {
+    list: (botId: string, status?: string) =>
+      request<{ proposals: FlowProposal[] }>(`/proposals/bot/${botId}${status ? `?status=${status}` : ''}`),
+    generate: (botId: string, flowId: string, kind = 'generate_segments') =>
+      request<FlowProposal>('/proposals/generate', { method: 'POST', body: JSON.stringify({ botId, flowId, kind }) }),
+    approve: (id: string) =>
+      request<{ ok: boolean; applied?: string; snapshotVersion?: number }>(`/proposals/${id}/approve`, { method: 'POST', body: '{}' }),
+    reject: (id: string) =>
+      request<{ ok: boolean }>(`/proposals/${id}/reject`, { method: 'POST', body: '{}' }),
   },
 }

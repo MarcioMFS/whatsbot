@@ -5,11 +5,12 @@ import {
   Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, GitBranch,
   Trash2, Settings2, Package, ChevronRight, ArrowRight, Bot, Copy,
   Layers, Sparkles, BookOpen, MessageCircle, CreditCard, LifeBuoy,
-  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap, X,
+  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap, X, Lightbulb,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow, InfoTip } from '../components/mkhub'
+import { ProposalsPanel } from '../components/builder/ProposalsPanel.tsx'
 import { api, type BotModule, type FlowSegment } from '../api/client.ts'
 import { SegmentEditorModal } from '../components/flow/SegmentEditorModal.tsx'
 import { useUIStore } from '../stores/uiStore.ts'
@@ -80,6 +81,7 @@ const TABS = [
   { id: 'automacao',    label: 'Flows',        icon: GitBranch, mode: 'flow' },   // só Fluxo
   { id: 'modulos',      label: 'Módulos',      icon: Layers },
   { id: 'skills',       label: 'Skills',       icon: Sparkles },
+  { id: 'propostas',    label: 'Propostas',    icon: Lightbulb },
   { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
   { id: 'tom',          label: 'Tom',          icon: MessageCircle },
 ] as const
@@ -298,6 +300,10 @@ export function BotConfig() {
 
         {activeTab === 'skills' && (
           <SkillsTab modules={modules} flows={flows} activeFlowId={bot.activeFlowId} isAgent={isAgent} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
+        )}
+
+        {activeTab === 'propostas' && (
+          <ProposalsPanel botId={bot.id} activeFlowId={bot.activeFlowId} />
         )}
 
         {activeTab === 'conhecimento' && (
