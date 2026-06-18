@@ -53,7 +53,7 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     const user = req.user as { id: string }
     const bot = await ctx.botRepo.findById(req.params.id)
     if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
-    return bot.toJSON()
+    return bot.toPublicJSON()
   })
 
   app.post('/', async (req, reply) => {
@@ -67,7 +67,7 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
       webhookBaseUrl: process.env.WEBHOOK_BASE_URL!,
     })
 
-    return reply.code(201).send(bot.toJSON())
+    return reply.code(201).send(bot.toPublicJSON())
   })
 
   app.patch<{ Params: { id: string } }>('/:id/activate', async (req, reply) => {
@@ -78,7 +78,7 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
 
     try {
       const updated = await ctx.botService.activateBot(bot.id, flowId)
-      return updated.toJSON()
+      return updated.toPublicJSON()
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Failed to activate' })
     }
@@ -90,7 +90,7 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
     if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
 
     const updated = await ctx.botService.deactivateBot(bot.id)
-    return updated.toJSON()
+    return updated.toPublicJSON()
   })
 
   app.get<{ Params: { id: string } }>('/:id/qrcode', async (req, reply) => {
@@ -120,7 +120,7 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
 
       bot.setRoutingRules(req.body.rules ?? [])
       await ctx.botRepo.save(bot)
-      return bot.toJSON()
+      return bot.toPublicJSON()
     }
   )
 
@@ -131,8 +131,10 @@ export async function botRoutes(app: FastifyInstance, ctx: BotCtx) {
 
     bot.updateGlobalConfig(req.body as Partial<BotGlobalConfig>)
     await ctx.botRepo.save(bot)
-    return bot.toJSON()
+    return bot.toPublicJSON()
   })
+
+  // (global-config endpoint abaixo retorna preview próprio)
 
   // Dedicated global-config endpoint: validated, sanitized, with preview + cache invalidation
   app.patch<{ Params: { id: string } }>('/:id/global-config', async (req, reply) => {

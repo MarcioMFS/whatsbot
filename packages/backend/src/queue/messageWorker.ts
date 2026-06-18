@@ -12,6 +12,21 @@ const MEDIA_KEY_INFO: Record<string, string> = {
   document: 'WhatsApp Document Keys',
 }
 
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024 // 50MB
+
+// #sec (SSRF): a URL vem do payload do webhook (atacável). Esta função baixa mídia do CDN do WhatsApp,
+// então só HTTPS + domínio *.whatsapp.net é permitido — fecha SSRF (sem IP interno/localhost/metadata cloud).
+function assertSafeMediaUrl(raw: string): URL {
+  let u: URL
+  try { u = new URL(raw) } catch { throw new Error('invalid media URL') }
+  if (u.protocol !== 'https:') throw new Error(`media URL must be https (got ${u.protocol})`)
+  const host = u.hostname.toLowerCase()
+  if (host !== 'whatsapp.net' && !host.endsWith('.whatsapp.net')) {
+    throw new Error(`media host not allowed: ${host}`)
+  }
+  return u
+}
+
 async function decryptWhatsAppMedia(imgMsg: Record<string, unknown>): Promise<string | undefined> {
   try {
     const url = imgMsg.URL as string | undefined
@@ -30,9 +45,19 @@ async function decryptWhatsAppMedia(imgMsg: Record<string, unknown>): Promise<st
 
     const info = MEDIA_KEY_INFO[mediaType] ?? 'WhatsApp Image Keys'
 
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`CDN returned ${res.status}`)
-    const encBuf = Buffer.from(await res.arrayBuffer())
+    const safeUrl = assertSafeMediaUrl(url)
+    const ac = new AbortController()
+    const timer = setTimeout(() => ac.abort(), 10_000)
+    let encBuf: Buffer
+    try {
+      const res = await fetch(safeUrl, { signal: ac.signal })
+      if (!res.ok) throw new Error(`CDN returned ${res.status}`)
+      const len = Number(res.headers.get('content-length') ?? 0)
+      if (len > MAX_MEDIA_BYTES) throw new Error(`media too large: ${len} bytes`)
+      encBuf = Buffer.from(await res.arrayBuffer())
+    } finally {
+      clearTimeout(timer)
+    }
 
     // HKDF-SHA256: salt = 32 zero bytes, expand to 112 bytes
     const mediaKey = Buffer.from(mediaKeyB64, 'base64')

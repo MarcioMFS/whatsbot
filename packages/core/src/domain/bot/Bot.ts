@@ -250,4 +250,11 @@ export class Bot {
   toJSON(): BotProps {
     return { ...this.props }
   }
+
+  // #sec: versão segura p/ RESPOSTA de API — sem o webhookSecret (segredo interno usado na verificação
+  // de assinatura do webhook; nunca deve sair da API). Use toJSON() só p/ persistência.
+  toPublicJSON(): Omit<BotProps, 'webhookSecret'> {
+    const { webhookSecret: _omit, ...pub } = this.props
+    return pub
+  }
 }

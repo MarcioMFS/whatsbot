@@ -27,8 +27,12 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
   )
 
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    const user = req.user as { id: string }
     const conversation = await ctx.conversationRepo.findById(req.params.id)
     if (!conversation) return reply.code(404).send({ error: 'Not found' })
+    // #sec: faltava checar dono — vazava phoneNumber/history/variables cross-tenant
+    const bot = await ctx.botRepo.findById(conversation.botId)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
     return conversation.toJSON()
   })
 

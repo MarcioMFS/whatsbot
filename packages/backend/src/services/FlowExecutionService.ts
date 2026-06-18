@@ -505,7 +505,9 @@ export class FlowExecutionService {
 
       if (capDecision.capability?.flowId) {
         const capFlow = await this.flowRepo.findById(capDecision.capability.flowId)
-        if (capFlow) {
+        // #sec defesa-em-profundidade: a capability NÃO pode rotear pra um flow de OUTRO bot
+        // (flowId malicioso sequestraria a conversa). Só aceita flow do próprio bot.
+        if (capFlow && capFlow.botId === bot.id) {
           if (!this.matchesTrigger(capFlow, message)) return
           conversation = Conversation.create({
             botId: bot.id,
