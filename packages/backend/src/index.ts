@@ -28,6 +28,8 @@ import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConv
 import { PostgreSQLPaymentIntentRepository } from './adapters/PostgreSQLPaymentIntentRepository.js'
 import { PostgreSQLProductRepository } from './adapters/PostgreSQLProductRepository.js'
 import { PostgreSQLOrderRepository } from './adapters/PostgreSQLOrderRepository.js'
+import { PostgreSQLProposalRepository } from './adapters/PostgreSQLProposalRepository.js'
+import { PostgreSQLFlowVersionRepository } from './adapters/PostgreSQLFlowVersionRepository.js'
 import { PostgreSQLPackageOfferRepository } from './adapters/PostgreSQLPackageOfferRepository.js'
 import { CatalogSearchService } from './services/CatalogSearchService.js'
 import { TranscriptionService } from './services/TranscriptionService.js'
@@ -50,6 +52,7 @@ import { DeliveryService } from './services/DeliveryService.js'
 import { leadRoutes } from './routes/leads.js'
 import { productRoutes } from './routes/products.js'
 import { orderRoutes } from './routes/orders.js'
+import { proposalRoutes } from './routes/proposals.js'
 import { packageOfferRoutes } from './routes/packageOffers.js'
 import { handoffRoutes } from './routes/handoffs.js'
 import { PostgreSQLHandoffRepository } from './adapters/PostgreSQLHandoffRepository.js'
@@ -73,6 +76,8 @@ const redis = new Redis(process.env.REDIS_URL!)
 
 const botRepo = new PostgreSQLBotRepository(db)
 const flowRepo = new PostgreSQLFlowRepository(db)
+const proposalRepo = new PostgreSQLProposalRepository(db)
+const flowVersionRepo = new PostgreSQLFlowVersionRepository(db)
 const conversationRepo = new RedisConversationRepository(redis, db)
 const leadRepo = new PostgreSQLLeadRepository(db)
 const eventRepo = new PostgreSQLConversationEventRepository(db)
@@ -162,6 +167,7 @@ await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRe
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo, botRepo })
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector, botRepo })
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
+await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, db })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.
