@@ -31,7 +31,9 @@ export async function aiRoutes(app: FastifyInstance, ctx: AICtx) {
     await req.jwtVerify()
   })
 
-  app.post('/generate-bot-config', async (req, reply) => {
+  // #sec: rate-limit dedicado nesta rota cara (chamada LLM). Antes só o global 100/min por IP — um user
+  // disparava geração à vontade (DoS financeiro). 10/min por IP nesta rota.
+  app.post('/generate-bot-config', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = GenerateSchema.safeParse(req.body)
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() })
 

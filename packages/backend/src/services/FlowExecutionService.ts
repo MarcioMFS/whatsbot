@@ -697,7 +697,7 @@ export class FlowExecutionService {
         }
 
         // ── validationRegex check ──────────────────────────────────────────
-        if (data.validationRegex && !new RegExp(data.validationRegex).test(message)) {
+        if (data.validationRegex && !this.safeRegexTest(data.validationRegex, message)) {
           // Escape hatch: entrada não bate o formato esperado (ex: pergunta no lugar do dado). Gated, per-part.
           if (conversation.phase !== 'awaiting_payment') {
             const esc = await this.runEscapeHatch(flow, conversation, lead, bot, message, [])
@@ -2499,6 +2499,20 @@ export class FlowExecutionService {
       }
       return v
     })
+  }
+
+  // #sec ReDoS: o validationRegex vem do flow (configurável pelo operador). Como o atacante controla o
+  // INPUT, uma regex mal-escrita do dono + input criado pode causar backtracking catastrófico. Mitigação:
+  // cap no tamanho do input testado (limita o backtracking) + try-catch (regex inválida não trava o fluxo).
+  // Fail-open: regex inválida → trata como "casou" (não rejeita entrada legítima por erro de config).
+  private safeRegexTest(pattern: string, input: string): boolean {
+    try {
+      const capped = input.length > 500 ? input.slice(0, 500) : input
+      return new RegExp(pattern).test(capped)
+    } catch {
+      console.warn(`[safeRegexTest] regex inválida no flow: ${pattern.slice(0, 80)}`)
+      return true
+    }
   }
 
   private parseAmountToCentavos(raw: string): number | null {

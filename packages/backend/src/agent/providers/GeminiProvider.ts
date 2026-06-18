@@ -4,7 +4,8 @@ import type { IAgentProvider, CompleteRequest, ProviderResponse, AgentMessage, T
 // Gemini via Vertex AI REST (generateContent). Ported pattern from Vox. No SDK.
 // Config via env, defaults to the same GCP project Vox uses.
 
-const PROJECT = process.env.GEMINI_PROJECT ?? 'project-758ade05-7be9-470b-b5d'
+// #sec: sem fallback hardcoded de project id (info-disclosure). GEMINI_PROJECT é obrigatória; vazio → request falha claro.
+const PROJECT = process.env.GEMINI_PROJECT ?? ''
 const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 const LOCATION = process.env.GEMINI_LOCATION ?? 'us-central1'
 

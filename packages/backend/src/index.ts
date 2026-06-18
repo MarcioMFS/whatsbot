@@ -139,7 +139,8 @@ console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: $
 const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo, moduleRegistry)
 timeoutService.start()
 
-await app.register(cors, { origin: process.env.FRONTEND_URL ?? '*' })
+// #sec: nunca '*' num backend financeiro. FRONTEND_URL está setada em prod; fallback = false (fail-safe).
+await app.register(cors, { origin: process.env.FRONTEND_URL ?? false })
 await app.register(jwt, { secret: process.env.JWT_SECRET! })
 await app.register(rateLimit, { max: 100, timeWindow: '1 minute' })
 
