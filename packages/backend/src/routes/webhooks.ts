@@ -127,11 +127,11 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
 
   const rl = { config: { rateLimit: { max: 300, timeWindow: '1 minute' } } }
 
-  // Legado (sem token) — mantido funcionando até a migração (passos 2/3). Auth virá via token no path.
-  app.post<{ Params: { botId: string } }>('/evolution/:botId', rl, async (req, reply) => {
-    const bot = await ctx.botRepo.findById(req.params.botId)
-    if (!bot) return reply.code(404).send({ error: 'Bot not found' })
-    return processEvolutionWebhook(bot, req, reply)
+  // #sec C2 passo 3: rota legada DESATIVADA — exige token no path. Todos os bots ativos foram
+  // re-registrados com a URL-com-token (bot-01 conectado + validado; bot-02 desconectado já com a
+  // URL-token no DB). Sem token = forja anônima → 401. Reverter = voltar a chamar processEvolutionWebhook.
+  app.post<{ Params: { botId: string } }>('/evolution/:botId', rl, async (_req, reply) => {
+    return reply.code(401).send({ error: 'Webhook token required in path' })
   })
 
   // #sec C2 passo 1 (additivo): token no path = bot.webhookSecret (timing-safe). Nenhum bot usa esta URL
