@@ -22,6 +22,7 @@ export type ConversationEventType =
   | 'order_created'
   | 'delivery_sent'
   | 'delivery_pending'
+  | 'node_reached'
 
 export interface ConversationEvent {
   botId: string

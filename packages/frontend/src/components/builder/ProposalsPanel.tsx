@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Check, X, Loader2, Inbox, Stethoscope } from 'lucide-react'
+import { Sparkles, Check, X, Loader2, Inbox, Stethoscope, Workflow } from 'lucide-react'
 import { MkButton, Eyebrow, InfoTip } from '../mkhub'
 import { api, type FlowProposal } from '../../api/client.ts'
 
@@ -9,6 +9,8 @@ export function ProposalsPanel({ botId, activeFlowId }: { botId: string; activeF
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [msg, setMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
+  const [showFlowGen, setShowFlowGen] = useState(false)
+  const [bizDesc, setBizDesc] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -26,6 +28,16 @@ export function ProposalsPanel({ botId, activeFlowId }: { botId: string; activeF
       setMsg({ kind: 'ok', text: 'A IA gerou uma proposta — revise e aprove abaixo.' })
       await load()
     } catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'falha na geração' }) }
+    finally { setBusy(null) }
+  }
+  const generateFlow = async () => {
+    setBusy('generate_flow'); setMsg(null)
+    try {
+      await api.proposals.generateFlow(botId, bizDesc.trim())
+      setMsg({ kind: 'ok', text: 'A IA montou um fluxo de vendas completo — revise e aprove abaixo. Ele entra inativo.' })
+      setShowFlowGen(false); setBizDesc('')
+      await load()
+    } catch (e) { setMsg({ kind: 'err', text: e instanceof Error ? e.message : 'falha ao gerar fluxo' }) }
     finally { setBusy(null) }
   }
   const improve = async () => {
@@ -63,12 +75,38 @@ export function ProposalsPanel({ botId, activeFlowId }: { botId: string; activeF
             {busy === 'improve' ? <Loader2 size={14} className="animate-spin" /> : <Stethoscope size={14} />}
             Sugerir melhorias
           </MkButton>
+          <MkButton variant="ghost" onClick={() => setShowFlowGen(v => !v)} disabled={busy === 'generate_flow'}>
+            {busy === 'generate_flow' ? <Loader2 size={14} className="animate-spin" /> : <Workflow size={14} />}
+            Gerar fluxo
+          </MkButton>
           <MkButton onClick={generate} disabled={busy === 'generate' || !activeFlowId}>
             {busy === 'generate' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
             Gerar habilidades
           </MkButton>
         </div>
       </div>
+
+      {showFlowGen && (
+        <div className="rounded-xl p-4 space-y-3" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+          <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Descreva o negócio</div>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>A IA monta um fluxo de vendas completo (catálogo → carrinho → PIX → comprovante → entrega) com a copy do seu negócio. A estrutura é garantida — você revisa e aprova. O fluxo entra <strong>inativo</strong>.</p>
+          <textarea
+            value={bizDesc}
+            onChange={e => setBizDesc(e.target.value)}
+            rows={4}
+            placeholder="Ex.: Vendo minisséries (doramas dublados) a R$6 cada, pacote de 3 por R$13. Pagamento via PIX, entrego o link de acesso na hora."
+            className="w-full rounded-lg px-3 py-2 text-sm"
+            style={{ border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)' }}
+          />
+          <div className="flex justify-end gap-2">
+            <MkButton variant="ghost" onClick={() => { setShowFlowGen(false); setBizDesc('') }} disabled={busy === 'generate_flow'}>Cancelar</MkButton>
+            <MkButton onClick={generateFlow} disabled={busy === 'generate_flow'}>
+              {busy === 'generate_flow' ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+              Gerar fluxo
+            </MkButton>
+          </div>
+        </div>
+      )}
 
       {msg && (
         <div className="rounded-xl px-4 py-3 text-sm" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)', color: msg.kind === 'err' ? '#b42318' : 'var(--ink)' }}>
@@ -107,8 +145,13 @@ function ProposalCard({ p, busy, onApprove, onReject }: { p: FlowProposal; busy:
   const segments = (p.proposedContent?.segments as Array<{ name?: string; description?: string; whenToUse?: string; nodeIds?: string[] }> | undefined) ?? []
   const suggestions = (p.proposedContent?.suggestions as Array<{ title?: string; problem?: string; recommendation?: string }> | undefined) ?? []
   const summary = typeof p.proposedContent?.summary === 'string' ? p.proposedContent.summary : ''
+  const flowGen = p.kind === 'generate_flow'
+    ? (p.proposedContent as { name?: string; nodeCount?: number; nodes?: Array<{ id?: string; data?: { label?: string; message?: string } }> } | undefined)
+    : undefined
+  // Roteiro do funil: todas as mensagens visíveis, na ordem dos nós — pra revisar ANTES de ativar.
+  const flowScript = (flowGen?.nodes ?? []).filter(n => typeof n.data?.message === 'string' && n.data!.message!.trim())
   const isPending = p.status === 'pending'
-  const applicable = p.kind === 'generate_segments' // só esse aplica automático; resto é advisory
+  const applicable = p.kind === 'generate_segments' || p.kind === 'generate_flow' // aplicam ao aprovar; resto é advisory
 
   return (
     <div className="rounded-2xl p-4" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
@@ -131,6 +174,29 @@ function ProposalCard({ p, busy, onApprove, onReject }: { p: FlowProposal; busy:
           </div>
         )}
       </div>
+
+      {flowGen && (
+        <div className="space-y-2">
+          <div className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)', background: 'var(--paper)' }}>
+            <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>
+              {flowGen.name ?? 'Funil de vendas'}
+              <span className="text-xs font-normal" style={{ color: 'var(--muted)' }}> · {flowGen.nodeCount ?? 0} nós · catálogo → carrinho → PIX → entrega</span>
+            </div>
+            <div className="text-xs mt-1" style={{ color: 'var(--muted)' }}>Ao aprovar, o fluxo é criado <strong>inativo</strong> — leia as mensagens abaixo e ative quando fizer sentido.</div>
+          </div>
+          {flowScript.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium" style={{ color: 'var(--muted)' }}>Mensagens do funil (na ordem que o cliente recebe):</div>
+              {flowScript.map((n, i) => (
+                <div key={i} className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)', background: 'var(--paper)' }}>
+                  <div className="text-xs font-medium" style={{ color: 'var(--ink)' }}>{i + 1}. {n.data?.label ?? n.id}</div>
+                  <div className="text-xs mt-0.5 whitespace-pre-line" style={{ color: 'var(--ink-soft)' }}>{n.data?.message}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {segments.length > 0 && (
         <div className="space-y-1.5">

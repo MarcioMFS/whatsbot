@@ -58,6 +58,8 @@ import type { ContextualAIRouter } from './ContextualAIRouter.js'
 import type { PaymentPhaseRouter } from './PaymentPhaseRouter.js'
 import type { CapabilityRouter } from './CapabilityRouter.js'
 import type { AIObservationRepository } from '@whatsbot/core'
+import type { ConversationOutcomeRepository, ConversationOutcomeType } from '@whatsbot/core'
+import { deriveTerminalOutcome } from '@whatsbot/core'
 import { buildBotPersona } from './BotPersonaBuilder.js'
 
 const RECOVERY_THRESHOLD = 0.6
@@ -96,7 +98,21 @@ export class FlowExecutionService {
     private capabilityRouter?: CapabilityRouter,
     private observationRepo?: AIObservationRepository,
     private visionTitleExtractor?: VisionTitleExtractor,
+    private conversationOutcomeRepo?: ConversationOutcomeRepository,
   ) {}
+
+  // F0 (gerador evolutivo) — materializa o desfecho da conversa. Fire-and-forget + idempotente:
+  // NUNCA bloqueia nem quebra o fluxo de venda. Ver Brain/spec_gerador_evolutivo.md.
+  private recordOutcome(conversation: Conversation, outcome: ConversationOutcomeType, gmvCentavos?: number): void {
+    this.conversationOutcomeRepo?.record({
+      conversationId: conversation.id,
+      botId: conversation.botId,
+      flowId: conversation.flowId ?? null,
+      lastPhase: conversation.phase ?? null,
+      outcome,
+      gmvCentavos: gmvCentavos ?? null,
+    }).catch(e => console.error('[FES] outcome record failed:', e?.message))
+  }
 
   /**
    * True when an incoming image must be treated as a payment receipt (do NOT run series-title vision).
@@ -414,6 +430,7 @@ export class FlowExecutionService {
           await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber, message: reply })
           conversation.addAssistantMessage(reply)
           conversation.end()
+          this.recordOutcome(conversation, 'abandoned', cart.totalCentavos || undefined)
           await this.convRepo.save(conversation)
           return
         }
@@ -792,6 +809,7 @@ export class FlowExecutionService {
           conversation.end()
           flog('executeFlow:end', { steps, nodeId: conversation.currentNodeId, reason: !node ? 'node_not_found' : 'end_node' })
           this.emit(bot.id, conversation.id, conversation.phoneNumber, 'flow_completed', { flowId: flow.id, steps })
+          this.recordOutcome(conversation, deriveTerminalOutcome(conversation.phase), Cart.fromVariables(conversation.variables).totalCentavos || undefined)
           // P2 — persist last state + generate context summary
           if (lead) {
             lead.setLastState(conversation.currentNodeId)
@@ -807,10 +825,14 @@ export class FlowExecutionService {
         if (nextNodeId === null) break // waiting for user input
         if (!nextNodeId) {
           conversation.end()
+          this.recordOutcome(conversation, deriveTerminalOutcome(conversation.phase), Cart.fromVariables(conversation.variables).totalCentavos || undefined)
           break
         }
 
         conversation.moveToNode(nextNodeId)
+        // F0 — sinal de funil: cada nó que a conversa ALCANÇA (passo + tipo + fase). Único ponto central.
+        const reached = flow.getNodeById(nextNodeId)
+        if (reached) this.emit(bot.id, conversation.id, conversation.phoneNumber, 'node_reached', { nodeId: nextNodeId, nodeType: reached.type, phase: conversation.phase ?? null, step: steps })
       }
     } catch (err) {
       console.error('[executeFlow] unhandled node error at', conversation.currentNodeId, ':', err instanceof Error ? err.message : err)
@@ -2392,6 +2414,7 @@ export class FlowExecutionService {
       leadTemperature: params.lead?.leadTemperature ?? null,
       last5Messages: last5,
     })
+    this.recordOutcome(params.conversation, 'escalated', hCart.totalCentavos || undefined)
     console.log(`[FlowExecution] handoff_created for ${params.conversation.phoneNumber} reason=${params.reason}`)
   }
 

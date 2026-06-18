@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import type { Pool } from 'pg'
-import type { FlowRepository, BotRepository, FlowSegment } from '@whatsbot/core'
+import type { FlowRepository, BotRepository, FlowSegment, FlowNode, FlowEdge } from '@whatsbot/core'
+import { Flow, validateFlowGraph } from '@whatsbot/core'
 import type { PostgreSQLProposalRepository } from '../adapters/PostgreSQLProposalRepository.js'
 import type { PostgreSQLFlowVersionRepository } from '../adapters/PostgreSQLFlowVersionRepository.js'
 import type { SegmentGenerationService } from '../services/SegmentGenerationService.js'
+import type { FlowGenerationService } from '../services/FlowGenerationService.js'
 import type { ImproverService } from '../services/ImproverService.js'
 
 interface ProposalCtx {
@@ -12,6 +14,7 @@ interface ProposalCtx {
   flowRepo: FlowRepository
   botRepo: BotRepository
   segmentGen: SegmentGenerationService
+  flowGen: FlowGenerationService
   improver: ImproverService
   db: Pool
 }
@@ -56,11 +59,35 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
   )
 
   // GERAÇÃO (passo 3): a IA cria uma proposta via cadeia FREE (NVIDIA→Groq), NÃO aplica — cai pending.
-  app.post<{ Body: { botId: string; flowId: string; kind: string } }>('/generate', async (req, reply) => {
+  app.post<{ Body: { botId: string; flowId?: string; kind: string; businessDescription?: string } }>('/generate', async (req, reply) => {
     const user = req.user as { id: string }
-    const { botId, flowId, kind } = req.body ?? {}
-    if (!botId || !flowId || !kind) return reply.code(400).send({ error: 'botId, flowId e kind são obrigatórios' })
+    const { botId, flowId, kind, businessDescription } = req.body ?? {}
+    if (!botId || !kind) return reply.code(400).send({ error: 'botId e kind são obrigatórios' })
     if (!await ownsBot(botId, user.id)) return reply.code(404).send({ error: 'Not found' })
+
+    // generate_flow (passo 5): gera um FLUXO NOVO inteiro (gabarito determinístico) — não
+    // depende de flow existente. flowId=null → vira flow inativo só ao ser aprovado no gate.
+    if (kind === 'generate_flow') {
+      let compiled
+      try {
+        compiled = await ctx.flowGen.generate(businessDescription ?? '')
+      } catch (err) {
+        req.log.error(err)
+        return reply.code(502).send({ error: 'Falha na geração do fluxo pela IA' })
+      }
+      const p = await ctx.proposalRepo.create({
+        botId, flowId: null, kind, targetRuntime: 'flow',
+        proposedContent: {
+          name: compiled.name, nodes: compiled.nodes, edges: compiled.edges,
+          brief: compiled.brief, nodeCount: compiled.nodes.length,
+        },
+        baselineStamp: null, createdBy: 'ai',
+      })
+      return reply.code(201).send(p)
+    }
+
+    // demais kinds precisam de um flow existente.
+    if (!flowId) return reply.code(400).send({ error: 'flowId é obrigatório para esse tipo de geração' })
     const flow = await ctx.flowRepo.findById(flowId)
     if (!flow || flow.botId !== botId) return reply.code(404).send({ error: 'Not found' })
 
@@ -105,6 +132,26 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
     if (!p) return reply.code(404).send({ error: 'Not found' })
     if (!await ownsBot(p.botId, user.id)) return reply.code(404).send({ error: 'Not found' })
     if (p.status !== 'pending') return reply.code(409).send({ error: `proposta não está pendente (status=${p.status})` })
+
+    // generate_flow: cria um FLUXO NOVO e INATIVO. Sem baseline/staleness (não há flow anterior).
+    // Revalida o grafo mecanicamente ANTES de persistir — gate nunca grava fluxo quebrado.
+    if (p.kind === 'generate_flow') {
+      const content = p.proposedContent as { name?: unknown; nodes?: unknown; edges?: unknown }
+      const nodes = (Array.isArray(content.nodes) ? content.nodes : []) as FlowNode[]
+      const edges = (Array.isArray(content.edges) ? content.edges : []) as FlowEdge[]
+      const v = validateFlowGraph(nodes, edges)
+      if (!v.ok) return reply.code(400).send({ error: `fluxo gerado é inválido: ${v.errors.join('; ')}` })
+      const name = typeof content.name === 'string' && content.name.trim() ? content.name.trim() : 'Fluxo gerado'
+      const flow = Flow.create({ botId: p.botId, name })
+      flow.updateNodes(nodes, edges)
+      flow.validate() // domínio: exatamente 1 trigger
+      await ctx.flowRepo.save(flow) // INSERT — fluxo INATIVO (isDefault=false), nunca ativa sozinho
+      const version = await ctx.flowVersionRepo.snapshot({
+        flowId: flow.id, nodes, edges, changedBy: user.id, reason: `flow gerado pela IA (proposta ${p.id})`,
+      })
+      await ctx.proposalRepo.markReviewed(p.id, 'applied', user.id)
+      return reply.send({ ok: true, applied: 'generate_flow', flowId: flow.id, snapshotVersion: version })
+    }
 
     if (!p.flowId) {
       return reply.code(400).send({ error: 'proposta sem flowId — geração de flow novo é passo 3+' })

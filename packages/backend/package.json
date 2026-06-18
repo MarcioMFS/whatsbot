@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "test": "pnpm test:node && pnpm test:vitest",
-    "test:node": "tsx --test --experimental-test-isolation=none --test-force-exit src/tests/agent-runtime.test.ts src/tests/commerce-runtime.test.ts src/tests/package-pix.test.ts src/tests/payment-flow.test.ts src/tests/payment-validator.test.ts src/tests/builder-chain.test.ts",
+    "test:node": "tsx --test --experimental-test-isolation=none --test-force-exit src/tests/agent-runtime.test.ts src/tests/commerce-runtime.test.ts src/tests/package-pix.test.ts src/tests/payment-flow.test.ts src/tests/payment-validator.test.ts src/tests/builder-chain.test.ts src/tests/flow-generation.test.ts src/tests/f0-outcome.test.ts",
     "test:vitest": "vitest run src/tests/payment-phase-router.test.ts src/tests/yes-no-context.test.ts"
   },
   "dependencies": {

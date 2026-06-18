@@ -244,10 +244,13 @@ export const api = {
       request<{ proposals: FlowProposal[] }>(`/proposals/bot/${botId}${status ? `?status=${status}` : ''}`),
     generate: (botId: string, flowId: string, kind = 'generate_segments') =>
       request<FlowProposal>('/proposals/generate', { method: 'POST', body: JSON.stringify({ botId, flowId, kind }) }),
+    // Gera um FLUXO NOVO inteiro a partir da descrição do negócio (gabarito determinístico, IA free).
+    generateFlow: (botId: string, businessDescription: string) =>
+      request<FlowProposal>('/proposals/generate', { method: 'POST', body: JSON.stringify({ botId, kind: 'generate_flow', businessDescription }) }),
     improve: (botId: string, days?: number) =>
       request<FlowProposal | { proposal: null; reason?: string }>('/proposals/improve', { method: 'POST', body: JSON.stringify({ botId, days }) }),
     approve: (id: string) =>
-      request<{ ok: boolean; applied?: string; snapshotVersion?: number }>(`/proposals/${id}/approve`, { method: 'POST', body: '{}' }),
+      request<{ ok: boolean; applied?: string; snapshotVersion?: number; flowId?: string }>(`/proposals/${id}/approve`, { method: 'POST', body: '{}' }),
     reject: (id: string) =>
       request<{ ok: boolean }>(`/proposals/${id}/reject`, { method: 'POST', body: '{}' }),
   },

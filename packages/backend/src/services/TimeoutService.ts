@@ -1,4 +1,4 @@
-import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository, LeadRepository, RecoveryConfig } from '@whatsbot/core'
+import type { BotRepository, FlowRepository, MessagingPort, Conversation, Flow, Bot, ConversationEventRepository, ConversationOutcomeRepository, LeadRepository, RecoveryConfig } from '@whatsbot/core'
 import { MODULE_IDS } from '@whatsbot/core'
 import type { ModuleRegistry } from './ModuleRegistry.js'
 
@@ -22,6 +22,7 @@ export class TimeoutService {
     private leadRepo?: LeadRepository,
     private eventRepo?: ConversationEventRepository,
     private moduleRegistry?: ModuleRegistry,
+    private conversationOutcomeRepo?: ConversationOutcomeRepository,
   ) {}
 
   start(): void {
@@ -83,6 +84,14 @@ export class TimeoutService {
         payload: { reason, nodeId: captureNode.id, variableName: data.variableName },
         occurredAt: new Date(),
       }).catch(() => {})
+      // F0 — desfecho: capture sem saída de timeout = cliente sumiu nesse passo.
+      this.conversationOutcomeRepo?.record({
+        conversationId: conversation.id,
+        botId: conversation.botId,
+        flowId: conversation.flowId ?? null,
+        lastPhase: conversation.phase ?? null,
+        outcome: 'timeout',
+      }).catch(e => console.error('[TimeoutService] outcome record failed:', e?.message))
       return
     }
 

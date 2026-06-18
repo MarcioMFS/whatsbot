@@ -25,6 +25,7 @@ import { TimeoutService } from './services/TimeoutService.js'
 import { startMessageWorker } from './queue/messageWorker.js'
 import { PostgreSQLLeadRepository } from './adapters/PostgreSQLLeadRepository.js'
 import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConversationEventRepository.js'
+import { PostgreSQLConversationOutcomeRepository } from './adapters/PostgreSQLConversationOutcomeRepository.js'
 import { PostgreSQLPaymentIntentRepository } from './adapters/PostgreSQLPaymentIntentRepository.js'
 import { PostgreSQLProductRepository } from './adapters/PostgreSQLProductRepository.js'
 import { PostgreSQLOrderRepository } from './adapters/PostgreSQLOrderRepository.js'
@@ -37,6 +38,7 @@ import { VisionTitleExtractor } from './services/VisionTitleExtractor.js'
 import { GeminiProvider } from './agent/providers/GeminiProvider.js'
 import { GroqAgentProvider } from './agent/providers/GroqAgentProvider.js'
 import { SegmentGenerationService } from './services/SegmentGenerationService.js'
+import { FlowGenerationService } from './services/FlowGenerationService.js'
 import { ImproverService } from './services/ImproverService.js'
 import { AgentRuntime } from './agent/AgentRuntime.js'
 import { ModuleRegistry } from './services/ModuleRegistry.js'
@@ -82,6 +84,7 @@ const flowVersionRepo = new PostgreSQLFlowVersionRepository(db)
 const conversationRepo = new RedisConversationRepository(redis, db)
 const leadRepo = new PostgreSQLLeadRepository(db)
 const eventRepo = new PostgreSQLConversationEventRepository(db)
+const conversationOutcomeRepo = new PostgreSQLConversationOutcomeRepository(db)
 const paymentIntentRepo = new PostgreSQLPaymentIntentRepository(db)
 
 const messaging = new EvolutionAPIAdapter(
@@ -138,15 +141,16 @@ const flowExecService = new FlowExecutionService(
   eventRepo, paymentOrchestrator, paymentIntentRepo,
   catalogSearchService, productRepo, orderRepo, deliveryService, packageOfferRepo, handoffRepo,
   contextualAIRouter, paymentPhaseRouter, capabilityRouter, observationRepo,
-  visionTitleExtractor,
+  visionTitleExtractor, conversationOutcomeRepo,
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const segmentGen = new SegmentGenerationService(aiService)
+const flowGen = new FlowGenerationService(aiService)
 // Registro de Módulos — resolve liga/desliga + config por bot; alimenta tool-set do agente (F2) e efeitos (F3).
 const moduleRegistry = new ModuleRegistry()
 console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: ${moduleRegistry.definitions().map(m => m.id).join(', ')}`)
 
-const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo, moduleRegistry)
+const timeoutService = new TimeoutService(conversationRepo, botRepo, flowRepo, messaging, flowExecService, leadRepo, eventRepo, moduleRegistry, conversationOutcomeRepo)
 timeoutService.start()
 
 // #sec: nunca '*' num backend financeiro. FRONTEND_URL está setada em prod; fallback = false (fail-safe).
@@ -169,7 +173,7 @@ await app.register(handoffRoutes, { prefix: '/api/handoffs', handoffRepo, convRe
 await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymentIntentRepo, botRepo })
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector, botRepo })
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
-await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, improver, db })
+await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, flowGen, improver, db })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.
