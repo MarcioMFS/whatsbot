@@ -1368,10 +1368,33 @@ export class FlowExecutionService {
           conversation.setVariable('__rt_has_unresolved', 'true')
           conversation.setVariable('__rt_search_unresolved', JSON.stringify(result.unresolved))
           this.emit(bot.id, conversation.id, phone, 'product_not_found', { query, unresolved: result.unresolved })
-          // auto-handoff: série não encontrada
+
+          // #not-found gracioso (mata a causa dos 46 series_not_found): em vez de escalar de cara,
+          // oferece os títulos mais próximos + pede nome/link, e SÓ escala após 2 tentativas seguidas.
+          const ndCount = Number(conversation.variables['__rt_notfound_count'] ?? 0) + 1
+          conversation.setVariable('__rt_notfound_count', String(ndCount))
+          const instance = bot.evolutionConfig.instanceName
+          const instanceId = bot.evolutionConfig.instanceId
+
+          if (ndCount < 2) {
+            const sugg = (result.suggestions ?? []).filter(Boolean).slice(0, 3)
+            const sugLines = sugg.length ? `\n\nVocê quis dizer alguma dessas? 👇\n${sugg.map(s => `• ${s}`).join('\n')}` : ''
+            const msg = `Hmm, não achei *"${query.slice(0, 60)}"* exatamente 😅${sugLines}\n\nMe manda o *nome certinho* (ou o print/link do anúncio) que eu procuro pra você 🔎`
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+            conversation.addAssistantMessage(msg)
+            // volta pra captura principal: a próxima mensagem (nome melhor / uma das sugestões) re-busca.
+            const mainCap = this.findMainCaptureNodeId(flow)
+            if (mainCap) conversation.moveToNode(mainCap)
+            await this.convRepo.save(conversation)
+            return
+          }
+          // 2+ tentativas sem achar → escala pro humano (cliente realmente não acha).
+          conversation.setVariable('__rt_notfound_count', '0')
           this.createHandoff({ bot, conversation, lead, reason: 'series_not_found', lastMessage: query }).catch(e => console.error('[FlowExecution] createHandoff failed:', e?.message))
           return flow.getNextNodes(node.id, 'not_found')[0]?.id
         }
+
+        conversation.setVariable('__rt_notfound_count', '0') // achou → zera o contador do not-found gracioso
 
         // Only the top result per search action — avoids adding multiple products for vague queries
         const top = result.products[0]

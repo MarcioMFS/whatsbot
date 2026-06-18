@@ -76,6 +76,9 @@ function extractListItems(message: string): string[] {
 export interface CatalogSearchResult {
   products: Array<{ product: Product; confidence: number; searchQuery: string }>
   unresolved: string[]
+  // #not-found gracioso: candidatos fuzzy mais próximos (trigram) mesmo quando nada passou o threshold.
+  // Servem pro "você quis dizer?" em vez de escalar direto. (ex.: "o beijo q expõe" → "BEIJO QUE EXPÕE TUDO")
+  suggestions?: string[]
 }
 
 export interface CatalogSearchAuditCtx {
@@ -144,6 +147,8 @@ export class CatalogSearchService {
     const directResults = await this.productRepo.search(botId, normalized, 10)
     const fuzzyCandidates = directResults.map(p => p.name)
     console.log(`${tag} fuzzyCandidates=${JSON.stringify(fuzzyCandidates)}`)
+    // top-3 candidatos mais próximos p/ o "você quis dizer?" quando nada casar (not-found gracioso).
+    const suggestions = directResults.slice(0, 3).map(p => p.name)
 
     if (directResults.length > 0) {
       const scored = directResults.map(p => {
@@ -218,7 +223,7 @@ export class CatalogSearchService {
     } catch (err) {
       console.log(`${tag} decision=not_found reason=ai_parse_error err=${err instanceof Error ? err.message : err}`)
       saveAudit('not_found', 0, { reason: 'ai_parse_error', provider: 'groq', usedFallback: true })
-      return { products: [], unresolved: [userMessage] }
+      return { products: [], unresolved: [userMessage], suggestions }
     }
 
     const found: CatalogSearchResult['products'] = []
@@ -252,7 +257,7 @@ export class CatalogSearchService {
       saveAudit('not_found', 0, { reason: 'ai_returned_no_candidates', provider: 'groq' })
     }
 
-    return { products: found, unresolved }
+    return { products: found, unresolved, suggestions: found.length === 0 ? suggestions : undefined }
   }
 
   private async searchMultiple(botId: string, items: string[]): Promise<CatalogSearchResult> {
