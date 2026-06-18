@@ -17,6 +17,7 @@ import { RedisConversationRepository } from './adapters/RedisConversationReposit
 import { EvolutionAPIAdapter } from './adapters/EvolutionAPIAdapter.js'
 import { ClaudeAdapter } from './adapters/ClaudeAdapter.js'
 import { GroqAdapter } from './adapters/GroqAdapter.js'
+import { NvidiaNIMAdapter } from './adapters/NvidiaNIMAdapter.js'
 import { BotService } from './services/BotService.js'
 import { FlowExecutionService } from './services/FlowExecutionService.js'
 import { AIGenerationService } from './services/AIGenerationService.js'
@@ -94,6 +95,8 @@ const groqKeys = [
 const aiProviders = {
   claude: process.env.CLAUDE_API_KEY ? new ClaudeAdapter(process.env.CLAUDE_API_KEY) : null,
   groq: groqKeys.length ? new GroqAdapter(groqKeys) : null,
+  // Builder/Improver: free endpoint, NUNCA no hot-path do cliente (ver AIGenerationService.generateBuilder).
+  nvidia: process.env.NVIDIA_API_KEY ? new NvidiaNIMAdapter(process.env.NVIDIA_API_KEY) : null,
 }
 
 const transcriptionService = groqKeys.length ? new TranscriptionService(groqKeys) : undefined
