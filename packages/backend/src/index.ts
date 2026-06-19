@@ -41,6 +41,7 @@ import { SegmentGenerationService } from './services/SegmentGenerationService.js
 import { FlowGenerationService } from './services/FlowGenerationService.js'
 import { ImproverService } from './services/ImproverService.js'
 import { MetricsAggregator } from './services/MetricsAggregator.js'
+import { PatternDistiller } from './services/PatternDistiller.js'
 import { AgentRuntime } from './agent/AgentRuntime.js'
 import { ModuleRegistry } from './services/ModuleRegistry.js'
 import { ContextualAIRouter } from './services/ContextualAIRouter.js'
@@ -149,6 +150,7 @@ const botService = new BotService(botRepo, flowRepo, messaging)
 const segmentGen = new SegmentGenerationService(aiService)
 const flowGen = new FlowGenerationService(aiService)
 const metricsAggregator = new MetricsAggregator(db)
+const patternDistiller = new PatternDistiller(db)
 // Registro de Módulos — resolve liga/desliga + config por bot; alimenta tool-set do agente (F2) e efeitos (F3).
 const moduleRegistry = new ModuleRegistry()
 console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: ${moduleRegistry.definitions().map(m => m.id).join(', ')}`)
@@ -159,6 +161,9 @@ timeoutService.start()
 // F1 — materializa o funnel_metrics no boot e de hora em hora (read-only, fora do hot-path).
 metricsAggregator.refresh().then(r => console.log(`[MetricsAggregator] funnel_metrics refreshed: ${r.scopes} escopos`)).catch(e => console.error('[MetricsAggregator] refresh inicial falhou:', e?.message))
 setInterval(() => { metricsAggregator.refresh().catch(e => console.error('[MetricsAggregator] refresh falhou:', e?.message)) }, 60 * 60_000)
+
+// F2 — semeia o store de padrões vencedores com o playbook (idempotente) no boot.
+patternDistiller.seed().then(r => console.log(`[PatternDistiller] winning_patterns seeded: ${r.seeded} do playbook`)).catch(e => console.error('[PatternDistiller] seed falhou:', e?.message))
 
 // #sec: nunca '*' num backend financeiro. FRONTEND_URL está setada em prod; fallback = false (fail-safe).
 await app.register(cors, { origin: process.env.FRONTEND_URL ?? false })
@@ -181,7 +186,7 @@ await app.register(paymentIntentRoutes, { prefix: '/api/payment-intents', paymen
 await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capabilityRepo, capabilityRouter, patternDetector, botRepo })
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
 await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, flowGen, improver, db })
-await app.register(metricsRoutes, { prefix: '/api/metrics', aggregator: metricsAggregator, botRepo })
+await app.register(metricsRoutes, { prefix: '/api/metrics', aggregator: metricsAggregator, distiller: patternDistiller, botRepo })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.

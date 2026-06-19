@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import type { BotRepository } from '@whatsbot/core'
 import type { MetricsAggregator } from '../services/MetricsAggregator.js'
+import type { PatternDistiller } from '../services/PatternDistiller.js'
 
 interface MetricsCtx {
   aggregator: MetricsAggregator
+  distiller: PatternDistiller
   botRepo: BotRepository
 }
 
@@ -37,5 +39,19 @@ export async function metricsRoutes(app: FastifyInstance, ctx: MetricsCtx) {
     if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
     const r = await ctx.aggregator.refresh(clampDays(req.body?.days))
     return { ok: true, ...r }
+  })
+
+  // F2 — store de padrões vencedores (seed do playbook + destilados). O que o F3 vai consumir.
+  app.get<{ Querystring: { vertical?: string } }>('/patterns', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
+    return { patterns: await ctx.distiller.getPatternsForGeneration(req.query.vertical) }
+  })
+
+  // F2 — roda a destilação (offline, free). Hoje retorna [] honesto (sem volume). Owner autenticado.
+  app.post<{ Body: { days?: number } }>('/distill', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
+    return ctx.distiller.distill(clampDays(req.body?.days))
   })
 }
