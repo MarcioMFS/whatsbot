@@ -28,6 +28,7 @@ interface AgentTone {
 }
 
 interface GlobalConfig {
+  poolOptOut?: boolean
   defaultPixKey?: string
   defaultReceiverName?: string
   ownerPhone?: string
@@ -308,7 +309,12 @@ export function BotConfig() {
           <ProposalsPanel botId={bot.id} activeFlowId={bot.activeFlowId} />
         )}
         {activeTab === 'painel' && (
-          <MetricsPanel botId={bot.id} />
+          <MetricsPanel
+            botId={bot.id}
+            optedOut={!!globalConfig.poolOptOut}
+            onToggleOptOut={(v) => saveGlobal({ poolOptOut: v }, 'pool')}
+            savingOptOut={savingTab === 'pool'}
+          />
         )}
 
         {activeTab === 'conhecimento' && (

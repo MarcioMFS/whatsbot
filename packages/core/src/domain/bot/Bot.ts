@@ -64,6 +64,7 @@ export interface BotGlobalConfig {
   aiRouterMode?: 'contextual' | 'escape_hatch' // nó ai_router: 'contextual' (legado, default) ou 'escape_hatch' (genérico, governado por aiGapFill). Fase 2 da aposentadoria.
   messageSplit?: MessageSplitConfig            // agente: quebra a resposta em mensagens separadas (humano no WhatsApp), com delay de "digitando". Default ligado.
   autoHandoff?: AutoHandoffConfig              // rede de segurança: cliente travado num capture (N rejeições seguidas) → escala pro humano. Sinal comportamental, sem keyword-guessing.
+  poolOptOut?: boolean                          // F5 governança: true = bot SAI do aprendizado global — suas conversas não alimentam a destilação (privacidade/LGPD) e o gerador usa só o playbook (sem padrões destilados de outros). Default off (participa).
 }
 
 // Rede de segurança: quando o cliente fica preso num nó de captura (manda texto onde se espera imagem,

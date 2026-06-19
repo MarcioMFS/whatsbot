@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Sparkles, Trophy, Loader2, Inbox, AlertTriangle } from 'lucide-react'
-import { Eyebrow, InfoTip } from '../mkhub'
+import { Sparkles, Trophy, Loader2, Inbox, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { Eyebrow, InfoTip, MkSwitch } from '../mkhub'
 import { api, type FunnelResult, type WinningPattern, type VersionPerf } from '../../api/client.ts'
+
+type AuditFlow = { flowId: string; flowName: string; patternSetVersion: string; patterns: Array<{ field: string; bucket: string; status: string }> }
 
 // Painel evolutivo (read-only): onde o cliente cai (F1), padrões que convertem (F2), performance por versão (F4).
 const STAGE_LABEL: Record<string, string> = { started: 'Iniciou', browsed: 'Buscou', cart: 'Carrinho', checkout: 'Checkout', paid: 'Pagou' }
@@ -22,19 +24,25 @@ const STATUS_META: Record<string, { label: string; bg: string; fg: string }> = {
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 const brl = (centavos: number) => (centavos / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export function MetricsPanel({ botId }: { botId: string }) {
+export function MetricsPanel({ botId, optedOut, onToggleOptOut, savingOptOut }: {
+  botId: string
+  optedOut: boolean
+  onToggleOptOut: (optOut: boolean) => void
+  savingOptOut: boolean
+}) {
   const [days, setDays] = useState(30)
   const [funnel, setFunnel] = useState<{ bot: FunnelResult; global: FunnelResult | null } | null>(null)
   const [patterns, setPatterns] = useState<Record<string, WinningPattern[]>>({})
   const [versions, setVersions] = useState<VersionPerf[]>([])
+  const [audit, setAudit] = useState<AuditFlow[]>([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     setLoading(true); setErr(null)
-    Promise.all([api.metrics.funnel(botId, days), api.metrics.patterns(), api.metrics.performance(Math.max(days, 90))])
-      .then(([f, p, perf]) => { if (!alive) return; setFunnel({ bot: f.bot, global: f.global }); setPatterns(p.patterns); setVersions(perf.versions) })
+    Promise.all([api.metrics.funnel(botId, days), api.metrics.patterns(), api.metrics.performance(Math.max(days, 90)), api.metrics.audit(botId)])
+      .then(([f, p, perf, a]) => { if (!alive) return; setFunnel({ bot: f.bot, global: f.global }); setPatterns(p.patterns); setVersions(perf.versions); setAudit(a.flows) })
       .catch(e => { if (alive) setErr(e instanceof Error ? e.message : 'erro ao carregar') })
       .finally(() => { if (alive) setLoading(false) })
     return () => { alive = false }
@@ -57,6 +65,22 @@ export function MetricsPanel({ botId }: { botId: string }) {
         </div>
       </div>
 
+      {/* Governança — opt-out do aprendizado global (privacidade/LGPD) */}
+      <div className="rounded-2xl p-4 flex items-center justify-between gap-3 flex-wrap" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+        <div className="flex items-start gap-2">
+          <ShieldCheck size={16} style={{ color: optedOut ? 'var(--muted)' : '#22a06b', marginTop: 2 }} />
+          <div>
+            <div className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Aprendizado global {savingOptOut && <span className="text-xs font-normal" style={{ color: 'var(--muted)' }}>· salvando…</span>}</div>
+            <div className="text-xs mt-0.5" style={{ color: 'var(--muted)', maxWidth: 470 }}>
+              {optedOut
+                ? 'Desligado: as conversas deste bot NÃO alimentam o pool e o gerador usa só o playbook (sem padrões destilados de outros).'
+                : 'Ligado: contribui com padrões anônimos (sem PII) e recebe os que mais convertem na plataforma.'}
+            </div>
+          </div>
+        </div>
+        <MkSwitch on={!optedOut} onChange={() => onToggleOptOut(!optedOut)} label={optedOut ? 'Fora' : 'Participando'} />
+      </div>
+
       {err && <div className="rounded-xl px-4 py-3 text-sm" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)', color: '#b42318' }}>{err}</div>}
 
       {loading ? (
@@ -67,6 +91,7 @@ export function MetricsPanel({ botId }: { botId: string }) {
           {funnel?.global && <FunnelChart title="Global (anônimo · todos os bots)" data={funnel.global} subtle />}
           <PatternsSection patterns={patterns} />
           <PerformanceSection versions={versions} />
+          <AuditSection flows={audit} />
         </>
       )}
     </div>
@@ -184,6 +209,34 @@ function PerformanceSection({ versions }: { versions: VersionPerf[] }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function AuditSection({ flows }: { flows: AuditFlow[] }) {
+  if (flows.length === 0) return null
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <ShieldCheck size={14} style={{ color: 'var(--muted)' }} />
+        <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>Auditoria — o que gerou cada funil</span>
+        <InfoTip text={<>Quais padrões alimentaram cada fluxo que a IA gerou. Rastreável por versão.</>} />
+      </div>
+      <div className="space-y-2">
+        {flows.map(f => (
+          <div key={f.flowId} className="rounded-lg px-3 py-2" style={{ border: '1px solid var(--line)', background: 'var(--paper)' }}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{f.flowName}</span>
+              <span className="text-xs font-mono" style={{ color: 'var(--muted)' }}>{f.patternSetVersion}</span>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              {f.patterns.length === 0
+                ? <span className="text-xs" style={{ color: 'var(--muted)' }}>(sem padrões registrados)</span>
+                : f.patterns.map((p, i) => <span key={i} className="text-xs rounded-full px-2 py-0.5" style={{ background: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-soft)' }}>{p.bucket}</span>)}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

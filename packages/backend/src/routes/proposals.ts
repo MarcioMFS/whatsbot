@@ -68,9 +68,10 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
     // generate_flow (passo 5): gera um FLUXO NOVO inteiro (gabarito determinístico) — não
     // depende de flow existente. flowId=null → vira flow inativo só ao ser aprovado no gate.
     if (kind === 'generate_flow') {
+      const genBot = await ctx.botRepo.findById(botId) // F5: bot opted-out usa só o playbook
       let compiled
       try {
-        compiled = await ctx.flowGen.generate(businessDescription ?? '')
+        compiled = await ctx.flowGen.generate(businessDescription ?? '', { poolOptOut: !!genBot?.globalConfig?.poolOptOut })
       } catch (err) {
         req.log.error(err)
         return reply.code(502).send({ error: 'Falha na geração do fluxo pela IA' })

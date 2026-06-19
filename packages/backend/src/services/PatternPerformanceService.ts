@@ -66,7 +66,8 @@ export class PatternPerformanceService {
          FROM pattern_set_members m
          JOIN flows f ON f.pattern_set_version = m.pattern_set_version
          JOIN conversation_outcomes co ON co.flow_id = f.id
-         WHERE m.pattern_id = $1 AND co.created_at >= now() - ($2 || ' days')::interval`,
+         WHERE m.pattern_id = $1 AND co.created_at >= now() - ($2 || ' days')::interval
+           AND co.bot_id NOT IN (SELECT id FROM bots WHERE (global_config->>'poolOptOut')::boolean IS TRUE)`,
         [c.id, windowDays],
       )
       const total = rows[0].total as number, bots = rows[0].bots as number, paid = rows[0].paid as number

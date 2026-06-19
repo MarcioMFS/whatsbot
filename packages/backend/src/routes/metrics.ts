@@ -57,6 +57,13 @@ export async function metricsRoutes(app: FastifyInstance, ctx: MetricsCtx) {
     return ctx.distiller.distill(clampDays(req.body?.days))
   })
 
+  // F5 — auditoria: quais padrões alimentaram cada flow GERADO do bot (owner-gated).
+  app.get<{ Params: { botId: string } }>('/audit/:botId', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!await ownsBot(req.params.botId, user.id)) return reply.code(404).send({ error: 'Not found' })
+    return { flows: await ctx.distiller.auditBot(req.params.botId) }
+  })
+
   // F4 — conversão por versão de padrões (qual conjunto converte mais). Read-only.
   app.get<{ Querystring: { days?: string } }>('/performance', async (req, reply) => {
     const user = req.user as { id: string }

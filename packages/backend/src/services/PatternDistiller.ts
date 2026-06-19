@@ -82,9 +82,11 @@ export class PatternDistiller {
   // cruza com a conversão, aplica Wilson + k-anonymity. Hoje retorna [] (F3 ainda não carimba versões
   // e o volume é baixo) — o motor fica ARMADO; liga quando o volume cruzar o limiar. Honesto.
   async distill(windowDays = 90): Promise<{ candidates: DistillCandidate[]; baselineConvRate: number; note: string }> {
+    // Bots que SAÍRAM do pool (F5) não contribuem com a destilação global — privacidade.
+    const NOT_OPTED_OUT = `bot_id NOT IN (SELECT id FROM bots WHERE (global_config->>'poolOptOut')::boolean IS TRUE)`
     const base = await this.db.query(
       `SELECT count(*)::int AS total, count(*) FILTER (WHERE outcome='paid')::int AS paid
-       FROM conversation_outcomes WHERE created_at >= now() - ($1 || ' days')::interval`,
+       FROM conversation_outcomes WHERE created_at >= now() - ($1 || ' days')::interval AND ${NOT_OPTED_OUT}`,
       [windowDays],
     )
     const baselineConvRate = base.rows[0].total > 0 ? base.rows[0].paid / base.rows[0].total : 0
@@ -95,7 +97,7 @@ export class PatternDistiller {
               count(DISTINCT bot_id)::int AS bots,
               count(*) FILTER (WHERE outcome='paid')::int AS paid
        FROM conversation_outcomes
-       WHERE created_at >= now() - ($1 || ' days')::interval AND pattern_set_version IS NOT NULL
+       WHERE created_at >= now() - ($1 || ' days')::interval AND pattern_set_version IS NOT NULL AND ${NOT_OPTED_OUT}
        GROUP BY pattern_set_version`,
       [windowDays],
     )
@@ -115,17 +117,39 @@ export class PatternDistiller {
     return { candidates, baselineConvRate, note }
   }
 
-  // API que o F3 consome: padrões ATIVOS (seed + promoted) por campo, opcional por vertical.
-  async getPatternsForGeneration(vertical?: string): Promise<Record<string, PatternForGen[]>> {
+  // API que o F3 consome: padrões ATIVOS por campo. includeGlobal=false (bot opted-out / F5) →
+  // só o playbook (seed), SEM os destilados de outros bots — privacidade.
+  async getPatternsForGeneration(vertical?: string, includeGlobal = true): Promise<Record<string, PatternForGen[]>> {
+    const statuses = includeGlobal ? ['seed', 'promoted'] : ['seed']
     const { rows } = await this.db.query(
       `SELECT id, field, bucket, guidance, sample_text_anon, status FROM winning_patterns
-       WHERE status IN ('seed','promoted') AND (vertical IS NULL OR vertical = $1)
+       WHERE status = ANY($2) AND (vertical IS NULL OR vertical = $1)
        ORDER BY field, (status='promoted') DESC`,
-      [vertical ?? null],
+      [vertical ?? null, statuses],
     )
     const out: Record<string, PatternForGen[]> = {}
     for (const r of rows) {
       ;(out[r.field] ??= []).push({ id: r.id, field: r.field, bucket: r.bucket, guidance: r.guidance, sampleTextAnon: r.sample_text_anon, status: r.status })
+    }
+    return out
+  }
+
+  // F5 auditoria: pra cada flow GERADO de um bot, quais padrões o alimentaram (via pattern_set_members).
+  async auditBot(botId: string): Promise<Array<{ flowId: string; flowName: string; patternSetVersion: string; patterns: Array<{ field: string; bucket: string; status: string }> }>> {
+    const flows = await this.db.query(
+      `SELECT id, name, pattern_set_version FROM flows
+       WHERE bot_id = $1 AND pattern_set_version IS NOT NULL ORDER BY updated_at DESC`,
+      [botId],
+    )
+    const out = []
+    for (const f of flows.rows) {
+      const m = await this.db.query(
+        `SELECT wp.field, wp.bucket, wp.status FROM pattern_set_members psm
+         JOIN winning_patterns wp ON wp.id = psm.pattern_id
+         WHERE psm.pattern_set_version = $1 ORDER BY wp.field`,
+        [f.pattern_set_version],
+      )
+      out.push({ flowId: f.id as string, flowName: f.name as string, patternSetVersion: f.pattern_set_version as string, patterns: m.rows.map(r => ({ field: r.field as string, bucket: r.bucket as string, status: r.status as string })) })
     }
     return out
   }

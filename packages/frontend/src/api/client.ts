@@ -275,5 +275,7 @@ export const api = {
       request<{ patterns: Record<string, WinningPattern[]> }>(`/metrics/patterns${vertical ? `?vertical=${encodeURIComponent(vertical)}` : ''}`),
     performance: (days = 90) =>
       request<{ baseline: number; versions: VersionPerf[] }>(`/metrics/performance?days=${days}`),
+    audit: (botId: string) =>
+      request<{ flows: Array<{ flowId: string; flowName: string; patternSetVersion: string; patterns: Array<{ field: string; bucket: string; status: string }> }> }>(`/metrics/audit/${botId}`),
   },
 }

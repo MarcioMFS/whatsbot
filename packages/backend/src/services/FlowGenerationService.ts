@@ -5,7 +5,7 @@ import type { AIGenerationService } from './AIGenerationService.js'
 // F3 — fonte dos padrões vencedores (implementada pelo PatternDistiller do F2). Tipo ESTRUTURAL:
 // qualquer coisa com getPatternsForGeneration serve, sem acoplar o gerador ao distiller.
 export interface GlobalPatternProvider {
-  getPatternsForGeneration(vertical?: string): Promise<Record<string, Array<{ id: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>>
+  getPatternsForGeneration(vertical?: string, includeGlobal?: boolean): Promise<Record<string, Array<{ id: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>>
 }
 type PatternMap = Awaited<ReturnType<GlobalPatternProvider['getPatternsForGeneration']>>
 
@@ -19,12 +19,13 @@ export class FlowGenerationService {
   constructor(private ai: AIGenerationService, private patternProvider?: GlobalPatternProvider) {}
 
   // businessDescription = texto livre do dono ("vendo doramas dublados a R$6, pago no PIX...").
-  async generate(businessDescription: string): Promise<CompiledFlow & { brief: FlowBrief; patternSetVersion: string | null; patternIds: string[] }> {
+  // opts.poolOptOut (F5): bot fora do aprendizado global → usa só o playbook, sem padrões destilados.
+  async generate(businessDescription: string, opts?: { poolOptOut?: boolean }): Promise<CompiledFlow & { brief: FlowBrief; patternSetVersion: string | null; patternIds: string[] }> {
     const desc = (businessDescription ?? '').trim()
 
     // F3 — puxa os padrões vencedores (RAG few-shot). Degradação graciosa: sem provider/padrões,
     // o systemPrompt fica idêntico ao estático de antes. patternSetVersion carimba qual conjunto gerou.
-    const patterns = await this.loadPatterns()
+    const patterns = await this.loadPatterns(!opts?.poolOptOut)
     const patternBlock = buildPatternBlock(patterns)
     const patternSetVersion = patternBlock ? versionOf(patterns) : null
     // F4 — os padrões que de fato entraram no bloco (top-3/campo), pra creditar performance depois.
@@ -81,9 +82,9 @@ export class FlowGenerationService {
     return { ...compiled, brief, patternSetVersion, patternIds }
   }
 
-  private async loadPatterns(): Promise<PatternMap> {
+  private async loadPatterns(includeGlobal: boolean): Promise<PatternMap> {
     if (!this.patternProvider) return {}
-    try { return await this.patternProvider.getPatternsForGeneration() } catch { return {} }
+    try { return await this.patternProvider.getPatternsForGeneration(undefined, includeGlobal) } catch { return {} }
   }
 }
 

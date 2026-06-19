@@ -245,6 +245,7 @@ export const GlobalConfigSchema = z.object({
     enabled:        z.boolean().optional(),
     captureRejects: z.number().int().min(1).max(10).optional(),
   }).strict().optional(),
+  poolOptOut: z.boolean().optional(),                 // F5 governança: bot sai do aprendizado global (privacidade/LGPD)
 }).strict()
 
 export type GlobalConfigInput = z.infer<typeof GlobalConfigSchema>
