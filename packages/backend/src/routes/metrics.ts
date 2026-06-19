@@ -2,10 +2,12 @@ import type { FastifyInstance } from 'fastify'
 import type { BotRepository } from '@whatsbot/core'
 import type { MetricsAggregator } from '../services/MetricsAggregator.js'
 import type { PatternDistiller } from '../services/PatternDistiller.js'
+import type { PatternPerformanceService } from '../services/PatternPerformanceService.js'
 
 interface MetricsCtx {
   aggregator: MetricsAggregator
   distiller: PatternDistiller
+  performance: PatternPerformanceService
   botRepo: BotRepository
 }
 
@@ -53,5 +55,19 @@ export async function metricsRoutes(app: FastifyInstance, ctx: MetricsCtx) {
     const user = req.user as { id: string }
     if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
     return ctx.distiller.distill(clampDays(req.body?.days))
+  })
+
+  // F4 — conversão por versão de padrões (qual conjunto converte mais). Read-only.
+  app.get<{ Querystring: { days?: string } }>('/performance', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
+    return ctx.performance.evaluateVersions(clampDays(req.query.days))
+  })
+
+  // F4 — roda a decisão promover/aposentar padrões por dado. Hoje no-op honesto (sem candidates/volume).
+  app.post<{ Body: { days?: number } }>('/promote', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
+    return ctx.performance.run(clampDays(req.body?.days))
   })
 }

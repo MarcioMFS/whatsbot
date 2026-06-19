@@ -80,7 +80,7 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
         proposedContent: {
           name: compiled.name, nodes: compiled.nodes, edges: compiled.edges,
           brief: compiled.brief, nodeCount: compiled.nodes.length,
-          patternSetVersion: compiled.patternSetVersion,
+          patternSetVersion: compiled.patternSetVersion, patternIds: compiled.patternIds,
         },
         baselineStamp: null, createdBy: 'ai',
       })
@@ -137,7 +137,7 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
     // generate_flow: cria um FLUXO NOVO e INATIVO. Sem baseline/staleness (não há flow anterior).
     // Revalida o grafo mecanicamente ANTES de persistir — gate nunca grava fluxo quebrado.
     if (p.kind === 'generate_flow') {
-      const content = p.proposedContent as { name?: unknown; nodes?: unknown; edges?: unknown }
+      const content = p.proposedContent as { name?: unknown; nodes?: unknown; edges?: unknown; patternSetVersion?: unknown; patternIds?: unknown }
       const nodes = (Array.isArray(content.nodes) ? content.nodes : []) as FlowNode[]
       const edges = (Array.isArray(content.edges) ? content.edges : []) as FlowEdge[]
       const v = validateFlowGraph(nodes, edges)
@@ -147,6 +147,15 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
       flow.updateNodes(nodes, edges)
       flow.validate() // domínio: exatamente 1 trigger
       await ctx.flowRepo.save(flow) // INSERT — fluxo INATIVO (isDefault=false), nunca ativa sozinho
+      // F4 — carimba a versão de padrões no flow + grava os membros, pra medir conversão depois.
+      const psv = typeof content.patternSetVersion === 'string' ? content.patternSetVersion : null
+      if (psv) {
+        await ctx.db.query('UPDATE flows SET pattern_set_version = $1 WHERE id = $2', [psv, flow.id])
+        const pids = Array.isArray(content.patternIds) ? content.patternIds.filter((x): x is string => typeof x === 'string') : []
+        for (const pid of pids) {
+          await ctx.db.query('INSERT INTO pattern_set_members (pattern_set_version, pattern_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [psv, pid])
+        }
+      }
       const version = await ctx.flowVersionRepo.snapshot({
         flowId: flow.id, nodes, edges, changedBy: user.id, reason: `flow gerado pela IA (proposta ${p.id})`,
       })

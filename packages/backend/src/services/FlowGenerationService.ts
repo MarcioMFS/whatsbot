@@ -5,7 +5,7 @@ import type { AIGenerationService } from './AIGenerationService.js'
 // F3 — fonte dos padrões vencedores (implementada pelo PatternDistiller do F2). Tipo ESTRUTURAL:
 // qualquer coisa com getPatternsForGeneration serve, sem acoplar o gerador ao distiller.
 export interface GlobalPatternProvider {
-  getPatternsForGeneration(vertical?: string): Promise<Record<string, Array<{ bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>>
+  getPatternsForGeneration(vertical?: string): Promise<Record<string, Array<{ id: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>>
 }
 type PatternMap = Awaited<ReturnType<GlobalPatternProvider['getPatternsForGeneration']>>
 
@@ -19,7 +19,7 @@ export class FlowGenerationService {
   constructor(private ai: AIGenerationService, private patternProvider?: GlobalPatternProvider) {}
 
   // businessDescription = texto livre do dono ("vendo doramas dublados a R$6, pago no PIX...").
-  async generate(businessDescription: string): Promise<CompiledFlow & { brief: FlowBrief; patternSetVersion: string | null }> {
+  async generate(businessDescription: string): Promise<CompiledFlow & { brief: FlowBrief; patternSetVersion: string | null; patternIds: string[] }> {
     const desc = (businessDescription ?? '').trim()
 
     // F3 — puxa os padrões vencedores (RAG few-shot). Degradação graciosa: sem provider/padrões,
@@ -27,6 +27,8 @@ export class FlowGenerationService {
     const patterns = await this.loadPatterns()
     const patternBlock = buildPatternBlock(patterns)
     const patternSetVersion = patternBlock ? versionOf(patterns) : null
+    // F4 — os padrões que de fato entraram no bloco (top-3/campo), pra creditar performance depois.
+    const patternIds = patternBlock ? Object.values(patterns).flatMap(ps => ps.slice(0, 3).map(p => p.id)) : []
 
     const systemPrompt = [
       'Você é um especialista em FUNIL de vendas no WhatsApp. A partir da descrição de um negócio — que pode ser inclusive uma PÁGINA DE VENDAS / landing inteira colada — você escreve o CONTEÚDO de um funil conversacional.',
@@ -76,7 +78,7 @@ export class FlowGenerationService {
       throw new Error(`compilador gerou grafo inválido (bug do gabarito): ${v.errors.join('; ')}`)
     }
 
-    return { ...compiled, brief, patternSetVersion }
+    return { ...compiled, brief, patternSetVersion, patternIds }
   }
 
   private async loadPatterns(): Promise<PatternMap> {

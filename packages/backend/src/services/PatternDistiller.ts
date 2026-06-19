@@ -57,7 +57,7 @@ export const PLAYBOOK_SEED: SeedPattern[] = [
     sampleTextAnon: '(cliente curto → responda curto; cliente caloroso → responda caloroso)' },
 ]
 
-export interface PatternForGen { field: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }
+export interface PatternForGen { id: string; field: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }
 export interface DistillCandidate { patternSetVersion: string; total: number; bots: number; conversions: number; convRate: number; wilsonLower: number; lift: number; passesKAnon: boolean }
 
 export class PatternDistiller {
@@ -118,14 +118,14 @@ export class PatternDistiller {
   // API que o F3 consome: padrões ATIVOS (seed + promoted) por campo, opcional por vertical.
   async getPatternsForGeneration(vertical?: string): Promise<Record<string, PatternForGen[]>> {
     const { rows } = await this.db.query(
-      `SELECT field, bucket, guidance, sample_text_anon, status FROM winning_patterns
+      `SELECT id, field, bucket, guidance, sample_text_anon, status FROM winning_patterns
        WHERE status IN ('seed','promoted') AND (vertical IS NULL OR vertical = $1)
        ORDER BY field, (status='promoted') DESC`,
       [vertical ?? null],
     )
     const out: Record<string, PatternForGen[]> = {}
     for (const r of rows) {
-      ;(out[r.field] ??= []).push({ field: r.field, bucket: r.bucket, guidance: r.guidance, sampleTextAnon: r.sample_text_anon, status: r.status })
+      ;(out[r.field] ??= []).push({ id: r.id, field: r.field, bucket: r.bucket, guidance: r.guidance, sampleTextAnon: r.sample_text_anon, status: r.status })
     }
     return out
   }
