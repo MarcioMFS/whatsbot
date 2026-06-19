@@ -11,6 +11,7 @@ import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { MkCard, MkButton, MkField, MkTextarea, MkSwitch, Eyebrow, InfoTip } from '../components/mkhub'
 import { ProposalsPanel } from '../components/builder/ProposalsPanel.tsx'
+import { MetricsPanel } from '../components/builder/MetricsPanel.tsx'
 import { api, type BotModule, type FlowSegment } from '../api/client.ts'
 import { SegmentEditorModal } from '../components/flow/SegmentEditorModal.tsx'
 import { useUIStore } from '../stores/uiStore.ts'
@@ -82,6 +83,7 @@ const TABS = [
   { id: 'modulos',      label: 'Módulos',      icon: Layers },
   { id: 'skills',       label: 'Skills',       icon: Sparkles },
   { id: 'propostas',    label: 'Propostas',    icon: Lightbulb },
+  { id: 'painel',       label: 'Painel',       icon: Activity },
   { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
   { id: 'tom',          label: 'Tom',          icon: MessageCircle },
 ] as const
@@ -304,6 +306,9 @@ export function BotConfig() {
 
         {activeTab === 'propostas' && (
           <ProposalsPanel botId={bot.id} activeFlowId={bot.activeFlowId} />
+        )}
+        {activeTab === 'painel' && (
+          <MetricsPanel botId={bot.id} />
         )}
 
         {activeTab === 'conhecimento' && (

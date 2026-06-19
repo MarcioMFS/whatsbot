@@ -87,6 +87,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return res.json()
 }
 
+// Painel evolutivo — funil (F1), padrões (F2), performance por versão (F4).
+export interface FunnelStage { stage: string; order: number; count: number; convFromPrev: number | null }
+export interface FunnelResult {
+  windowDays: number
+  conversations: number
+  botsContributing: number
+  stages: FunnelStage[]
+  outcomes: { paid: number; abandoned: number; escalated: number; timeout: number; completed: number }
+  gmvCentavos: number
+}
+export interface WinningPattern { id: string; field: string; bucket: string; guidance: string; sampleTextAnon: string | null; status: string }
+export interface VersionPerf { patternSetVersion: string; total: number; bots: number; conversions: number; convRate: number; wilsonLower: number; lift: number }
+
 export const api = {
   auth: {
     login: (email: string, password: string) =>
@@ -253,5 +266,14 @@ export const api = {
       request<{ ok: boolean; applied?: string; snapshotVersion?: number; flowId?: string }>(`/proposals/${id}/approve`, { method: 'POST', body: '{}' }),
     reject: (id: string) =>
       request<{ ok: boolean }>(`/proposals/${id}/reject`, { method: 'POST', body: '{}' }),
+  },
+  // Painel evolutivo (read-only): funil de conversão, store de padrões, performance por versão.
+  metrics: {
+    funnel: (botId: string, days = 30) =>
+      request<{ bot: FunnelResult; global: FunnelResult | null; globalSuppressed: boolean }>(`/metrics/funnel/${botId}?days=${days}`),
+    patterns: (vertical?: string) =>
+      request<{ patterns: Record<string, WinningPattern[]> }>(`/metrics/patterns${vertical ? `?vertical=${encodeURIComponent(vertical)}` : ''}`),
+    performance: (days = 90) =>
+      request<{ baseline: number; versions: VersionPerf[] }>(`/metrics/performance?days=${days}`),
   },
 }
