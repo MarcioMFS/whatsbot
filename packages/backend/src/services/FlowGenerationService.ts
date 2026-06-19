@@ -1,17 +1,32 @@
 import { compileFlow, validateFlowGraph, type FlowBrief, type CompiledFlow } from '@whatsbot/core'
+import { createHash } from 'crypto'
 import type { AIGenerationService } from './AIGenerationService.js'
+
+// F3 — fonte dos padrões vencedores (implementada pelo PatternDistiller do F2). Tipo ESTRUTURAL:
+// qualquer coisa com getPatternsForGeneration serve, sem acoplar o gerador ao distiller.
+export interface GlobalPatternProvider {
+  getPatternsForGeneration(vertical?: string): Promise<Record<string, Array<{ bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>>
+}
+type PatternMap = Awaited<ReturnType<GlobalPatternProvider['getPatternsForGeneration']>>
 
 // Gerador de FLUXO ancorado em gabarito (Builder passo 5). A IA preenche um FlowBrief
 // TIPADO (copy + intents do negócio) via cadeia FREE (NVIDIA→Groq); o compilador
 // determinístico (core/flowTemplates) monta a topologia conhecida-boa e o validador
 // mecânico garante que é executável. A IA NUNCA emite nó/edge — fragilidade contida.
-// NÃO persiste — devolve um grafo pendente pro gate humano. Ver Brain/spec_builder_improver.md.
+// F3: o prompt deixa de ser estático — injeta os PADRÕES QUE MAIS CONVERTEM (store vivo do F2).
+// NÃO persiste — devolve um grafo pendente pro gate humano. Ver Brain/spec_gerador_evolutivo.md.
 export class FlowGenerationService {
-  constructor(private ai: AIGenerationService) {}
+  constructor(private ai: AIGenerationService, private patternProvider?: GlobalPatternProvider) {}
 
   // businessDescription = texto livre do dono ("vendo doramas dublados a R$6, pago no PIX...").
-  async generate(businessDescription: string): Promise<CompiledFlow & { brief: FlowBrief }> {
+  async generate(businessDescription: string): Promise<CompiledFlow & { brief: FlowBrief; patternSetVersion: string | null }> {
     const desc = (businessDescription ?? '').trim()
+
+    // F3 — puxa os padrões vencedores (RAG few-shot). Degradação graciosa: sem provider/padrões,
+    // o systemPrompt fica idêntico ao estático de antes. patternSetVersion carimba qual conjunto gerou.
+    const patterns = await this.loadPatterns()
+    const patternBlock = buildPatternBlock(patterns)
+    const patternSetVersion = patternBlock ? versionOf(patterns) : null
 
     const systemPrompt = [
       'Você é um especialista em FUNIL de vendas no WhatsApp. A partir da descrição de um negócio — que pode ser inclusive uma PÁGINA DE VENDAS / landing inteira colada — você escreve o CONTEÚDO de um funil conversacional.',
@@ -24,6 +39,7 @@ export class FlowGenerationService {
       'Regras de venda: tom humano e caloroso (sem cara de robô), espelhe o cliente, conduza pra ação (micro-compromisso), nunca prometa o que não pode cumprir.',
       'PROIBIDO datas/prazos na copy ("só hoje, 17/06", "até sexta", "termina amanhã"): você NÃO sabe a data real → vira urgência FALSA. Urgência só ATEMPORAL ("oferta especial", "por tempo limitado", "enquanto durar").',
       'PT-BR, curto e natural pra WhatsApp (1-2 emojis ok). Use os fatos REAIS do negócio.',
+      ...(patternBlock ? [patternBlock] : []),
       'Campos do JSON:',
       '- flowName: nome curto do funil (ex.: "Funil Mapa da Bíblia")',
       '- businessName: nome do negócio',
@@ -60,8 +76,37 @@ export class FlowGenerationService {
       throw new Error(`compilador gerou grafo inválido (bug do gabarito): ${v.errors.join('; ')}`)
     }
 
-    return { ...compiled, brief }
+    return { ...compiled, brief, patternSetVersion }
   }
+
+  private async loadPatterns(): Promise<PatternMap> {
+    if (!this.patternProvider) return {}
+    try { return await this.patternProvider.getPatternsForGeneration() } catch { return {} }
+  }
+}
+
+// Monta o bloco "padrões que mais convertem" pro systemPrompt (top-3 por campo). null se vazio.
+function buildPatternBlock(patterns: PatternMap): string | null {
+  const fields = Object.keys(patterns)
+  if (!fields.length) return null
+  const lines = ['PADRÕES QUE MAIS CONVERTEM (técnicas validadas — siga como guia e ADAPTE ao negócio; NÃO copie o exemplo literal):']
+  for (const field of fields) {
+    for (const p of patterns[field].slice(0, 3)) {
+      const ex = p.sampleTextAnon ? `  (ex.: "${p.sampleTextAnon}")` : ''
+      lines.push(`- ${field} [${p.bucket}]: ${p.guidance}${ex}`)
+    }
+  }
+  return lines.join('\n')
+}
+
+// Versão determinística do conjunto de padrões (mesmo conjunto → mesma versão). Carimba o flow
+// gerado pra o F4 medir depois qual conjunto converteu mais.
+function versionOf(patterns: PatternMap): string {
+  const sig = Object.entries(patterns)
+    .flatMap(([f, ps]) => ps.map(p => `${f}:${p.bucket}:${p.status}`))
+    .sort()
+    .join('|')
+  return 'ps_' + createHash('sha1').update(sig).digest('hex').slice(0, 10)
 }
 
 // Parse tolerante do brief: fatia do primeiro { ao último }, tenta JSON.parse; se truncar,

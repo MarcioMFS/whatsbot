@@ -80,6 +80,7 @@ export async function proposalRoutes(app: FastifyInstance, ctx: ProposalCtx) {
         proposedContent: {
           name: compiled.name, nodes: compiled.nodes, edges: compiled.edges,
           brief: compiled.brief, nodeCount: compiled.nodes.length,
+          patternSetVersion: compiled.patternSetVersion,
         },
         baselineStamp: null, createdBy: 'ai',
       })

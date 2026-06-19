@@ -148,9 +148,9 @@ const flowExecService = new FlowExecutionService(
 )
 const botService = new BotService(botRepo, flowRepo, messaging)
 const segmentGen = new SegmentGenerationService(aiService)
-const flowGen = new FlowGenerationService(aiService)
 const metricsAggregator = new MetricsAggregator(db)
 const patternDistiller = new PatternDistiller(db)
+const flowGen = new FlowGenerationService(aiService, patternDistiller) // F3: gerador consome os padrões vencedores
 // Registro de Módulos — resolve liga/desliga + config por bot; alimenta tool-set do agente (F2) e efeitos (F3).
 const moduleRegistry = new ModuleRegistry()
 console.log(`[ModuleRegistry] ${moduleRegistry.definitions().length} módulos: ${moduleRegistry.definitions().map(m => m.id).join(', ')}`)

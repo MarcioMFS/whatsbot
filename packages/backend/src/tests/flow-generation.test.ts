@@ -109,3 +109,35 @@ test('FlowGenerationService: lixo da IA (sem JSON) → fluxo genérico VÁLIDO (
   assert.equal(validateFlowGraph(r.nodes, r.edges).ok, true, 'fallback sempre válido')
   assert.ok(r.nodes.length > 5)
 })
+
+// ── F3: gerador consome os padrões vencedores (RAG) ──────────────────────────
+const fakeProvider = (patterns: Record<string, Array<{ bucket: string; guidance: string; sampleTextAnon: string | null; status: string }>>) =>
+  ({ getPatternsForGeneration: async () => patterns })
+
+test('F3: com patternProvider, carimba patternSetVersion determinístico e gera válido', async () => {
+  const nvidia = fake('nvidia', () => ok(JSON.stringify({ introMessage: 'Oi!' })))
+  const provider = fakeProvider({ introMessage: [{ bucket: 'hook_warm', guidance: 'abra leve', sampleTextAnon: 'Oi 😊', status: 'seed' }] })
+  const svc = new FlowGenerationService(new AIGenerationService({ claude: null, groq: null, nvidia }), provider)
+  const r = await svc.generate('vendo x')
+  assert.ok(r.patternSetVersion?.startsWith('ps_'), 'carimba versão')
+  assert.equal(validateFlowGraph(r.nodes, r.edges).ok, true)
+  const r2 = await svc.generate('vendo y')
+  assert.equal(r.patternSetVersion, r2.patternSetVersion, 'mesmo conjunto → mesma versão')
+})
+
+test('F3: sem patternProvider → patternSetVersion=null (degradação graciosa = estático)', async () => {
+  const nvidia = fake('nvidia', () => ok('{}'))
+  const svc = new FlowGenerationService(new AIGenerationService({ claude: null, groq: null, nvidia }))
+  const r = await svc.generate('x')
+  assert.equal(r.patternSetVersion, null)
+  assert.equal(validateFlowGraph(r.nodes, r.edges).ok, true)
+})
+
+test('F3: provider que falha NÃO derruba a geração (cai pro estático)', async () => {
+  const nvidia = fake('nvidia', () => ok('{}'))
+  const provider = { getPatternsForGeneration: async () => { throw new Error('db down') } }
+  const svc = new FlowGenerationService(new AIGenerationService({ claude: null, groq: null, nvidia }), provider)
+  const r = await svc.generate('x')
+  assert.equal(r.patternSetVersion, null, 'falha do provider → estático, não quebra')
+  assert.equal(validateFlowGraph(r.nodes, r.edges).ok, true)
+})
