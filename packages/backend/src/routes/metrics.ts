@@ -1,0 +1,41 @@
+import type { FastifyInstance } from 'fastify'
+import type { BotRepository } from '@whatsbot/core'
+import type { MetricsAggregator } from '../services/MetricsAggregator.js'
+
+interface MetricsCtx {
+  aggregator: MetricsAggregator
+  botRepo: BotRepository
+}
+
+// F1 — painel de funil. READ-ONLY. O dono vê o funil do PRÓPRIO bot + o funil GLOBAL anônimo
+// (só contagens agregadas, sem PII, sem identificar outro tenant). Ver Brain/spec_gerador_evolutivo.md.
+export async function metricsRoutes(app: FastifyInstance, ctx: MetricsCtx) {
+  app.addHook('preHandler', async (req) => { await req.jwtVerify() })
+
+  const ownsBot = async (botId: string, userId: string): Promise<boolean> => {
+    const bot = await ctx.botRepo.findById(botId)
+    return !!bot && bot.ownerId === userId
+  }
+  const clampDays = (d: unknown): number => Math.min(Math.max(Number(d) || 30, 1), 365)
+
+  // Funil do bot do dono + funil global anônimo (agregado de todos os bots, só counts).
+  app.get<{ Params: { botId: string }; Querystring: { days?: string } }>('/funnel/:botId', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!await ownsBot(req.params.botId, user.id)) return reply.code(404).send({ error: 'Not found' })
+    const windowDays = clampDays(req.query.days)
+    const [bot, global] = await Promise.all([
+      ctx.aggregator.computeFunnel({ botId: req.params.botId, windowDays }),
+      ctx.aggregator.computeFunnel({ windowDays }),
+    ])
+    // higiene de privacidade: só revela o global se ≥2 bots contribuíram (senão ≈ 1 tenant).
+    return { bot, global: global.botsContributing >= 2 ? global : null, globalSuppressed: global.botsContributing < 2 }
+  })
+
+  // Dispara a materialização do funnel_metrics (consumido pelo F2). Agregado read-only.
+  app.post<{ Body: { days?: number } }>('/refresh', async (req, reply) => {
+    const user = req.user as { id: string }
+    if (!user?.id) return reply.code(401).send({ error: 'Unauthorized' })
+    const r = await ctx.aggregator.refresh(clampDays(req.body?.days))
+    return { ok: true, ...r }
+  })
+}
