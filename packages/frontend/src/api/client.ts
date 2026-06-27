@@ -220,24 +220,6 @@ export const api = {
     delete: (id: string) =>
       request<void>(`/package-offers/${id}`, { method: 'DELETE' }),
   },
-  capabilities: {
-    list: (botId: string) =>
-      request<unknown[]>(`/capabilities/bot/${botId}`),
-    get: (id: string) =>
-      request<unknown>(`/capabilities/${id}`),
-    create: (botId: string, data: unknown) =>
-      request<unknown>(`/capabilities/bot/${botId}`, { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: unknown) =>
-      request<unknown>(`/capabilities/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-    delete: (id: string) =>
-      request<void>(`/capabilities/${id}`, { method: 'DELETE' }),
-    toggle: (id: string) =>
-      request<unknown>(`/capabilities/${id}/toggle`, { method: 'PATCH', body: '{}' }),
-    metrics: (botId: string, days = 7) =>
-      request<unknown[]>(`/capabilities/bot/${botId}/metrics?days=${days}`),
-    patterns: (botId: string, days = 7) =>
-      request<unknown[]>(`/capabilities/bot/${botId}/patterns?days=${days}`),
-  },
   observations: {
     stats: (botId: string, days = 7) =>
       request<{ stats: unknown }>(`/observations/bot/${botId}/stats?days=${days}`),

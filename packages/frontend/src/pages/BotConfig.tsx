@@ -477,7 +477,7 @@ function ConfigTab({
       </ConfigSection>}
 
       {/* Diagnóstico (ops) — gaveta colapsada, FORA do caminho do lojista. Inspecionar, não configurar.
-          Capabilities saiu daqui (legado → remoção no passo 6). */}
+          Capabilities removido da UI (passo 6); CapabilityRouter no backend permanece p/ bots-flow. */}
       <details className="mt-2">
         <summary className="flex items-center gap-2 cursor-pointer select-none">
           <Eyebrow>Diagnóstico</Eyebrow>
