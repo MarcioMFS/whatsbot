@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { Pool } from 'pg'
 import type { BotRepository, ConversationRepository, LeadRepository, MessagingPort, Bot } from '@whatsbot/core'
+import type { AIGenerationService } from '../services/AIGenerationService.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { z } from 'zod'
@@ -16,6 +17,7 @@ interface McpDeps {
   conversationRepo: ConversationRepository
   leadRepo: LeadRepository
   messaging: MessagingPort
+  aiService: AIGenerationService
 }
 interface McpClient { id: string; ownerId: string; allowedBots: string[] | null; scopes: string[] }
 
@@ -91,6 +93,52 @@ export async function mcpRoutes(app: FastifyInstance, deps: McpDeps) {
         if (!conv) return ok({ messages: [] })
         const n = Math.min(limit ?? 20, 100)
         return ok({ messages: conv.history.slice(-n).map(m => ({ role: m.role, content: m.content })) })
+      } catch (e) { return fail(e instanceof Error ? e.message : 'falha') }
+    })
+
+    server.registerTool('summarize_conversation', {
+      description: 'Resumo PT-BR da conversa (quem é / o que quer / onde parou / objeções). Usa IA na cadeia free. Requer escopo read.',
+      inputSchema: { botId: z.string(), phone: z.string() },
+    }, async ({ botId, phone }) => {
+      try {
+        await access(client, botId, 'read')
+        const conv = await deps.conversationRepo.findActiveByPhone(botId, phone)
+        if (!conv || conv.history.length === 0) {
+          const lead = await deps.leadRepo.findByPhone(botId, phone)
+          return ok({ summary: lead?.contextSummary ?? null, source: 'persisted', note: conv ? 'sem histórico ativo' : 'sem conversa ativa' })
+        }
+        const transcript = conv.history.slice(-30).map(m => `${m.role === 'user' ? 'Cliente' : 'Bot'}: ${m.content}`).join('\n')
+        const r = await deps.aiService.generateBuilder({
+          systemPrompt: 'Você resume conversas de venda no WhatsApp em PT-BR pra um assistente. 3-4 linhas: quem é / o que a pessoa quer / onde parou / objeções ou pendências. Direto. Só o resumo.',
+          promptTemplate: `Conversa:\n${transcript}`, history: [], userMessage: 'Resuma.', variables: {}, temperature: 0.3, maxTokens: 400,
+        })
+        return ok({ summary: r.content.trim(), source: 'live' })
+      } catch (e) { return fail(e instanceof Error ? e.message : 'falha') }
+    })
+
+    server.registerTool('get_lead_intelligence', {
+      description: 'Perfil do lead: tags, temperatura, resumo, último estado, PIX abandonado, último pagamento. Requer escopo read.',
+      inputSchema: { botId: z.string(), phone: z.string() },
+    }, async ({ botId, phone }) => {
+      try {
+        await access(client, botId, 'read')
+        const lead = await deps.leadRepo.findByPhone(botId, phone)
+        if (!lead) return ok({ found: false })
+        return ok({ found: true, name: lead.name, tags: lead.tags, temperature: lead.leadTemperature, lastState: lead.lastState, summary: lead.contextSummary, abandonedPixCount: lead.abandonedPixCount, lastPaymentConfirmedAt: lead.lastPaymentConfirmedAt })
+      } catch (e) { return fail(e instanceof Error ? e.message : 'falha') }
+    })
+
+    server.registerTool('get_conversation_outcome', {
+      description: 'Desfecho da última conversa desse telefone (paid/abandoned/escalated/timeout/completed) + GMV + etapa. Requer escopo read.',
+      inputSchema: { botId: z.string(), phone: z.string() },
+    }, async ({ botId, phone }) => {
+      try {
+        await access(client, botId, 'read')
+        const { rows } = await deps.db.query(
+          `SELECT co.outcome, co.gmv_centavos, co.last_phase, co.created_at
+           FROM conversation_outcomes co JOIN conversations c ON c.id = co.conversation_id
+           WHERE c.bot_id = $1 AND c.phone_number = $2 ORDER BY co.created_at DESC LIMIT 1`, [botId, phone])
+        return ok(rows[0] ? { outcome: rows[0].outcome, gmvCentavos: rows[0].gmv_centavos, lastPhase: rows[0].last_phase, at: rows[0].created_at } : { outcome: null, note: 'sem desfecho registrado' })
       } catch (e) { return fail(e instanceof Error ? e.message : 'falha') }
     })
 

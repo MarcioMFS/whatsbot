@@ -193,7 +193,7 @@ await app.register(capabilitiesRoutes, { prefix: '/api/capabilities', capability
 await app.register(observationRoutes, { prefix: '/api/observations', observationRepo, botRepo })
 await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, flowGen, improver, db })
 await app.register(metricsRoutes, { prefix: '/api/metrics', aggregator: metricsAggregator, distiller: patternDistiller, performance: patternPerformance, botRepo })
-await app.register(mcpRoutes, { prefix: '/mcp', db, botRepo, conversationRepo, leadRepo, messaging })
+await app.register(mcpRoutes, { prefix: '/mcp', db, botRepo, conversationRepo, leadRepo, messaging, aiService })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.
