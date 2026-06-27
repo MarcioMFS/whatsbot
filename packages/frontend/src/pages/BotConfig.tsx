@@ -4,7 +4,7 @@ import gsap from 'gsap'
 import {
   Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, GitBranch,
   Trash2, Settings2, Package, ChevronRight, ArrowRight, Bot, Copy,
-  Layers, Sparkles, BookOpen, MessageCircle, CreditCard, LifeBuoy,
+  Layers, Sparkles, BookOpen, CreditCard, LifeBuoy,
   RotateCcw, Search, Image as ImageIcon, Activity, Zap, X, Lightbulb,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -85,8 +85,7 @@ const TABS = [
   { id: 'skills',       label: 'Skills',       icon: Sparkles },
   { id: 'propostas',    label: 'Propostas',    icon: Lightbulb },
   { id: 'painel',       label: 'Painel',       icon: Activity },
-  { id: 'conhecimento', label: 'Conhecimento', icon: BookOpen },
-  { id: 'tom',          label: 'Tom',          icon: MessageCircle },
+  { id: 'cerebro',      label: 'Cérebro',      icon: BookOpen },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -317,12 +316,8 @@ export function BotConfig() {
           />
         )}
 
-        {activeTab === 'conhecimento' && (
-          <ConhecimentoTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
-        )}
-
-        {activeTab === 'tom' && (
-          <TomTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} preview={preview} />
+        {activeTab === 'cerebro' && (
+          <CerebroTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} preview={preview} />
         )}
 
       </div>
@@ -638,41 +633,8 @@ function SkillsTab({
   globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
   saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
 }) {
-  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
-  const save = () => saveGlobal({
-    agentInstructions: globalConfig.agentInstructions,
-    agentIntroMessage: globalConfig.agentIntroMessage,
-    agentGreeting: globalConfig.agentGreeting,
-  }, 'skills')
-
   return (
     <div className="space-y-9">
-      <ConfigSection title="Como o agente age" subtitle="Regras e jeito de vender — vira o system prompt do agente. A IA propõe, o código dispõe." badge="modo Agente"
-        info={<>Vale só quando o runtime está em <strong>Agente</strong>. São as regras de conduta da IA (como vender, o que nunca prometer). No modo <strong>Fluxo</strong>, quem manda são os nós, não isto.</>}>
-        <MkTextarea label="Instruções do agente" value={globalConfig.agentInstructions ?? ''}
-          onChange={v => set('agentInstructions', v)} rows={7}
-          placeholder={'Ex:\n- Sempre confirme o título antes de gerar o PIX\n- Se a pessoa hesitar, ofereça o pacote\n- Nunca prometa o que o módulo não faz'} />
-      </ConfigSection>
-
-      <ConfigSection title="Abertura" subtitle="Como o bot inicia a 1ª conversa. Mensagem exata tem prioridade; a orientação deixa a IA abrir com as palavras dela." badge="modo Agente"
-        info={<><strong>Atenção:</strong> esta abertura só é usada no modo <strong>Agente</strong>. No modo <strong>Fluxo</strong> (atual do seu bot), quem dá as boas-vindas são os nós da habilidade <strong>"Boas-vindas"</strong> ali embaixo — não estes campos. Por isso parecem "duas aberturas": cada uma é de um modo.</>}>
-        <div className="space-y-5">
-          <MkTextarea label="Mensagem de abertura (exata, verbatim)" value={globalConfig.agentIntroMessage ?? ''}
-            onChange={v => set('agentIntroMessage', v)} rows={3}
-            placeholder="Oi! Bem-vindo à DramaHub 🎬 Qual série você procura?"
-            hint="Enviada literal no 1º contato. Use quando copy/preços precisam ser exatos (não passa pela IA)." />
-          <MkTextarea label="Orientação de abertura (IA)" value={globalConfig.agentGreeting ?? ''}
-            onChange={v => set('agentGreeting', v)} rows={2}
-            placeholder="Apresente-se de forma calorosa e pergunte o que a pessoa procura."
-            hint="Usada quando NÃO há mensagem exata acima." />
-        </div>
-        <div className="mt-5">
-          <MkButton onClick={save} disabled={savingTab === 'skills'}>
-            {savingTab === 'skills' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
-          </MkButton>
-        </div>
-      </ConfigSection>
-
       {!isAgent && <FlowSegments flows={flows} activeFlowId={activeFlowId} />}
 
       <div>
@@ -893,6 +855,56 @@ function FlowSegments({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId
 }
 
 // ─── Tab: Conhecimento ────────────────────────────────────────────────────────
+
+// ─── Tab: Cérebro (poda passo 4) — "descrever o negócio" num lugar só: Instruções + Conhecimento + Tom.
+// Reusa ConhecimentoTab + TomTab; mantém as MESMAS chaves de globalConfig (sem renomear estado). ──────
+function CerebroTab({
+  globalConfig, setGlobalConfig, saveGlobal, savingTab, preview,
+}: {
+  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
+  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
+  preview: PersonaPreview | null
+}) {
+  const set = (k: keyof GlobalConfig, v: unknown) => setGlobalConfig(c => ({ ...c, [k]: v }))
+  const saveAgent = () => saveGlobal({
+    agentInstructions: globalConfig.agentInstructions,
+    agentIntroMessage: globalConfig.agentIntroMessage,
+    agentGreeting: globalConfig.agentGreeting,
+  }, 'cerebro')
+
+  return (
+    <div className="space-y-9">
+      <ConfigSection title="Como o agente age" subtitle="Regras e jeito de vender — vira o system prompt do agente. A IA propõe, o código dispõe." badge="modo Agente"
+        info={<>Vale só quando o runtime está em <strong>Agente</strong>. São as regras de conduta da IA (como vender, o que nunca prometer). No modo <strong>Fluxo</strong>, quem manda são os nós, não isto.</>}>
+        <MkTextarea label="Instruções do agente" value={globalConfig.agentInstructions ?? ''}
+          onChange={v => set('agentInstructions', v)} rows={7}
+          placeholder={'Ex:\n- Sempre confirme o título antes de gerar o PIX\n- Se a pessoa hesitar, ofereça o pacote\n- Nunca prometa o que o módulo não faz'} />
+      </ConfigSection>
+
+      <ConfigSection title="Abertura" subtitle="Como o bot inicia a 1ª conversa. Mensagem exata tem prioridade; a orientação deixa a IA abrir com as palavras dela." badge="modo Agente"
+        info={<>Esta abertura só é usada no modo <strong>Agente</strong>. No modo <strong>Fluxo</strong>, quem dá as boas-vindas são os nós da habilidade "Boas-vindas".</>}>
+        <div className="space-y-5">
+          <MkTextarea label="Mensagem de abertura (exata, verbatim)" value={globalConfig.agentIntroMessage ?? ''}
+            onChange={v => set('agentIntroMessage', v)} rows={3}
+            placeholder="Oi! Bem-vindo à DramaHub 🎬 Qual série você procura?"
+            hint="Enviada literal no 1º contato. Use quando copy/preços precisam ser exatos (não passa pela IA)." />
+          <MkTextarea label="Orientação de abertura (IA)" value={globalConfig.agentGreeting ?? ''}
+            onChange={v => set('agentGreeting', v)} rows={2}
+            placeholder="Apresente-se de forma calorosa e pergunte o que a pessoa procura."
+            hint="Usada quando NÃO há mensagem exata acima." />
+        </div>
+        <div className="mt-5">
+          <MkButton onClick={saveAgent} disabled={savingTab === 'cerebro'}>
+            {savingTab === 'cerebro' ? <Loader2 size={14} className="animate-spin" /> : null} Salvar
+          </MkButton>
+        </div>
+      </ConfigSection>
+
+      <ConhecimentoTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
+      <TomTab globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} preview={preview} />
+    </div>
+  )
+}
 
 function ConhecimentoTab({
   globalConfig, setGlobalConfig, saveGlobal, savingTab,

@@ -27,7 +27,7 @@ function isBotNavActive(item: BotNavItem, botId: string, pathname: string, searc
   const tab = new URLSearchParams(search).get('tab')
   if (item.href === 'config') {
     if (pathname !== configPath) return false
-    if (!item.tab) return !tab || !['automacao', 'config', 'modulos', 'skills', 'conhecimento', 'tom'].includes(tab)
+    if (!item.tab) return !tab || !['automacao', 'config', 'modulos', 'skills', 'propostas', 'painel', 'cerebro'].includes(tab)
     return tab === item.tab
   }
   return pathname === `/bots/${botId}/${item.href}`
