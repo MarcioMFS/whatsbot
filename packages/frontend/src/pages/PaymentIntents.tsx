@@ -23,7 +23,7 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d atrás`
 }
 
-export default function PaymentIntents() {
+export default function PaymentIntents({ embedded = false }: { embedded?: boolean } = {}) {
   const { botId } = useParams<{ botId: string }>()
   const navigate = useNavigate()
   const [intents, setIntents] = useState<PaymentIntent[]>([])
@@ -60,8 +60,8 @@ export default function PaymentIntents() {
     ? { background: 'var(--ink)', color: 'var(--paper)', border: '1px solid var(--ink)' }
     : { background: 'var(--paper-2)', color: 'var(--muted)', border: '1px solid var(--line)' }
 
-  return (
-    <MkLayout>
+  const body = (
+    <>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -136,6 +136,7 @@ export default function PaymentIntents() {
           ))}
         </div>
       </div>
-    </MkLayout>
+    </>
   )
+  return embedded ? body : <MkLayout>{body}</MkLayout>
 }

@@ -18,7 +18,7 @@ function parsePriceToCentavos(raw: string): number {
   return isNaN(val) ? 0 : Math.round(val * 100)
 }
 
-export function Products() {
+export function Products({ embedded = false }: { embedded?: boolean } = {}) {
   const { botId } = useParams<{ botId: string }>()
   const navigate = useNavigate()
   const [products, setProducts] = useState<Product[]>([])
@@ -76,8 +76,8 @@ export function Products() {
 
   const setF = (k: keyof typeof emptyForm, v: unknown) => setForm(f => ({ ...f, [k]: v }))
 
-  return (
-    <MkLayout>
+  const body = (
+    <>
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center gap-3 mb-7">
           <button onClick={() => navigate(-1)} className="hover:opacity-60" style={{ color: 'var(--muted)' }}><ArrowLeft size={18} /></button>
@@ -167,6 +167,7 @@ export function Products() {
           </MkCard>
         </div>
       </div>
-    </MkLayout>
+    </>
   )
+  return embedded ? body : <MkLayout>{body}</MkLayout>
 }

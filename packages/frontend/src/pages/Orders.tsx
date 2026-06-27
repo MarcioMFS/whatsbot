@@ -30,7 +30,7 @@ function statusPill(status: string) {
 const formatBRL = (c: number) => `R$ ${(c / 100).toFixed(2).replace('.', ',')}`
 const fmt = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
-export function Orders() {
+export function Orders({ embedded = false }: { embedded?: boolean } = {}) {
   const { botId } = useParams<{ botId: string }>()
   const navigate = useNavigate()
   const [orders, setOrders] = useState<Order[]>([])
@@ -48,8 +48,8 @@ export function Orders() {
   const displayed = statusFilter ? orders.filter(o => o.status === statusFilter) : orders
   const totalRevenue = orders.filter(o => o.status === 'paid' || o.status === 'delivered').reduce((s, o) => s + o.totalCentavos, 0)
 
-  return (
-    <MkLayout>
+  const body = (
+    <>
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center gap-3 mb-7">
           <button onClick={() => navigate(-1)} className="hover:opacity-60" style={{ color: 'var(--muted)' }}><ArrowLeft size={18} /></button>
@@ -118,6 +118,7 @@ export function Orders() {
           })}
         </div>
       </div>
-    </MkLayout>
+    </>
   )
+  return embedded ? body : <MkLayout>{body}</MkLayout>
 }

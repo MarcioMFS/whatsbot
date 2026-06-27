@@ -13,6 +13,7 @@ import { Handoffs } from './pages/Handoffs.tsx'
 import PaymentIntents from './pages/PaymentIntents.tsx'
 import { Capabilities } from './pages/Capabilities.tsx'
 import { AIPatterns } from './pages/AIPatterns.tsx'
+import { Vendas } from './pages/Vendas.tsx'
 import { Login } from './pages/Login.tsx'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default function App() {
       <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/bots/:botId/config" element={<ProtectedRoute><BotConfig /></ProtectedRoute>} />
       <Route path="/bots/:botId/flow/:flowId" element={<ProtectedRoute><FlowBuilder /></ProtectedRoute>} />
+      <Route path="/bots/:botId/sales" element={<ProtectedRoute><Vendas /></ProtectedRoute>} />
       <Route path="/bots/:botId/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
       <Route path="/bots/:botId/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
       <Route path="/bots/:botId/agent-trace" element={<ProtectedRoute><AgentTrace /></ProtectedRoute>} />

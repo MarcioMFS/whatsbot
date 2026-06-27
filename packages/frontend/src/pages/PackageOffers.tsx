@@ -24,7 +24,7 @@ function parsePriceToCentavos(raw: string): number {
   return isNaN(val) ? 0 : Math.round(val * 100)
 }
 
-export function PackageOffers() {
+export function PackageOffers({ embedded = false }: { embedded?: boolean } = {}) {
   const { botId } = useParams<{ botId: string }>()
   const navigate = useNavigate()
   const [offers, setOffers] = useState<PackageOffer[]>([])
@@ -66,8 +66,8 @@ export function PackageOffers() {
   const inactiveOffers = offers.filter(o => !o.isActive)
   const lbl = "mk-eyebrow block mb-1.5"
 
-  return (
-    <MkLayout>
+  const body = (
+    <>
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
           <button onClick={() => navigate(`/bots/${botId}/config`)} className="p-2 rounded-xl hover:opacity-60" style={{ color: 'var(--muted)' }}><ArrowLeft size={18} /></button>
@@ -142,8 +142,9 @@ export function PackageOffers() {
           <button onClick={() => setShowInactive(v => !v)} className="text-xs hover:opacity-60" style={{ color: 'var(--muted)' }}>{showInactive ? 'Ocultar inativos' : 'Mostrar inativos'}</button>
         </div>
       </div>
-    </MkLayout>
+    </>
   )
+  return embedded ? body : <MkLayout>{body}</MkLayout>
 }
 
 function OfferRow({ offer, onEdit, onToggle, onDelete }: { offer: PackageOffer; onEdit: () => void; onToggle: () => void; onDelete: () => void }) {

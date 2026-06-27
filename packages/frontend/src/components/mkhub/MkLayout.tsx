@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
-  LogOut, LayoutDashboard, GitBranch, Users, Package,
-  ShoppingBag, Tag, PhoneCall, CreditCard, Settings2,
+  LogOut, LayoutDashboard, GitBranch, Users,
+  ShoppingBag, PhoneCall, Settings2,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore.ts'
 import { useUIStore } from '../../stores/uiStore.ts'
@@ -12,11 +12,8 @@ const BOT_NAV: BotNavItem[] = [
   { label: 'Visão Geral',   icon: LayoutDashboard, href: 'config' },
   { label: 'Flows',         icon: GitBranch,       href: 'config', tab: 'automacao' },
   { label: 'Leads',         icon: Users,           href: 'leads' },
-  { label: 'Produtos',      icon: Package,         href: 'products' },
-  { label: 'Pedidos',       icon: ShoppingBag,     href: 'orders' },
-  { label: 'Pacotes',       icon: Tag,             href: 'package-offers' },
+  { label: 'Vendas',        icon: ShoppingBag,     href: 'sales' },
   { label: 'Handoffs',      icon: PhoneCall,       href: 'handoffs' },
-  { label: 'Pagamentos',    icon: CreditCard,      href: 'payment-intents' },
   { label: 'Configurações', icon: Settings2,       href: 'config', tab: 'config' },
 ]
 
