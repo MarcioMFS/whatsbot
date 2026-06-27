@@ -5,7 +5,7 @@ import {
   Plus, ExternalLink, QrCode, Power, PowerOff, Loader2, GitBranch,
   Trash2, Settings2, Package, ChevronRight, ArrowRight, Bot, Copy,
   Layers, Sparkles, BookOpen, MessageCircle, CreditCard, LifeBuoy,
-  RotateCcw, Search, Image as ImageIcon, Workflow, Activity, Zap, X, Lightbulb,
+  RotateCcw, Search, Image as ImageIcon, Activity, Zap, X, Lightbulb,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
@@ -481,34 +481,30 @@ function ConfigTab({
         </div>
       </ConfigSection>}
 
-      {/* Avançado / observabilidade */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Eyebrow>Avançado</Eyebrow>
-          <InfoTip text={<>Telas de diagnóstico (observabilidade). <strong>Capabilities</strong> = sub-fluxos legados. <strong>AI Patterns</strong> = o que a IA não entendeu e taxa de erro. <strong>Eventos</strong> = log da conversa ao vivo. Pra inspecionar, não pra configurar o dia a dia.</>} />
-        </div>
-        <div className="grid grid-cols-1 gap-3">
+      {/* Diagnóstico (ops) — gaveta colapsada, FORA do caminho do lojista. Inspecionar, não configurar.
+          Capabilities saiu daqui (legado → remoção no passo 6). */}
+      <details className="mt-2">
+        <summary className="flex items-center gap-2 cursor-pointer select-none">
+          <Eyebrow>Diagnóstico</Eyebrow>
+          <span className="text-xs" style={{ color: 'var(--muted)' }}>ferramentas de ops — inspecionar, não configurar</span>
+        </summary>
+        <div className="grid grid-cols-1 gap-2 mt-3">
           {[
-            { label: 'Trilha do Agente', desc: 'O que a IA chamou: ferramentas, argumentos, resultados', icon: Bot, path: 'agent-trace' },
-            { label: 'Capabilities (legado, desligado)', desc: 'Roteador antigo — aposentado; o agente assume o roteamento', icon: Workflow, path: 'capabilities' },
-            { label: 'AI Patterns', desc: 'Decisões do roteador de IA e taxa de fallback', icon: Activity, path: 'patterns' },
-            { label: 'Eventos', desc: 'Log de eventos da conversa em tempo real', icon: Zap, path: 'events' },
-          ].filter(card => !(isAgent && (card.path === 'capabilities' || card.path === 'patterns'))).map(card => (
-            <MkCard key={card.path} hover onClick={() => navigate(`/bots/${botId}/${card.path}`)} style={{ padding: 16 }}>
-              <div className="flex items-center gap-4">
-                <div style={{ width: 36, height: 36, borderRadius: 11, border: '1px solid var(--line)', background: 'var(--paper-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <card.icon size={16} strokeWidth={1.6} />
-                </div>
-                <div className="flex-1">
-                  <p className="mk-display" style={{ fontWeight: 600, fontSize: '.9rem' }}>{card.label}</p>
-                  <p style={{ color: 'var(--muted)', fontSize: '.75rem', marginTop: 1 }}>{card.desc}</p>
-                </div>
-                <ArrowRight size={15} strokeWidth={1.6} style={{ color: 'var(--muted)', flexShrink: 0 }} />
-              </div>
-            </MkCard>
+            { label: 'Trilha do Agente', desc: 'ferramentas/argumentos/resultados que a IA chamou', icon: Bot, path: 'agent-trace' },
+            { label: 'AI Patterns', desc: 'decisões do roteador de IA e taxa de fallback', icon: Activity, path: 'patterns' },
+            { label: 'Eventos', desc: 'log de eventos da conversa em tempo real', icon: Zap, path: 'events' },
+          ].map(card => (
+            <button key={card.path} onClick={() => navigate(`/bots/${botId}/${card.path}`)}
+              className="flex items-center gap-3 rounded-lg px-3 py-2 text-left hover:opacity-70"
+              style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+              <card.icon size={14} strokeWidth={1.6} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+              <span className="text-sm" style={{ color: 'var(--ink)' }}>{card.label}</span>
+              <span className="text-xs flex-1" style={{ color: 'var(--muted)' }}>{card.desc}</span>
+              <ArrowRight size={13} strokeWidth={1.6} style={{ color: 'var(--muted)', flexShrink: 0 }} />
+            </button>
           ))}
         </div>
-      </div>
+      </details>
     </div>
   )
 }
