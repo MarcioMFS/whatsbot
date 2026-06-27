@@ -82,8 +82,8 @@ const TABS = [
   { id: 'config',       label: 'Config',       icon: Settings2 },
   { id: 'automacao',    label: 'Flows',        icon: GitBranch, mode: 'flow' },   // só Fluxo
   { id: 'modulos',      label: 'Módulos',      icon: Layers },
-  { id: 'skills',       label: 'Skills',       icon: Sparkles },
-  { id: 'propostas',    label: 'Propostas',    icon: Lightbulb },
+  { id: 'skills',       label: 'Segmentos',    icon: Sparkles, mode: 'flow' },
+  { id: 'propostas',    label: 'Propostas',    icon: Lightbulb, mode: 'flow' },
   { id: 'painel',       label: 'Painel',       icon: Activity },
   { id: 'cerebro',      label: 'Cérebro',      icon: BookOpen },
 ] as const
@@ -301,7 +301,7 @@ export function BotConfig() {
         )}
 
         {activeTab === 'skills' && (
-          <SkillsTab modules={modules} flows={flows} activeFlowId={bot.activeFlowId} isAgent={isAgent} globalConfig={globalConfig} setGlobalConfig={setGlobalConfig} saveGlobal={saveGlobal} savingTab={savingTab} />
+          <SkillsTab flows={flows} activeFlowId={bot.activeFlowId} />
         )}
 
         {activeTab === 'propostas' && (
@@ -626,36 +626,10 @@ function ModulosTab({
 
 // ─── Tab: Skills ──────────────────────────────────────────────────────────────
 
-function SkillsTab({
-  modules, flows, activeFlowId, isAgent, globalConfig, setGlobalConfig, saveGlobal, savingTab,
-}: {
-  modules: BotModule[]; flows: FlowData[]; activeFlowId: string | null; isAgent: boolean
-  globalConfig: GlobalConfig; setGlobalConfig: React.Dispatch<React.SetStateAction<GlobalConfig>>
-  saveGlobal: (patch: Partial<GlobalConfig>, tabKey: string) => void; savingTab: string | null
-}) {
+function SkillsTab({ flows, activeFlowId }: { flows: FlowData[]; activeFlowId: string | null }) {
   return (
     <div className="space-y-9">
-      {!isAgent && <FlowSegments flows={flows} activeFlowId={activeFlowId} />}
-
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Eyebrow>Habilidades automáticas</Eyebrow>
-          <InfoTip text={<>O que cada <strong>módulo ligado</strong> já entrega à IA, sem você descrever nada. A descrição vem do próprio módulo. Para ligar/desligar, vá na aba <strong>Módulos</strong>.</>} />
-        </div>
-        <p style={{ color: 'var(--muted)', fontSize: '.78rem', marginBottom: 14 }}>O que cada módulo ligado já entrega ao agente — sem você descrever.</p>
-        <div className="space-y-2">
-          {modules.filter(m => m.enabled).map(m => {
-            const Icon = MODULE_ICON[m.id] ?? Layers
-            return (
-              <div key={m.id} className="flex items-center gap-3 rounded-xl px-4 py-3" style={{ border: '1px solid var(--line)', background: 'var(--paper-2)' }}>
-                <Icon size={16} strokeWidth={1.6} style={{ color: 'var(--ink-soft)', flexShrink: 0 }} />
-                <span className="text-sm font-medium" style={{ color: 'var(--ink)' }}>{m.name}</span>
-                <span className="text-xs" style={{ color: 'var(--muted)' }}>{m.description}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      <FlowSegments flows={flows} activeFlowId={activeFlowId} />
     </div>
   )
 }
