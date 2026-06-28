@@ -23,6 +23,7 @@ import { FlowExecutionService } from './services/FlowExecutionService.js'
 import { AIGenerationService } from './services/AIGenerationService.js'
 import { TimeoutService } from './services/TimeoutService.js'
 import { startMessageWorker } from './queue/messageWorker.js'
+import { ExternalInboundDispatcher } from './services/ExternalInboundDispatcher.js'
 import { PostgreSQLLeadRepository } from './adapters/PostgreSQLLeadRepository.js'
 import { PostgreSQLConversationEventRepository } from './adapters/PostgreSQLConversationEventRepository.js'
 import { PostgreSQLConversationOutcomeRepository } from './adapters/PostgreSQLConversationOutcomeRepository.js'
@@ -212,7 +213,10 @@ const agentRuntime = new AgentRuntime(
   agentTrace,
 )
 
-startMessageWorker(redis, flowExecService, botRepo, transcriptionService, agentRuntime)
+// Onda 3 — canal ao vivo (runtime='external'): encaminha msg pro handler externo (ex.: Vox).
+const externalDispatcher = new ExternalInboundDispatcher({ messaging, conversationRepo, leadRepo })
+
+startMessageWorker(redis, flowExecService, botRepo, transcriptionService, agentRuntime, externalDispatcher)
 
 const port = Number(process.env.PORT ?? 3001)
 await app.listen({ port, host: '0.0.0.0' })

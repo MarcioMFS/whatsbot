@@ -47,7 +47,9 @@ export interface BotGlobalConfig {
   tone?: 'acolhedor' | 'profissional' | 'casual' | 'formal'
   locale?: string              // e.g. 'pt-BR', 'en-US', 'es-ES' — default: 'pt-BR'
   // v2 — Agent runtime
-  runtime?: 'flow' | 'agent'   // default 'flow'. 'agent' = tool-calling agent loop (lab)
+  runtime?: 'flow' | 'agent' | 'external'   // default 'flow'. 'agent' = tool-calling agent loop (lab). 'external' = canal ao vivo: a msg NÃO roda motor; é encaminhada (POST assinado) p/ externalInboundUrl, que devolve a resposta. Ver Brain/spec_whatsbot_mcp.md (onda 3).
+  externalInboundUrl?: string  // runtime 'external': URL do handler externo (ex.: Vox). Recebe {phone,message,context}, devolve {reply}. WhatsBot vira pipe + contexto.
+  externalInboundSecret?: string  // segredo HMAC-SHA256 p/ assinar o POST de saída (header X-WhatsBot-Signature). O handler verifica que veio mesmo do WhatsBot.
   agentTestNumbers?: string[]  // whitelist: estes telefones usam o agente MESMO com runtime='flow'. Resto segue flow (produção). Kill switch = esvaziar.
   agentInstructions?: string   // prompt principal / regras do agente (Instruções)
   agentGreeting?: string       // orientação de abertura (LLM) — usada no 1º contato quando NÃO há agentIntroMessage. O agente apresenta com as palavras dele.

@@ -4,6 +4,7 @@ import type Redis from 'ioredis'
 import type { BotRepository } from '@whatsbot/core'
 import type { FlowExecutionService } from '../services/FlowExecutionService.js'
 import type { TranscriptionService } from '../services/TranscriptionService.js'
+import type { ExternalInboundDispatcher } from '../services/ExternalInboundDispatcher.js'
 
 const MEDIA_KEY_INFO: Record<string, string> = {
   image: 'WhatsApp Image Keys',
@@ -95,6 +96,7 @@ export function startMessageWorker(
   botRepo: BotRepository,
   transcriptionService?: TranscriptionService,
   agentRuntime?: { handleIncomingMessage(bot: import('@whatsbot/core').Bot, phone: string, message: string, imageBase64?: string, opts?: { isLastAttempt?: boolean }): Promise<void> },
+  externalDispatcher?: ExternalInboundDispatcher,
 ): Worker {
   const worker = new Worker(
     'messages',
@@ -144,6 +146,14 @@ export function startMessageWorker(
         }
 
         if (!effectiveMessage.trim()) return
+
+        // Onda 3 — canal ao vivo: runtime='external' encaminha a msg pro handler externo
+        // (ex.: Vox) e entrega a resposta de volta. NÃO roda flow/agent. Gate estrito em
+        // runtime==='external' → zero impacto nos bots que vendem (flow/agent).
+        if (bot.globalConfig?.runtime === 'external' && externalDispatcher) {
+          await externalDispatcher.dispatch(bot, phoneNumber, effectiveMessage, { imageBase64, hasImage: hasImage ?? !!imageBase64 })
+          return
+        }
 
         // v2 runtime branch: agent (tool-calling) vs flow (legacy graph)
         // Whitelist override: numero de teste cai no agente mesmo com runtime='flow' (testa em prod sem afetar clientes reais)

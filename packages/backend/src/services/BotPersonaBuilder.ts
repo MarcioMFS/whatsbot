@@ -198,7 +198,9 @@ export const GlobalConfigSchema = z.object({
   locale:                   z.enum(['pt-BR', 'en-US', 'es-ES']).optional(),
   ownerTestMode:            z.boolean().optional(),
   // Agente v2 — runtime, prompt, abertura, conhecimento, tom e política
-  runtime:                  z.enum(['flow', 'agent']).optional(),
+  runtime:                  z.enum(['flow', 'agent', 'external']).optional(),
+  externalInboundUrl:       z.string().url().max(500).optional(),
+  externalInboundSecret:    z.string().trim().min(16).max(200).optional(),
   agentTestNumbers:         z.array(z.string().trim().max(30)).max(50).optional(),
   agentInstructions:        z.string().max(8000).optional(),
   agentGreeting:            z.string().max(2000).optional(),
