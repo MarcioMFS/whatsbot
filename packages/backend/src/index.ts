@@ -62,6 +62,7 @@ import { orderRoutes } from './routes/orders.js'
 import { proposalRoutes } from './routes/proposals.js'
 import { metricsRoutes } from './routes/metrics.js'
 import { mcpRoutes } from './routes/mcp.js'
+import { outboundRoutes } from './routes/outbound.js'
 import { packageOfferRoutes } from './routes/packageOffers.js'
 import { handoffRoutes } from './routes/handoffs.js'
 import { PostgreSQLHandoffRepository } from './adapters/PostgreSQLHandoffRepository.js'
@@ -195,6 +196,7 @@ await app.register(observationRoutes, { prefix: '/api/observations', observation
 await app.register(proposalRoutes, { prefix: '/api/proposals', proposalRepo, flowVersionRepo, flowRepo, botRepo, segmentGen, flowGen, improver, db })
 await app.register(metricsRoutes, { prefix: '/api/metrics', aggregator: metricsAggregator, distiller: patternDistiller, performance: patternPerformance, botRepo })
 await app.register(mcpRoutes, { prefix: '/mcp', db, botRepo, conversationRepo, leadRepo, messaging, aiService })
+await app.register(outboundRoutes, { prefix: '/api/outbound', db, botRepo, messaging })
 await app.register(webhookRoutes, { prefix: '/webhooks', ...ctx })
 
 // v2 — Agent runtime (tool-calling). Ativado por bot.globalConfig.runtime === 'agent'.
