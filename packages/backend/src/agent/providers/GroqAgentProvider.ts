@@ -47,6 +47,19 @@ function recoverToolCalls(err: unknown): ToolCall[] | null {
   return calls.length ? calls : null
 }
 
+// Llama às vezes emite a tool-call como TEXTO na resposta de sucesso (`<function=nome{json}</function>`)
+// em vez de usar o campo tool_calls. Extraímos as calls e removemos do texto visível ao cliente.
+function extractInlineToolCalls(text: string): { calls: ToolCall[]; clean: string } {
+  const re = /<function=([a-zA-Z_]\w*)\s*(\{[\s\S]*?\})\s*(?:<\/function>|$)/g
+  const calls: ToolCall[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    try { calls.push({ id: `inline_${calls.length}`, name: m[1], input: JSON.parse(m[2]) }) } catch { /* ignora */ }
+  }
+  const clean = text.replace(re, '').replace(/\n{3,}/g, '\n\n').trim()
+  return { calls, clean }
+}
+
 function toOpenAIMessages(system: string, messages: AgentMessage[]): OpenAIMsg[] {
   const out: OpenAIMsg[] = [{ role: 'system', content: system }]
   for (const m of messages) {
@@ -103,9 +116,18 @@ export class GroqAgentProvider implements IAgentProvider {
           name: tc.function.name,
           input: safeParse(tc.function.arguments),
         }))
+        let text = msg?.content ?? undefined
+        // Fallback: tool-call emitida como texto (sem usar tool_calls) → extrai e limpa
+        if (toolCalls.length === 0 && text && text.includes('<function=')) {
+          const { calls, clean } = extractInlineToolCalls(text)
+          if (calls.length) {
+            toolCalls.push(...calls)
+            text = clean || undefined
+          }
+        }
         return {
           stopReason: toolCalls.length > 0 ? 'tool_use' : 'end',
-          text: msg?.content ?? undefined,
+          text,
           toolCalls,
           usage: { inputTokens: resp.usage?.prompt_tokens, outputTokens: resp.usage?.completion_tokens },
         }
