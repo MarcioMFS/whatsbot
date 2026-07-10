@@ -10,9 +10,9 @@ continua caindo no flow default (DramaHub, any_message).
 O flow é criado INATIVO (não mexe no active_flow_id do bot).
 
 ANTES DE RODAR, preencha:
-  - IMG: URLs públicas das imagens do funil (hero, amostras, prints, garantia, cupom)
-  - CHECKOUT_URL: link do checkout/cadastro
+  - CHECKOUT_URL: link do checkout (será Asaas, mesma conta do DramaHub Play)
   - KEYWORDS: precisa casar com o texto pré-preenchido do anúncio
+  - HAS_PRINTS: ligue quando houver prints REAIS de depoimento (05..08-printN.jpg)
 """
 import requests, sys
 
@@ -26,19 +26,27 @@ FLOW_NAME = "Eduzzy — Kit Aula Pronta Infantil"
 # Texto sugerido pro anúncio (click-to-WhatsApp): "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"
 KEYWORDS = ["kit aula pronta", "planinhos de aula"]
 
-CHECKOUT_URL = "https://SEU-CHECKOUT-AQUI.com.br"  # TODO: link real do cadastro/checkout
+# TODO: trocar pelo checkout Asaas (mesma conta do DramaHub Play) quando existir
+CHECKOUT_URL = "https://SEU-CHECKOUT-AQUI.com.br"
 
-# TODO: subir as imagens e trocar as URLs (envio falho não quebra o flow, mas perde conversão)
+# 6 imagens geradas (Imagen + tipografia Nunito) e servidas pelo frontend em
+# packages/frontend/public/media/eduzzy/. False → funil só-texto (nós de imagem
+# com legenda viram text_message; os demais saem da corrente).
+INCLUDE_IMAGES = True
+
+# Prints de depoimento (prova social) NÃO gerados por IA — usar prints reais
+# autorizados quando existirem: suba 05..08-printN.jpg e ligue esta flag.
+HAS_PRINTS = False
 MEDIA_BASE = "https://whatsbot.mfslabs.com.br/media/eduzzy"
 IMG = {
     "hero":      f"{MEDIA_BASE}/01-hero.jpg",
     "materiais": f"{MEDIA_BASE}/02-materiais.jpg",
     "planos":    f"{MEDIA_BASE}/03-planos-bncc.jpg",
     "atividades":f"{MEDIA_BASE}/04-atividades.jpg",
-    "print1":    f"{MEDIA_BASE}/05-print1.jpg",
-    "print2":    f"{MEDIA_BASE}/06-print2.jpg",
-    "print3":    f"{MEDIA_BASE}/07-print3.jpg",
-    "print4":    f"{MEDIA_BASE}/08-print4.jpg",
+    "print1":    f"{MEDIA_BASE}/05-print1.jpg",  # TODO print real
+    "print2":    f"{MEDIA_BASE}/06-print2.jpg",  # TODO print real
+    "print3":    f"{MEDIA_BASE}/07-print3.jpg",  # TODO print real
+    "print4":    f"{MEDIA_BASE}/08-print4.jpg",  # TODO print real
     "garantia":  f"{MEDIA_BASE}/09-garantia.jpg",
     "cupom":     f"{MEDIA_BASE}/10-cupom.jpg",
 }
@@ -154,13 +162,18 @@ T11 = (
 T12 = (
     "E, professora, enquanto estamos fazendo os últimos ajustes no seu kit para você acessar…\n\n"
     "Vamos ver o que as professoras que também dão aula para criancinhas de {{faixa_etaria}} "
-    "acharam do Kit Aula Pronta Infantil…\n\n"
-    "Veja os prints autorizados por elas, tirados ainda dessa semana ⤵️"
+    "acharam do Kit Aula Pronta Infantil…"
+    + ("\n\nVeja os prints autorizados por elas, tirados ainda dessa semana ⤵️" if HAS_PRINTS else "")
 )
 T13 = (
-    "Essas são apenas algumas das mensagens que recebemos todos os dias dos mais de *13 mil professores* "
-    "como você que já receberam o Kit Aula Pronta Infantil este mês.\n\n"
-    "Incrível, né, professora? 🥰\n\n"
+    (
+        "Essas são apenas algumas das mensagens que recebemos todos os dias dos mais de *13 mil professores* "
+        "como você que já receberam o Kit Aula Pronta Infantil este mês.\n\n"
+        if HAS_PRINTS else
+        "São mais de *13 mil professores* como você que já receberam o Kit Aula Pronta Infantil este mês, "
+        "e recebemos mensagens de agradecimento todos os dias.\n\n"
+    )
+    + "Incrível, né, professora? 🥰\n\n"
     "✅ Recebi a informação de que seu *Kit Aula Pronta Infantil está pronto!*\n\n"
     "Vamos lá conhecer seus materiais e aprender como acessar?\n\n"
     "Responda *SIM, VAMOS LÁ!*"
@@ -266,6 +279,30 @@ chain = [
     "img_p3", "img_p4", "t13", "c5", "t14", "img_garantia", "t15", "t16",
     "c6", "t17", "t18", "img_cupom", "t19", "t_link", "tag_checkout", "end",
 ]
+if not HAS_PRINTS:
+    # Sem prints reais: tira os 4 nós de print da corrente (prova social fica no texto).
+    prints = {"img_p1", "img_p2", "img_p3", "img_p4"}
+    nodes = [node for node in nodes if node["id"] not in prints]
+    chain = [nid for nid in chain if nid not in prints]
+
+if not INCLUDE_IMAGES:
+    # Sem imagens ainda: legenda vira mensagem de texto; imagem sem legenda sai da corrente.
+    by_id = {node["id"]: node for node in nodes}
+    kept = []
+    for nid in chain:
+        node = by_id[nid]
+        if node["type"] != "image":
+            kept.append(nid)
+        elif node["data"].get("caption"):
+            node["type"] = "text_message"
+            msg = node["data"]["caption"].removesuffix(" ⤵️")  # seta apontava pra imagem
+            node["data"] = {"label": node["data"]["label"], "message": msg}
+            kept.append(nid)
+    dropped = [node["id"] for node in nodes if node["id"] not in kept and node["type"] == "image"]
+    nodes = [node for node in nodes if node["id"] in kept]
+    chain = kept
+    print(f"🖼️  Sem imagens (INCLUDE_IMAGES=False) — removidos: {', '.join(dropped)}")
+
 edges = [e(chain[i], chain[i + 1]) for i in range(len(chain) - 1)]
 
 # ── Create (não ativa — DramaHub segue como flow default) ─────────────────────
@@ -284,8 +321,8 @@ else:
 
 print(f"""
 Próximos passos:
-  1. Suba as 10 imagens e ajuste IMG (ou edite no FlowBuilder).
-  2. Troque CHECKOUT_URL pelo link real.
+  1. Troque CHECKOUT_URL pelo checkout Asaas (conta DramaHub Play) e rode de novo.
+  2. Quando tiver prints REAIS de depoimento: suba 05..08-printN.jpg, HAS_PRINTS=True e rode de novo.
   3. Anúncio click-to-WhatsApp com texto pré-preenchido contendo: {KEYWORDS[0]!r}
      Ex.: "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"
   4. NÃO ativar este flow como default — o roteamento por keyword cuida da entrada.
