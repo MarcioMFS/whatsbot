@@ -24,6 +24,7 @@ import { NodeConfigPanel } from '../components/flow/NodeConfigPanel.tsx'
 import { TriggerNode } from '../components/flow/nodes/TriggerNode.tsx'
 import { AIResponseNode } from '../components/flow/nodes/AIResponseNode.tsx'
 import { TextNode } from '../components/flow/nodes/TextNode.tsx'
+import { ImageNode } from '../components/flow/nodes/ImageNode.tsx'
 import { ConditionNode } from '../components/flow/nodes/ConditionNode.tsx'
 import { CaptureNode } from '../components/flow/nodes/CaptureNode.tsx'
 import { WebhookNode } from '../components/flow/nodes/WebhookNode.tsx'
@@ -84,6 +85,7 @@ const nodeTypes = {
   trigger: TriggerNode,
   ai_response: AIResponseNode,
   text_message: TextNode,
+  image: ImageNode,
   condition: ConditionNode,
   capture: CaptureNode,
   webhook: WebhookNode,
@@ -281,6 +283,7 @@ export function FlowBuilder() {
     const id = `${type}_${Date.now()}`
     const defaults: Record<string, Record<string, unknown>> = {
       text_message: { label: 'Send Message', message: 'Hello! How can I help you?' },
+      image: { label: 'Enviar Imagem', mediaUrl: '', caption: '' },
       ai_response: { label: 'AI Response', promptTemplate: 'Answer the user: {{user_message}}', useHistory: true },
       condition: { label: 'Condition', variable: 'answer', operator: 'equals', value: 'yes' },
       capture: { label: 'Ask a question here...', variableName: 'user_input' },

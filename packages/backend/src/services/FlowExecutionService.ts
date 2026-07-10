@@ -20,6 +20,7 @@ import {
   type FlowNode,
   type AIResponseNodeData,
   type TextNodeData,
+  type ImageNodeData,
   type ConditionNodeData,
   type CaptureNodeData,
   type WebhookNodeData,
@@ -501,9 +502,27 @@ export class FlowExecutionService {
       }
     }
 
+    // Roteamento determinístico por keyword (funis paralelos no MESMO número):
+    // em conversa NOVA, um flow não-default cujo trigger é 'keyword' e casa com a mensagem
+    // vence a regra de tag e o CapabilityRouter. O flow default (any_message) segue intacto
+    // para todo o resto do tráfego. Entrada típica: anúncio com texto pré-preenchido.
+    let keywordFlow: Flow | undefined
+    if (isNewConversation) {
+      const botFlows = await this.flowRepo.findByBotId(bot.id)
+      keywordFlow = botFlows.find(f => {
+        if (f.id === bot.activeFlowId) return false
+        const trig = f.nodes.find(n => n.type === 'trigger')
+        const d = trig?.data as TriggerNodeData | undefined
+        return d?.triggerType === 'keyword' && !!d?.keywords?.length && this.matchesTrigger(f, message)
+      })
+      if (keywordFlow) {
+        console.log(`[FES:keyword_flow] phone="${phoneNumber}" flow="${keywordFlow.name}" id=${keywordFlow.id} matched keyword trigger`)
+      }
+    }
+
     // CapabilityRouter: on new conversations (or ended), let AI pick the right flow.
     // LEGADO em aposentadoria (Brain/spec_aposentadoria_roteadores.md) — gate per-bot, default mantém.
-    if (isNewConversation && this.capabilityRouter && bot.globalConfig?.capabilityRouterEnabled !== false) {
+    if (isNewConversation && !keywordFlow && this.capabilityRouter && bot.globalConfig?.capabilityRouterEnabled !== false) {
       const cart = conversation ? Cart.fromVariables(conversation.variables) : Cart.empty()
       const capDecision = await this.capabilityRouter.route({
         botId: bot.id,
@@ -551,9 +570,14 @@ export class FlowExecutionService {
     let flowId: string | null | undefined
     let flowReason: string
     if (isNewConversation) {
-      const routed = bot.resolveFlowId(lead?.tags ?? [])
-      flowId = routed ?? bot.activeFlowId
-      flowReason = (routed && routed !== bot.activeFlowId) ? 'regra_de_tag' : 'flow_ativo_padrao'
+      if (keywordFlow) {
+        flowId = keywordFlow.id
+        flowReason = 'trigger_keyword'
+      } else {
+        const routed = bot.resolveFlowId(lead?.tags ?? [])
+        flowId = routed ?? bot.activeFlowId
+        flowReason = (routed && routed !== bot.activeFlowId) ? 'regra_de_tag' : 'flow_ativo_padrao'
+      }
     } else {
       flowId = conversation!.flowId
       flowReason = 'conversa_em_andamento'
@@ -905,6 +929,32 @@ export class FlowExecutionService {
         conversation.addAssistantMessage(msg)
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
+      }
+
+      case 'image': {
+        const data = node.data as ImageNodeData
+        const caption = data.caption ? this.interpolate(data.caption, conversation.variables) : undefined
+        // Envio de imagem NUNCA quebra o funil: sem sendMedia no port ou URL fora do ar → loga e segue.
+        try {
+          if (data.mediaUrl && this.messaging.sendMedia) {
+            flog('msg:send', { nodeId: node.id, nodeType: 'image', url: data.mediaUrl })
+            await this.messaging.sendMedia({
+              instanceName: instance,
+              instanceId,
+              phoneNumber: phone,
+              mediaUrl: data.mediaUrl,
+              mediaType: 'image',
+              caption,
+            })
+            if (caption) conversation.addAssistantMessage(caption)
+          } else if (caption) {
+            await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: caption })
+            conversation.addAssistantMessage(caption)
+          }
+        } catch (err) {
+          console.error(`[FlowExecution] image_send_failed node=${node.id} url=${data.mediaUrl}: ${(err as Error).message}`)
+        }
+        return flow.getNextNodes(node.id)[0]?.id
       }
 
       case 'ai_response': {

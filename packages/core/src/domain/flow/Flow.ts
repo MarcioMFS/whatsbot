@@ -4,6 +4,7 @@ export type NodeType =
   | 'trigger'
   | 'ai_response'
   | 'text_message'
+  | 'image'                // send image by URL via /send/media — 1 output; falha de envio não quebra o flow
   | 'condition'
   | 'capture'
   | 'webhook'
@@ -183,6 +184,11 @@ export interface HandoffRequestNodeData extends NodeData {
 export interface TextNodeData extends NodeData {
   message: string
   variables?: string[]
+}
+
+export interface ImageNodeData extends NodeData {
+  mediaUrl: string          // URL pública da imagem (https)
+  caption?: string          // legenda opcional, suporta {{variáveis}}
 }
 
 export interface ConditionNodeData extends NodeData {

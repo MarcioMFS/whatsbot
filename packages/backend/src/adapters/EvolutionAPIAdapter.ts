@@ -1,4 +1,4 @@
-import type { MessagingPort, OutgoingMessage, InstanceStatus } from '@whatsbot/core'
+import type { MessagingPort, OutgoingMessage, OutgoingMedia, InstanceStatus } from '@whatsbot/core'
 import QRCode from 'qrcode'
 
 interface EvoGoInstance {
@@ -54,6 +54,26 @@ export class EvolutionAPIAdapter implements MessagingPort {
     await this.request(
       '/send/text',
       { method: 'POST', body: JSON.stringify({ number, text: msg.message }) },
+      msg.instanceName,
+    )
+  }
+
+  async sendMedia(msg: OutgoingMedia): Promise<void> {
+    const number = msg.phoneNumber.includes('@')
+      ? msg.phoneNumber.split('@')[0]
+      : msg.phoneNumber
+
+    await this.request(
+      '/send/media',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          number,
+          type: msg.mediaType ?? 'image',
+          url: msg.mediaUrl,
+          ...(msg.caption ? { caption: msg.caption } : {}),
+        }),
+      },
       msg.instanceName,
     )
   }

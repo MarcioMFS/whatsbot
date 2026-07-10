@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
-import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag, ShieldCheck, CheckCircle2, Search, ShoppingCart, Receipt, CreditCard, Package, Send } from 'lucide-react'
+import { Zap, Bot, MessageSquare, GitBranch, Clipboard, Globe, Clock, XCircle, Shuffle, Bell, BarChart2, QrCode, Tag, ShieldCheck, CheckCircle2, Search, ShoppingCart, Receipt, CreditCard, Package, Send, Image } from 'lucide-react'
 
 const NODE_TYPES = [
   { type: 'text_message', label: 'Mensagem', icon: MessageSquare, color: 'text-blue-400', bg: 'bg-blue-500/10 border-blue-500/20' },
+  { type: 'image', label: 'Imagem', icon: Image, color: 'text-pink-400', bg: 'bg-pink-500/10 border-pink-500/20' },
   { type: 'distributor', label: 'Distribuidor', icon: Shuffle, color: 'text-orange-400', bg: 'bg-orange-500/10 border-orange-500/20' },
   { type: 'ai_response', label: 'IA / GPT', icon: Bot, color: 'text-purple-400', bg: 'bg-purple-500/10 border-purple-500/20' },
   { type: 'capture', label: 'Aguardar Resp.', icon: Clipboard, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },

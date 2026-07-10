@@ -110,6 +110,15 @@ export function NodeConfigPanel({ node, onUpdate, onClose, nodes }: Props) {
             hint="Use {{variable_name}} to insert captured values." />
         )}
 
+        {node.type === 'image' && (
+          <>
+            <Field label="URL da imagem" value={String(node.data.mediaUrl ?? '')} onChange={v => set('mediaUrl', v)}
+              placeholder="https://.../imagem.jpg" hint="URL pública (https). Se o envio falhar, o flow continua." />
+            <Field label="Legenda (opcional)" value={String(node.data.caption ?? '')} onChange={v => set('caption', v)} textarea
+              hint="Suporta {{variáveis}}." />
+          </>
+        )}
+
         {node.type === 'ai_response' && (
           <>
             <Field label="Prompt / Treinamento" value={String(node.data.promptTemplate ?? '')} onChange={v => set('promptTemplate', v)} textarea
