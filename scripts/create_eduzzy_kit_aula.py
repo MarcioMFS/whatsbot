@@ -17,11 +17,13 @@ ANTES DE RODAR, preencha:
 import requests, sys
 
 BASE     = "http://localhost:3013"
-BOT_ID   = "2039b971-b290-4ff3-9964-ad78ff33dd3c"   # Doramas Online (instância bot-01)
+# Doramas Online Bot (instância site-01, nº 558193976255, runtime=agent).
+# O funil entra por keyword e o messageWorker desvia do agente só nessas conversas.
+BOT_ID   = "fe994a71-a0b1-433e-992b-a584cec8a839"
 EMAIL    = "69kleberlucas@gmail.com"
 PASSWORD = "DramaHub@Script29"
 
-FLOW_NAME = "Eduzzy — Kit Aula Pronta Infantil"
+FLOW_NAME = "Nota Dez — Kit Aula Pronta Infantil"
 
 # Texto sugerido pro anúncio (click-to-WhatsApp): "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"
 KEYWORDS = ["kit aula pronta", "planinhos de aula"]
@@ -89,7 +91,7 @@ def delay(id, x, y, seconds=3):
 
 # ── Copy ──────────────────────────────────────────────────────────────────────
 T1 = (
-    "Oi, professora! Aqui é a *Lúcia, da equipe Eduzzy* 💙\n\n"
+    "Oi! Aqui é a *Juliana, da equipe Nota Dez* 📚\n\n"
     "Você, professora do infantil, está precisando de planinhos de aula, atividades lúdicas, "
     "pareceres descritivos e modelinhos do dia a dia *prontos e editáveis* para sua turminha?\n\n"
     "Responda *SIM* aqui embaixo ⤵️"
@@ -212,21 +214,22 @@ T17 = (
     "✅ Bônus surpresa MAIS VALIOSO que o próprio Kit! (revelado após o cadastro)\n"
     "✅ Atualizações gratuitas para SEMPRE!"
 )
-T18 = "Tudo isso por apenas uma *TAXA ÚNICA de R$ 97*, MAS CALMA! ✋✋✋"
+T18 = "Tudo isso por apenas uma *TAXA ÚNICA* de ~R$ 97~ … MAS CALMA! ✋✋✋"
 T19 = (
     "*HOJE, APENAS HOJE*, estamos com um *CUPOM DE DESCONTO* disponível para as primeiras "
     "30 professoras que comprarem!\n\n"
-    "⤵️ Toque no link abaixo para verificar se o cupom ainda está ativo e finalizar seu "
-    "cadastro em nosso site!"
+    "Estamos com uma condição especial para as primeiras 30 professoras que estão dispostas "
+    "a melhorar o desempenho dos alunos: *R$ 27*, taxa única!"
 )
+T20 = "⤵️ Segue as informações abaixo para garantir a condição especial e finalizar seu cadastro!"
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
 Y = [50 + i * 150 for i in range(40)]
 nodes = [
+    # Bot dedicado à oferta: qualquer mensagem inicia o funil.
     n("trigger", "trigger", 100, Y[0], {
-        "label": "Início (anúncio Eduzzy)",
-        "triggerType": "keyword",
-        "keywords": KEYWORDS,
+        "label": "Início (qualquer mensagem)",
+        "triggerType": "any_message",
     }),
     n("tag_entry", "tag_lead", 100, Y[1], {"label": "Tag eduzzy", "add": ["eduzzy", "kit-aula-pronta"]}),
     text("t1", 100, Y[2], "Abertura Lúcia", T1),
@@ -266,8 +269,9 @@ nodes = [
     text("t17", 100, Y[31], "Bônus 30 primeiras", T17),
     text("t18", 100, Y[32], "Preço R$97", T18),
     image("img_cupom", 400, Y[32], "Imagem cupom", IMG["cupom"]),
-    text("t19", 100, Y[33], "Cupom hoje", T19),
-    text("t_link", 100, Y[34], "Link checkout", CHECKOUT_URL),
+    text("t19", 100, Y[33], "Cupom hoje R$27", T19),
+    text("t20", 100, Y[34], "Garantir condição", T20),
+    text("t_link", 100, Y[35], "Link checkout", CHECKOUT_URL),
     n("tag_checkout", "tag_lead", 100, Y[35], {"label": "Tag chegou no checkout", "add": ["eduzzy-checkout"]}),
     n("end", "end", 100, Y[36], {"label": "Fim"}),
 ]
@@ -277,7 +281,7 @@ chain = [
     "t4", "t5", "img_materiais", "t6", "t7", "c3", "t8", "img_planos",
     "img_atividades", "t9", "t10", "c4", "t11", "t12", "img_p1", "img_p2",
     "img_p3", "img_p4", "t13", "c5", "t14", "img_garantia", "t15", "t16",
-    "c6", "t17", "t18", "img_cupom", "t19", "t_link", "tag_checkout", "end",
+    "c6", "t17", "t18", "img_cupom", "t19", "t20", "t_link", "tag_checkout", "end",
 ]
 if not HAS_PRINTS:
     # Sem prints reais: tira os 4 nós de print da corrente (prova social fica no texto).
