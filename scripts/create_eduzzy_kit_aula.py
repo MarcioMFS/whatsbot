@@ -264,6 +264,18 @@ nodes = [
         "label": "Início (qualquer mensagem)",
         "triggerType": "any_message",
     }),
+    # Guarda: 1ª mensagem é IMAGEM e o lead já tinha chegado no Pix (conversa expirou)
+    # → provável comprovante atrasado; confirma com humano em vez de reiniciar o funil.
+    n("cond_img", "condition", 400, Y[1], {
+        "label": "1ª msg é imagem?", "variable": "__imageBase64", "operator": "regex", "value": ".+",
+    }),
+    n("cond_buyer", "condition", 700, Y[1], {
+        "label": "Já chegou no Pix?", "variable": "__lead_tags", "operator": "contains", "value": "eduzzy-checkout",
+    }),
+    n("ho_late", "handoff_request", 700, Y[2], {
+        "label": "Comprovante atrasado", "reason": "pix_failed", "notifyOwner": True,
+        "userMessage": "Recebi! 🙏 Vou confirmar seu pagamento com a equipe e já te retorno por aqui, professora 😊",
+    }),
     n("tag_entry", "tag_lead", 100, Y[1], {"label": "Tag eduzzy", "add": ["eduzzy", "kit-aula-pronta"]}),
     text("t1", 100, Y[2], "Abertura Juliana", T1),
     capture("c1", 100, Y[3], "Aguardar SIM", "resposta_inicial"),
@@ -356,7 +368,7 @@ nodes = [
 
 # corrente principal
 chain = [
-    "trigger", "tag_entry", "t1", "c1", "t2", "img_hero", "d1", "t3", "c2",
+    "tag_entry", "t1", "c1", "t2", "img_hero", "d1", "t3", "c2",
     "t4", "img_materiais", "t6", "t7", "c3", "img_planos", "img_atividades",
     "t9", "t11", "img_garantia", "t16", "c4", "t18", "img_cupom", "t19",
     "pix_main", "t_pix_after", "tag_checkout", "c5",
@@ -382,6 +394,11 @@ edges = [e(chain[i], chain[i + 1]) for i in range(len(chain) - 1)]
 
 # ── Remarketing edges (saída "timeout" dos captures) ─────────────────────────
 edges += [
+    # guarda de comprovante atrasado na entrada
+    e("trigger", "cond_img"),
+    e("cond_img", "cond_buyer", "true"), e("cond_img", "tag_entry", "false"),
+    e("cond_buyer", "ho_late", "true"), e("cond_buyer", "tag_entry", "false"),
+    e("ho_late", "end", "output"),
     # começo: c1 → rm1a → c1r(→t2) → rm1b → c1r2(→t2) → end
     e("c1", "rm1a", "timeout"), e("rm1a", "c1r"), e("c1r", "t2"),
     e("c1r", "rm1b", "timeout"), e("rm1b", "c1r2"), e("c1r2", "t2"),
