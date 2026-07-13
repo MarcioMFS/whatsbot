@@ -21,6 +21,7 @@ export interface OutgoingMedia {
   mediaUrl: string
   mediaType?: 'image' | 'video' | 'document' | 'audio'
   caption?: string
+  filename?: string
 }
 
 export interface OutgoingPresence {

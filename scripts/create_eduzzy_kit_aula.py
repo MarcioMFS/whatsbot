@@ -31,6 +31,26 @@ KEYWORDS = ["kit aula pronta", "planinhos de aula"]
 PIX_KEY  = "equipenotadez@jim.com"
 PIX_NAME = "Equipe Nota Dez"
 
+# Kit entregue após pagamento confirmado (PDFs em public/media/eduzzy/kit/, gitignored)
+KIT_FILES = [
+    "01-Tracar-Numeros-1-a-20.pdf",
+    "02-Tracar-Letras-A-a-Z.pdf",
+    "03-Contar-e-Circular-1-a-10.pdf",
+    "04-Formas-e-Cores-para-Colorir.pdf",
+    "05-Labirintos.pdf",
+    "06-Ligue-os-Pontos.pdf",
+    "07-Associe-os-Iguais.pdf",
+    "08-Sequencia-Logica.pdf",
+    "09-Maior-e-Menor.pdf",
+    "10-Animais-Tracar-Nomes.pdf",
+    "11-Modelos-de-Rotina.pdf",
+    "12-Coordenacao-Motora-Infantil.pdf",
+    "13-Caderno-de-Atividades-Completo.pdf",
+    "14-Atividades-Ludicas-Psicomotricidade.pdf",
+    "15-Alfabetizacao-4-e-5-Anos.pdf",
+    "16-Atividades-para-Criancas.pdf",
+]
+
 # 6 imagens geradas (Imagen + tipografia Nunito) e servidas pelo frontend em
 # packages/frontend/public/media/eduzzy/. False → funil só-texto (nós de imagem
 # com legenda viram text_message; os demais saem da corrente).
@@ -179,8 +199,13 @@ T_REJ = (
 )
 T_CONFIRMED = "Pagamento confirmado! 🎉💙"
 T_POST = (
-    "Seu acesso ao *Kit Aula Pronta Infantil* está sendo preparado e chega já já aqui "
-    "no WhatsApp e no seu e-mail! Qualquer dúvida, me chama 😊"
+    "Aqui está seu *Kit Aula Pronta Infantil* 🎁\n\n"
+    "Vou te enviar os materiais agora — salva tudo no seu celular ou notebook!"
+)
+T_DELIVERED = (
+    "Prontinho, professora! 🥰 Esse é só o começo: seus *bônus surpresa* e os demais materiais "
+    "chegam ainda hoje por aqui.\n\n"
+    "Qualquer dúvida, me chama. Boas aulas — e bons domingos! 💙"
 )
 
 # ── Remarketing (régua de recuperação — 30min → 3h → 12h silencioso) ─────────
@@ -282,6 +307,15 @@ nodes = [
     }),
     n("end", "end", 100, Y[29], {"label": "Fim"}),
 
+    # ── Entrega do kit (após pagamento confirmado) ──────────────────────
+] + [
+    n(f"doc{i:02d}", "image", 1000, 50 + i * 120, {
+        "label": f"Kit {i:02d}", "mediaType": "document",
+        "mediaUrl": f"{MEDIA_BASE}/kit/{f}", "filename": f.replace("-", " ").replace(".pdf", "") + ".pdf",
+    }) for i, f in enumerate(KIT_FILES, 1)
+] + [
+    text("t_delivered", 1000, 50 + 17 * 120, "Entrega concluída", T_DELIVERED),
+
     # ── Remarketing: começo (2 toques) ──────────────────────────────────
     text("rm1a", 400, Y[3], "RM início 30min", RM1A),
     capture("c1r", 400, Y[4], "RM início retry", "rm_inicio", timeout=180),
@@ -357,7 +391,7 @@ edges += [
     # comprovante: c5 → v1 → approved pc / rejected t_rej → c6 → v2 → pc | handoff
     e("c5", "v1"),
     e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
-    e("pc", "end"),
+    e("pc", "doc01"),
     e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),
     e("v2", "pc", "approved"), e("v2", "ho", "rejected"), e("ho", "end", "output"),
     # downsell: c5 --45min--> tag → rm5a → pix_ds → c5b(→v1) → rm5b → c5c(→v1) → end
@@ -366,6 +400,8 @@ edges += [
     e("c5b", "rm5b", "timeout"), e("rm5b", "c5c"), e("c5c", "v1"),
     e("c5c", "end", "timeout"),
 ]
+edges += [e(f"doc{i:02d}", f"doc{i+1:02d}") for i in range(1, len(KIT_FILES))]
+edges += [e(f"doc{len(KIT_FILES):02d}", "t_delivered"), e("t_delivered", "end")]
 
 # ── Create (não ativa — DramaHub segue como flow default) ─────────────────────
 existing = requests.get(f"{BASE}/api/flows/bot/{BOT_ID}", headers=H).json()

@@ -938,18 +938,23 @@ export class FlowExecutionService {
       case 'image': {
         const data = node.data as ImageNodeData
         const caption = data.caption ? this.interpolate(data.caption, conversation.variables) : undefined
-        // Envio de imagem NUNCA quebra o funil: sem sendMedia no port ou URL fora do ar → loga e segue.
+        // Envio de mídia NUNCA quebra o funil: sem sendMedia no port ou URL fora do ar → loga e segue.
+        const mediaType = data.mediaType ?? 'image'
         try {
-          await this.simulateTyping(bot, instance, instanceId, phone, (caption ?? '').length || 80)
+          // documentos em sequência (entrega de kit) não simulam digitação — evita estourar o lock
+          if (mediaType === 'image') {
+            await this.simulateTyping(bot, instance, instanceId, phone, (caption ?? '').length || 80)
+          }
           if (data.mediaUrl && this.messaging.sendMedia) {
-            flog('msg:send', { nodeId: node.id, nodeType: 'image', url: data.mediaUrl })
+            flog('msg:send', { nodeId: node.id, nodeType: 'image', mediaType, url: data.mediaUrl })
             await this.messaging.sendMedia({
               instanceName: instance,
               instanceId,
               phoneNumber: phone,
               mediaUrl: data.mediaUrl,
-              mediaType: 'image',
+              mediaType,
               caption,
+              filename: data.filename,
             })
             if (caption) conversation.addAssistantMessage(caption)
           } else if (caption) {

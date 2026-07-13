@@ -72,6 +72,7 @@ export class EvolutionAPIAdapter implements MessagingPort {
           type: msg.mediaType ?? 'image',
           url: msg.mediaUrl,
           ...(msg.caption ? { caption: msg.caption } : {}),
+          ...(msg.filename ? { filename: msg.filename } : {}),
         }),
       },
       msg.instanceName,

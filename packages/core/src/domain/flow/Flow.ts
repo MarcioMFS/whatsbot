@@ -187,8 +187,10 @@ export interface TextNodeData extends NodeData {
 }
 
 export interface ImageNodeData extends NodeData {
-  mediaUrl: string          // URL pública da imagem (https)
+  mediaUrl: string          // URL pública da mídia (https)
   caption?: string          // legenda opcional, suporta {{variáveis}}
+  mediaType?: 'image' | 'document'  // default: 'image'. 'document' envia como arquivo (PDF etc.)
+  filename?: string         // nome do arquivo mostrado no WhatsApp (documentos)
 }
 
 export interface ConditionNodeData extends NodeData {
