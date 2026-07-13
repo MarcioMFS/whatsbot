@@ -7,3 +7,4 @@ dist/
 packages/*/node_modules/
 packages/*/dist/
 packages/frontend/public/media/eduzzy/kit/
+scripts/__pycache__/
