@@ -171,6 +171,17 @@ test('reject: invalid status', () => {
   assert.equal(d.reason, 'invalid_status')
 })
 
+test('approve: status ausente (comprovante Nubank não traz status)', () => {
+  const d = validator.validate(makeReceipt({ status: null }), makeIntent(), false, false)
+  assert.equal(d.approved, true)
+})
+
+test('reject: status agendado', () => {
+  const d = validator.validate(makeReceipt({ status: 'Transferência agendada' }), makeIntent(), false, false)
+  assert.equal(d.approved, false)
+  assert.equal(d.reason, 'invalid_status')
+})
+
 test('reject: duplicate transactionId', () => {
   const d = validator.validate(makeReceipt(), makeIntent(), true, false)
   assert.equal(d.approved, false)

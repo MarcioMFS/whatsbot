@@ -8,6 +8,16 @@ const VALID_COMPLETED_STATUSES = [
   'aprovado', 'pago', 'confirmed', 'realizado', 'sucesso',
 ]
 
+// Status que indicam transferência NÃO concluída — só rejeitamos quando o status
+// existe e é ruim. Muitos comprovantes reais (ex.: Nubank) não trazem palavra de
+// status nenhuma: o documento "Comprovante de transferência" já implica concluída,
+// e as regras fortes (valor, chave, data, duplicidade) continuam valendo.
+const INVALID_STATUSES = [
+  'pendente', 'pending', 'agendad', 'schedul', 'recusad', 'negad',
+  'devolvid', 'cancelad', 'estornad', 'em processamento', 'processing',
+  'falh', 'failed', 'rejected', 'expirad',
+]
+
 const MIN_CONFIDENCE = 0.85
 
 // 10 minutes tolerance for clock skew / delayed screenshots
@@ -95,10 +105,14 @@ export class DeterministicPaymentValidator {
       })
     }
 
-    // ── Rule 9: valid status ───────────────────────────────────────────────
+    // ── Rule 9: status ─────────────────────────────────────────────────────
+    // Rejeita apenas status explicitamente ruim. Ausente/desconhecido passa
+    // (comprovantes Nubank etc. não trazem status), positivo passa.
     const statusNorm = extracted.status?.toLowerCase().trim() ?? ''
-    const isValidStatus = VALID_COMPLETED_STATUSES.some(s => statusNorm.includes(s))
-    if (!isValidStatus) {
+    const isBadStatus = statusNorm !== '' &&
+      !VALID_COMPLETED_STATUSES.some(s => statusNorm.includes(s)) &&
+      INVALID_STATUSES.some(s => statusNorm.includes(s))
+    if (isBadStatus) {
       return reject('invalid_status', { status: extracted.status })
     }
 
