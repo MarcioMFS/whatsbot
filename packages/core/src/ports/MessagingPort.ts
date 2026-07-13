@@ -23,6 +23,13 @@ export interface OutgoingMedia {
   caption?: string
 }
 
+export interface OutgoingPresence {
+  instanceName: string
+  instanceId?: string
+  phoneNumber: string
+  state: 'composing' | 'paused'
+}
+
 export interface InstanceStatus {
   instanceName: string
   state: 'open' | 'close' | 'connecting'
@@ -32,6 +39,7 @@ export interface InstanceStatus {
 export interface MessagingPort {
   sendMessage(msg: OutgoingMessage): Promise<void>
   sendMedia?(msg: OutgoingMedia): Promise<void>
+  sendPresence?(msg: OutgoingPresence): Promise<void>
   getInstanceStatus(instanceName: string): Promise<InstanceStatus>
   createInstance(instanceName: string, webhookUrl?: string, webhookSecret?: string): Promise<{ qrCode: string }>
   deleteInstance(instanceName: string): Promise<void>

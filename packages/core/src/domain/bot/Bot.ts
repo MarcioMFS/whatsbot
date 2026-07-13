@@ -61,6 +61,7 @@ export interface BotGlobalConfig {
   modules?: Record<string, BotModuleState>  // Registro de Módulos: liga/desliga + config por bot. Ausente = defaults (tudo ligado).
   aiGapFill?: AiGapFillConfig                // Escape hatch — "IA cobre lacunas" (Brain/spec_escape_hatch.md). Default do bot.
   capabilityRouterEnabled?: boolean          // false = desliga o CapabilityRouter legado (aposentadoria). Default/undefined = ligado.
+  typingSimulation?: boolean                 // true = "digitando…" + delay proporcional ao tamanho antes de cada bolha do flow (humaniza funis roteirizados). Default: off.
   productNoun?: string                        // substantivo do que o bot vende (ex.: "série", "curso", "suplemento"). Default genérico "produto". Deixa o agente neutro p/ qualquer vertical.
   catalogGenreSearch?: boolean                // true = liga a busca por gênero/categoria (feature de entretenimento). Default OFF (genérico).
   aiRouterMode?: 'contextual' | 'escape_hatch' // nó ai_router: 'contextual' (legado, default) ou 'escape_hatch' (genérico, governado por aiGapFill). Fase 2 da aposentadoria.

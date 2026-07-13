@@ -245,7 +245,9 @@ export class FlowExecutionService {
     imageBase64?: string,
     inbound?: { msgId?: string; hasImage?: boolean },
   ): Promise<void> {
-    if (!bot.isActive || !bot.activeFlowId) return
+    // Sem flow ativo ainda pode haver funil por keyword (bot runtime='agent') —
+    // o guard de flow inexistente acontece adiante, quando o flowId é resolvido.
+    if (!bot.isActive) return
 
     const msgId = inbound?.msgId
     const hasImage = inbound?.hasImage ?? !!imageBase64
@@ -583,7 +585,8 @@ export class FlowExecutionService {
       flowReason = 'conversa_em_andamento'
     }
 
-    const flow = await this.flowRepo.findById(flowId!)
+    if (!flowId) return
+    const flow = await this.flowRepo.findById(flowId)
     if (!flow) return
     // Observabilidade: QUAL fluxo está sendo chamado AGORA e POR QUÊ (regra de tag vs default vs em andamento).
     console.log(`[FES:flow_resolved] phone="${phoneNumber}" flow="${flow.name}" id=${flow.id} reason=${flowReason} isNew=${isNewConversation} tags=[${(lead?.tags ?? []).join(',')}]`)
@@ -925,6 +928,7 @@ export class FlowExecutionService {
         const data = node.data as TextNodeData
         const msg = this.interpolate(data.message, conversation.variables)
         flog('msg:send', { nodeId: node.id, nodeType: 'text_message', hash: msgHash(msg), len: msg.length })
+        await this.simulateTyping(bot, instance, instanceId, phone, msg.length)
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
         conversation.addAssistantMessage(msg)
         const nexts = flow.getNextNodes(node.id)
@@ -936,6 +940,7 @@ export class FlowExecutionService {
         const caption = data.caption ? this.interpolate(data.caption, conversation.variables) : undefined
         // Envio de imagem NUNCA quebra o funil: sem sendMedia no port ou URL fora do ar → loga e segue.
         try {
+          await this.simulateTyping(bot, instance, instanceId, phone, (caption ?? '').length || 80)
           if (data.mediaUrl && this.messaging.sendMedia) {
             flog('msg:send', { nodeId: node.id, nodeType: 'image', url: data.mediaUrl })
             await this.messaging.sendMedia({
@@ -2557,6 +2562,53 @@ export class FlowExecutionService {
       if (normalized.includes(word)) return num
     }
     return null
+  }
+
+  /**
+   * Humanização gated por bot (globalConfig.typingSimulation): mostra "digitando…"
+   * e espera um tempo proporcional ao tamanho da bolha antes de enviar.
+   * ~40 chars/s de "digitação", clamp 2–5s (teto baixo: o lock por telefone é 45s
+   * e a maior sequência entre capturas tem 6 bolhas). Presence falhar não bloqueia.
+   */
+  private async simulateTyping(
+    bot: Bot,
+    instanceName: string,
+    instanceId: string | undefined,
+    phoneNumber: string,
+    messageLength: number,
+  ): Promise<void> {
+    if (!bot.globalConfig?.typingSimulation) return
+    const seconds = Math.min(5, Math.max(2, 1 + messageLength / 40))
+    try {
+      await this.messaging.sendPresence?.({ instanceName, instanceId, phoneNumber, state: 'composing' })
+    } catch { /* presence é cosmético */ }
+    await new Promise(r => setTimeout(r, seconds * 1000))
+    try {
+      await this.messaging.sendPresence?.({ instanceName, instanceId, phoneNumber, state: 'paused' })
+    } catch { /* presence é cosmético */ }
+  }
+
+  /**
+   * Funil roteirizado convivendo com runtime='agent': diz se a mensagem pertence
+   * ao motor de flow — ou porque abre um flow de trigger 'keyword' (conversa nova),
+   * ou porque continua uma conversa que já está dentro de um flow de keyword.
+   * O messageWorker usa isso pra desviar do AgentRuntime só nesses casos.
+   */
+  async shouldHandleViaKeywordFlow(bot: Bot, phoneNumber: string, message: string): Promise<boolean> {
+    const conversation = await this.convRepo.findActiveByPhone(bot.id, phoneNumber)
+    if (conversation && conversation.status !== 'ended') {
+      if (!conversation.flowId) return false
+      const flow = await this.flowRepo.findById(conversation.flowId)
+      const trig = flow?.nodes.find(n => n.type === 'trigger')
+      return (trig?.data as TriggerNodeData | undefined)?.triggerType === 'keyword'
+    }
+    const botFlows = await this.flowRepo.findByBotId(bot.id)
+    return botFlows.some(f => {
+      if (f.id === bot.activeFlowId) return false
+      const trig = f.nodes.find(n => n.type === 'trigger')
+      const d = trig?.data as TriggerNodeData | undefined
+      return d?.triggerType === 'keyword' && !!d?.keywords?.length && this.matchesTrigger(f, message)
+    })
   }
 
   private matchesTrigger(flow: Flow, message: string): boolean {

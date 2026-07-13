@@ -161,7 +161,17 @@ export function startMessageWorker(
         const phoneTail = (p: string) => p.replace(/\D/g, '').slice(-8) // tolera 55 (pais) e o 9 extra do movel BR
         const incomingTail = phoneTail(phoneNumber)
         const isTestNumber = incomingTail.length === 8 && testNumbers.some((n) => phoneTail(n) === incomingTail)
-        const useAgent = bot.globalConfig?.runtime === 'agent' || isTestNumber
+        const runtimeAgent = bot.globalConfig?.runtime === 'agent' || isTestNumber
+        // Funil roteirizado por keyword convive com runtime='agent': se a msg abre
+        // (ou continua) uma conversa de flow com trigger 'keyword', vai pro motor de
+        // flow mesmo em bot-agente. Fora isso, zero mudança no caminho do agente.
+        const keywordFunnel = runtimeAgent
+          ? await flowExecService.shouldHandleViaKeywordFlow(bot, phoneNumber, effectiveMessage)
+          : false
+        if (keywordFunnel) {
+          console.log(`[worker] keyword_funnel_over_agent bot=${bot.id} phone=${phoneNumber}`)
+        }
+        const useAgent = runtimeAgent && !keywordFunnel
         if (useAgent && agentRuntime) {
           // última tentativa? então o agente faz fallback (handoff). Senão, erro transitório
           // re-lança e o BullMQ re-processa sozinho (cliente não precisa "acordar" o bot).

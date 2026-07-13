@@ -102,7 +102,7 @@ class InMemEventRepo implements ConversationEventRepository {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function makeBot(activeFlowId: string): Bot {
+function makeBot(activeFlowId: string | null): Bot {
   return Bot.reconstitute({
     id: 'bot-001',
     name: 'TestBot',
@@ -230,6 +230,46 @@ test('image send failure does not break the flow', async () => {
   const msgs = messaging.sent.map(m => m.message)
   assert.ok(msgs.includes('EDUZZY OPENING'))
   assert.ok(msgs.includes('AFTER IMAGE'), 'flow must continue past a failed image')
+})
+
+test('bot WITHOUT active flow (runtime agent) still runs keyword funnel', async () => {
+  const messaging = new InMemMessaging()
+  const service = makeService([makeKeywordFlow()], messaging)
+  const bot = makeBot(null) // ex.: Doramas Online Bot — runtime agent, sem active_flow_id
+
+  await service.handleIncomingMessage(bot, '5511988887777', 'quero o kit aula pronta')
+  const msgs = messaging.sent.map(m => m.message)
+  assert.ok(msgs.includes('EDUZZY OPENING'), 'keyword funnel should run without activeFlowId')
+
+  // mensagem sem keyword e sem flow default → nada acontece (não explode)
+  messaging.sent = []
+  const service2 = makeService([makeKeywordFlow()], messaging)
+  await service2.handleIncomingMessage(bot, '5511900000000', 'oi')
+  assert.equal(messaging.sent.length, 0, 'no default flow → no message')
+})
+
+test('shouldHandleViaKeywordFlow: entrada, continuação e conversa de agente', async () => {
+  const messaging = new InMemMessaging()
+  const service = makeService([makeDefaultFlow(), makeKeywordFlow()], messaging)
+  const bot = makeBot(null)
+
+  // conversa nova com keyword → true; sem keyword → false
+  assert.equal(await service.shouldHandleViaKeywordFlow(bot, '5511911111111', 'kit aula pronta'), true)
+  assert.equal(await service.shouldHandleViaKeywordFlow(bot, '5511911111111', 'oi, tudo bem?'), false)
+
+  // conversa em andamento DENTRO do funil → sticky true, mesmo sem keyword na msg
+  const convRepo = new InMemConversationRepo()
+  const aiStub = { generate: async () => ({ content: 'ok', tokensUsed: 0 }) } as any
+  const svc = new FlowExecutionService(
+    new InMemFlowRepo([makeKeywordFlow()]), convRepo, new InMemLeadRepo(),
+    messaging, aiStub, new InMemEventRepo(),
+  )
+  await convRepo.save(Conversation.create({ botId: 'bot-001', flowId: 'flow-eduzzy', phoneNumber: '5511922222222', triggerNodeId: 'trg' }))
+  assert.equal(await svc.shouldHandleViaKeywordFlow(bot, '5511922222222', 'sim'), true)
+
+  // conversa ativa de AGENTE (flowId __agent__) → false (fica com o agente)
+  await convRepo.save(Conversation.create({ botId: 'bot-001', flowId: '__agent__', phoneNumber: '5511933333333', triggerNodeId: '__agent__' }))
+  assert.equal(await svc.shouldHandleViaKeywordFlow(bot, '5511933333333', 'kit aula pronta'), false)
 })
 
 test('messaging port without sendMedia falls back to caption as text', async () => {
