@@ -271,7 +271,16 @@ nodes = [
     image("img_hero", 100, Y[5], "Imagem hero", IMG["hero"]),
     delay("d1", 100, Y[6], 3),
     text("t3", 100, Y[7], "Pergunta faixa etária", T3),
-    capture("c2", 100, Y[8], "Aguardar faixa", "faixa_etaria"),
+    # valida a faixa: resposta fora do formato re-pergunta e segura o funil
+    # (evita resposta "atrasada" de outra pergunta avançar esta etapa)
+    n("c2", "capture", 100, Y[8], {
+        "label": "Aguardar faixa", "variableName": "faixa_etaria",
+        "timeoutMinutes": 30, "timeoutBehavior": "suspend",
+        "suspendedReason": "eduzzy_faixa_etaria",
+        "validationRegex": "[2-6]|anos|1\u20e3|2\u20e3|3\u20e3|4\u20e3",
+        "errorMessage": "Só preciso da faixa da sua turminha 😊 Responda: *2 a 3*, *3 a 4*, *4 a 5* ou *5 a 6 anos*",
+        "recoveryHints": ["anos", "faixa", "turminha"],
+    }),
     text("t4", 100, Y[9], "Registro + 1 mil materiais", T4),
     image("img_materiais", 100, Y[10], "Imagem materiais", IMG["materiais"]),
     text("t6", 100, Y[11], "Benefícios", T6),
