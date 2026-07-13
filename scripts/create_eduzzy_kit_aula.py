@@ -10,7 +10,7 @@ continua caindo no flow default (DramaHub, any_message).
 O flow é criado INATIVO (não mexe no active_flow_id do bot).
 
 ANTES DE RODAR, preencha:
-  - CHECKOUT_URL: link do checkout (será Asaas, mesma conta do DramaHub Play)
+  - Fechamento é Pix direto (PIX_KEY equipenotadez@jim.com), chave em bolha separada
   - KEYWORDS: precisa casar com o texto pré-preenchido do anúncio
   - HAS_PRINTS: ligue quando houver prints REAIS de depoimento (05..08-printN.jpg)
 """
@@ -28,9 +28,8 @@ FLOW_NAME = "Nota Dez — Kit Aula Pronta Infantil"
 # Texto sugerido pro anúncio (click-to-WhatsApp): "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"
 KEYWORDS = ["kit aula pronta", "planinhos de aula"]
 
-# TODO: trocar pelo checkout Asaas (mesma conta do DramaHub Play) quando existir
-CHECKOUT_URL = "https://SEU-CHECKOUT-AQUI.com.br"
-DOWNSELL_URL = "https://SEU-DOWNSELL-AQUI.com.br"  # TODO: checkout Asaas R$17,90
+PIX_KEY  = "equipenotadez@jim.com"
+PIX_NAME = "Equipe Nota Dez"
 
 # 6 imagens geradas (Imagen + tipografia Nunito) e servidas pelo frontend em
 # packages/frontend/public/media/eduzzy/. False → funil só-texto (nós de imagem
@@ -165,13 +164,24 @@ T18 = (
 T19 = (
     "*HOJE, APENAS HOJE*, estamos com um *CUPOM DE DESCONTO* disponível para as primeiras "
     "30 professoras que comprarem!\n\n"
-    "Toque no link abaixo para verificar se o cupom ainda está ativo e finalizar seu "
-    "cadastro em nosso site!\n\n"
     "Estamos com uma condição especial para as primeiras 30 professoras que estão dispostas "
-    "a melhorar o desempenho dos alunos!"
+    "a melhorar o desempenho dos alunos!\n\n"
+    "Pra garantir a sua, é só fazer o *Pix de R$ 27,90* na chave abaixo ⤵️"
 )
-T20 = "⤵️ Segue as informações abaixo para garantir a condição especial — com garantia incondicional de 30 dias!"
-T_ACK = "Perfeito! Qualquer dúvida no cadastro, me chama por aqui 😊"
+T_PIX_AFTER = (
+    "Assim que fizer o Pix, me envia o *print do comprovante* aqui mesmo que eu já libero "
+    "seu acesso 🥰\n\n"
+    "Lembrando: *garantia incondicional de 30 dias* — risco zero."
+)
+T_REJ = (
+    "Hmm, não consegui confirmar esse comprovante 🤔\n\n"
+    "Confere se o Pix foi pra chave *equipenotadez@jim.com* e me envia o *print* de novo, por favor?"
+)
+T_CONFIRMED = "Pagamento confirmado! 🎉💙"
+T_POST = (
+    "Seu acesso ao *Kit Aula Pronta Infantil* está sendo preparado e chega já já aqui "
+    "no WhatsApp e no seu e-mail! Qualquer dúvida, me chama 😊"
+)
 
 # ── Remarketing (régua de recuperação — 30min → 3h → 12h silencioso) ─────────
 RM1A = (
@@ -209,17 +219,16 @@ RM4B = (
     "A condição especial de hoje não volta. Responda *EU QUERO* agora."
 )
 RM5A = (
-    "Professora, vi que você chegou até o final e não concluiu seu cadastro… 🥺\n\n"
+    "Professora, vi que você chegou até o final e não concluiu… 🥺\n\n"
     "Foi o valor? Então deixa eu fazer algo que não faço sempre.\n\n"
     "Só nesta conversa: de ~R$ 27,90~ por *R$ 17,90* — pra nunca mais perder "
     "seu domingo planejando aula.\n\n"
-    "Toque no link abaixo pra garantir ⤵️"
+    "Faz o *Pix de R$ 17,90* na chave abaixo e me manda o comprovante ⤵️"
 )
 RM5B = (
     "Vou encerrar por aqui, professora 💙\n\n"
-    "O link com *R$ 17,90* sai do ar hoje. Se organizar seu trabalho ainda for prioridade, "
-    "ele está logo acima ⤴️\n\n"
-    "Boa aula — e bons domingos!"
+    "O *Pix de R$ 17,90* vale só até o fim do dia — a chave está logo acima ⤴️\n\n"
+    "Me manda o comprovante que eu libero seu acesso na hora. Boa aula — e bons domingos!"
 )
 
 # ── Graph ─────────────────────────────────────────────────────────────────────
@@ -253,12 +262,24 @@ nodes = [
     text("t18", 100, Y[21], "Preço 47,90→27,90", T18),
     image("img_cupom", 100, Y[22], "Imagem cupom", IMG["cupom"]),
     text("t19", 100, Y[23], "Cupom hoje", T19),
-    text("t20", 100, Y[24], "Garantir condição", T20),
-    text("t_link", 100, Y[25], "Link checkout", CHECKOUT_URL),
-    n("tag_checkout", "tag_lead", 100, Y[26], {"label": "Tag chegou no checkout", "add": ["eduzzy-checkout"]}),
-    # pós-link: espera cadastro; resposta → ack; sumiu 45min → downsell
-    capture("c5", 100, Y[27], "Pós-checkout", "pos_checkout", timeout=45),
-    text("t_ack", 100, Y[28], "Ack pós-link", T_ACK),
+    n("pix_main", "pix", 100, Y[24], {
+        "label": "Pix R$27,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "27,90", "description": "Kit Aula Pronta Infantil",
+        "expiresInMinutes": 120, "outputVariable": "paymentIntentId",
+    }),
+    text("t_pix_after", 100, Y[25], "Pedir comprovante", T_PIX_AFTER),
+    n("tag_checkout", "tag_lead", 100, Y[26], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
+    # espera comprovante; resposta → valida; sumiu 45min → downsell
+    capture("c5", 100, Y[27], "Aguardar comprovante", "pos_checkout", timeout=45),
+    n("v1", "ai_validate_receipt", 100, Y[28], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
+    n("pc", "payment_confirmed", 250, Y[28], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),
+    text("t_rej", 400, Y[28], "Comprovante rejeitado", T_REJ),
+    capture("c6", 550, Y[28], "Reenviar comprovante", "comprovante_retry", timeout=60),
+    n("v2", "ai_validate_receipt", 700, Y[28], {"label": "Validar 2ª", "paymentIntentVariable": "paymentIntentId"}),
+    n("ho", "handoff_request", 850, Y[28], {
+        "label": "Handoff comprovante", "reason": "pix_failed", "notifyOwner": True,
+        "userMessage": "Vou pedir pra equipe confirmar seu pagamento manualmente — já te retorno por aqui! 😊",
+    }),
     n("end", "end", 100, Y[29], {"label": "Fim"}),
 
     # ── Remarketing: começo (2 toques) ──────────────────────────────────
@@ -280,8 +301,12 @@ nodes = [
     # downsell pós-link (2 toques)
     n("tag_downsell", "tag_lead", 400, Y[26], {"label": "Tag downsell", "add": ["eduzzy-downsell"]}),
     text("rm5a", 400, Y[27], "Downsell 17,90", RM5A),
-    text("t_link_ds", 400, Y[28], "Link downsell", DOWNSELL_URL),
-    capture("c5b", 400, Y[29], "Downsell retry", "rm_downsell", timeout=180),
+    n("pix_ds", "pix", 550, Y[27], {
+        "label": "Pix R$17,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "17,90", "description": "Kit Aula Pronta Infantil (condição especial)",
+        "expiresInMinutes": 120, "outputVariable": "paymentIntentId",
+    }),
+    capture("c5b", 400, Y[29], "Downsell aguardar comprovante", "rm_downsell", timeout=180),
     text("rm5b", 700, Y[27], "Downsell última", RM5B),
     capture("c5c", 700, Y[28], "Downsell última espera", "rm_downsell2", timeout=720),
 ]
@@ -291,7 +316,7 @@ chain = [
     "trigger", "tag_entry", "t1", "c1", "t2", "img_hero", "d1", "t3", "c2",
     "t4", "img_materiais", "t6", "t7", "c3", "img_planos", "img_atividades",
     "t9", "t11", "img_garantia", "t16", "c4", "t18", "img_cupom", "t19",
-    "t20", "t_link", "tag_checkout", "c5", "t_ack", "end",
+    "pix_main", "t_pix_after", "tag_checkout", "c5",
 ]
 
 if not INCLUDE_IMAGES:
@@ -329,10 +354,16 @@ edges += [
     e("c4", "rm4a", "timeout"), e("rm4a", "c4r"), e("c4r", "t18"),
     e("c4r", "rm4b", "timeout"), e("rm4b", "c4r2"), e("c4r2", "t18"),
     e("c4r2", "end", "timeout"),
-    # downsell: c5 → tag → rm5a → link_ds → c5b(→ack) → rm5b → c5c(→ack) → end
+    # comprovante: c5 → v1 → approved pc / rejected t_rej → c6 → v2 → pc | handoff
+    e("c5", "v1"),
+    e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
+    e("pc", "end"),
+    e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),
+    e("v2", "pc", "approved"), e("v2", "ho", "rejected"), e("ho", "end", "output"),
+    # downsell: c5 --45min--> tag → rm5a → pix_ds → c5b(→v1) → rm5b → c5c(→v1) → end
     e("c5", "tag_downsell", "timeout"), e("tag_downsell", "rm5a"),
-    e("rm5a", "t_link_ds"), e("t_link_ds", "c5b"), e("c5b", "t_ack"),
-    e("c5b", "rm5b", "timeout"), e("rm5b", "c5c"), e("c5c", "t_ack"),
+    e("rm5a", "pix_ds"), e("pix_ds", "c5b"), e("c5b", "v1"),
+    e("c5b", "rm5b", "timeout"), e("rm5b", "c5c"), e("c5c", "v1"),
     e("c5c", "end", "timeout"),
 ]
 
@@ -352,7 +383,7 @@ else:
 
 print(f"""
 Próximos passos:
-  1. Troque CHECKOUT_URL pelo checkout Asaas (conta DramaHub Play) e rode de novo.
+  1. Pix: equipenotadez@jim.com (R$27,90 / downsell R$17,90) — comprovante validado por IA.
   2. Quando tiver prints REAIS de depoimento: suba 05..08-printN.jpg, HAS_PRINTS=True e rode de novo.
   3. Anúncio click-to-WhatsApp com texto pré-preenchido contendo: {KEYWORDS[0]!r}
      Ex.: "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"
