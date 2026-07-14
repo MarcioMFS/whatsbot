@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { Columns3, Clock, Flame } from 'lucide-react'
+import { Columns3, Clock } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
-import { Eyebrow } from '../components/mkhub'
+import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
 
 interface Lead {
@@ -19,7 +19,7 @@ interface LiveConv { phoneNumber: string; status: string; phase?: string }
 interface Column {
   key: string
   title: string
-  color: string
+  dot: string
   /** tags aplicadas ao arrastar um card PARA esta coluna */
   addTags: string[]
   /** tags removidas ao arrastar PARA esta coluna */
@@ -28,13 +28,16 @@ interface Column {
 
 // Estágio é derivado (tags + conversa ativa) — arrastar aplica/remove tags via API.
 const COLUMNS: Column[] = [
-  { key: 'novo',     title: 'Novos',        color: '#6b7280', addTags: [], removeTags: ['lost'] },
-  { key: 'conversa', title: 'Em conversa',  color: '#2563eb', addTags: ['high_intent'], removeTags: ['lost'] },
-  { key: 'pix',      title: 'Pix gerado',   color: '#d97706', addTags: ['pix_generated'], removeTags: ['lost'] },
-  { key: 'comprou',  title: 'Comprou',      color: '#16a34a', addTags: ['buyer'], removeTags: ['lost'] },
-  { key: 'humano',   title: 'Atendimento',  color: '#dc2626', addTags: ['needs_human'], removeTags: [] },
-  { key: 'perdido',  title: 'Perdido',      color: '#111827', addTags: ['lost'], removeTags: ['high_intent'] },
+  { key: 'novo',     title: 'Novos',       dot: 'var(--muted)', addTags: [], removeTags: ['lost'] },
+  { key: 'conversa', title: 'Em conversa', dot: '#9a7400',      addTags: ['high_intent'], removeTags: ['lost'] },
+  { key: 'pix',      title: 'Pix gerado',  dot: '#b45309',      addTags: ['pix_generated'], removeTags: ['lost'] },
+  { key: 'comprou',  title: 'Comprou',     dot: '#1d7a52',      addTags: ['buyer'], removeTags: ['lost'] },
+  { key: 'humano',   title: 'Atendimento', dot: '#c2410c',      addTags: ['needs_human'], removeTags: [] },
+  { key: 'perdido',  title: 'Perdido',     dot: 'var(--ink)',   addTags: ['lost'], removeTags: ['high_intent'] },
 ]
+
+const TEMP_COLORS: Record<string, string> = { cold: 'var(--muted)', warm: '#9a7400', hot: '#c2410c', vip: 'var(--ink)' }
+const TEMP_LABELS: Record<string, string> = { cold: 'frio', warm: 'morno', hot: 'quente', vip: 'VIP' }
 
 function stageOf(lead: Lead, activeByPhone: Map<string, LiveConv>): string {
   const t = new Set(lead.tags)
@@ -48,15 +51,14 @@ function stageOf(lead: Lead, activeByPhone: Map<string, LiveConv>): string {
   return 'novo'
 }
 
-function fmtAgo(ts: string): string {
-  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
-  if (s < 60) return 'agora'
-  if (s < 3600) return `${Math.floor(s / 60)}min`
-  if (s < 86400) return `${Math.floor(s / 3600)}h`
-  return `${Math.floor(s / 86400)}d`
+function timeAgo(iso: string): string {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return 'agora'
+  if (m < 60) return `${m}min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
 }
-
-const TEMP_ICON: Record<string, string> = { hot: '🔥', vip: '⭐', warm: '🌤️', cold: '❄️' }
 
 export function Kanban() {
   const { botId } = useParams<{ botId: string }>()
@@ -93,7 +95,7 @@ export function Kanban() {
     if (!lead || stageOf(lead, activeByPhone) === col.key) return
     // otimista: aplica tags localmente e persiste
     const currentCol = COLUMNS.find(c => c.key === stageOf(lead, activeByPhone))
-    const remove = [...new Set([...(col.removeTags), ...(currentCol?.addTags ?? [])])].filter(t => !col.addTags.includes(t))
+    const remove = [...new Set([...col.removeTags, ...(currentCol?.addTags ?? [])])].filter(t => !col.addTags.includes(t))
     setLeads(ls => ls.map(l => l.phoneNumber !== lead.phoneNumber ? l : {
       ...l, tags: [...new Set([...l.tags.filter(t => !remove.includes(t)), ...col.addTags])],
     }))
@@ -106,69 +108,83 @@ export function Kanban() {
 
   return (
     <MkLayout>
-      <div className="mx-auto" style={{ maxWidth: '96rem' }}>
-        <div className="mb-7">
-          <Eyebrow>Operação</Eyebrow>
-          <h1 className="mk-display flex items-center gap-2" style={{ fontSize: '1.7rem', fontWeight: 700 }}>
-            <Columns3 size={22} strokeWidth={1.7} /> Kanban
-          </h1>
-          <p className="text-sm" style={{ color: 'var(--muted)' }}>
-            {leads.length} leads · arraste um card pra mudar o estágio (aplica tags)
-          </p>
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-end justify-between mb-7">
+          <div>
+            <Eyebrow>Operação</Eyebrow>
+            <h1 className="mk-display flex items-center gap-2" style={{ fontSize: '1.7rem', fontWeight: 700 }}>
+              <Columns3 size={22} strokeWidth={1.7} /> Kanban
+            </h1>
+            <p className="text-sm" style={{ color: 'var(--muted)', marginTop: 2 }}>
+              {leads.length} leads — arraste um card pra mudar de estágio
+            </p>
+          </div>
         </div>
 
-        <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${COLUMNS.length}, minmax(0, 1fr))` }}>
+        {/* colunas com largura fixa + scroll horizontal (nunca espremem) */}
+        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '62vh' }}>
           {COLUMNS.map(col => {
             const items = byCol.get(col.key)!
+            const isOver = overCol === col.key
             return (
               <div key={col.key}
                 onDragOver={e => { e.preventDefault(); setOverCol(col.key) }}
                 onDragLeave={() => setOverCol(o => (o === col.key ? null : o))}
                 onDrop={() => onDrop(col)}
-                className="rounded-xl p-2"
+                className="shrink-0 rounded-2xl transition-all"
                 style={{
-                  background: overCol === col.key ? 'rgba(37,99,235,0.06)' : 'var(--paper)',
-                  border: `1px ${overCol === col.key ? 'dashed' : 'solid'} var(--line)`,
-                  minHeight: '60vh',
+                  width: 250,
+                  padding: '12px 10px',
+                  background: isOver ? 'var(--paper-2)' : 'transparent',
+                  border: isOver ? '1px dashed var(--ink)' : '1px dashed transparent',
                 }}>
-                <div className="flex items-center justify-between px-1.5 pb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="inline-block w-2 h-2 rounded-full" style={{ background: col.color }} />
+                <div className="flex items-center justify-between px-1.5 mb-3">
+                  <span className="mk-eyebrow inline-flex items-center gap-2" style={{ fontSize: '.62rem' }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: col.dot, display: 'inline-block' }} />
                     {col.title}
                   </span>
-                  <span className="text-xs font-semibold px-1.5 rounded" style={{ color: 'var(--muted)', background: 'var(--paper-2)', border: '1px solid var(--line)' }}>
-                    {items.length}
-                  </span>
+                  <span className="text-xs" style={{ color: 'var(--muted)' }}>{items.length}</span>
                 </div>
                 <div className="space-y-2">
+                  {items.length === 0 && (
+                    <div className="rounded-xl text-center text-xs py-6"
+                      style={{ color: 'var(--muted)', border: '1px dashed var(--line)' }}>
+                      vazio
+                    </div>
+                  )}
                   {items.map(lead => (
                     <div key={lead.id}
                       draggable
                       onDragStart={() => setDragPhone(lead.phoneNumber)}
                       onDragEnd={() => setDragPhone(null)}
-                      className="rounded-lg p-2.5 cursor-grab active:cursor-grabbing"
-                      style={{
-                        background: 'var(--paper-2)',
-                        border: '1px solid var(--line)',
-                        opacity: dragPhone === lead.phoneNumber ? 0.5 : 1,
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                      }}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold">{lead.name || lead.phoneNumber}</span>
-                        <span className="text-xs">{TEMP_ICON[lead.leadTemperature] ?? ''}</span>
-                      </div>
-                      {lead.name && <p className="text-[10px]" style={{ color: 'var(--muted)' }}>{lead.phoneNumber}</p>}
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {lead.tags.slice(0, 3).map(t => (
-                          <span key={t} className="text-[9px] px-1 py-0.5 rounded" style={{ background: 'var(--paper)', border: '1px solid var(--line)', color: 'var(--muted)' }}>
-                            {t}
+                      style={{ opacity: dragPhone === lead.phoneNumber ? 0.45 : 1, cursor: 'grab' }}>
+                      <MkCard style={{ padding: 13 }}>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-medium text-sm truncate" style={{ color: 'var(--ink)' }}>
+                            {lead.name || lead.phoneNumber}
+                          </p>
+                          <span className="text-[11px] font-medium shrink-0" style={{ color: TEMP_COLORS[lead.leadTemperature] ?? 'var(--muted)' }}>
+                            {TEMP_LABELS[lead.leadTemperature] ?? ''}
                           </span>
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between mt-1.5 text-[10px]" style={{ color: 'var(--muted)' }}>
-                        <span className="flex items-center gap-1"><Clock size={9} /> {fmtAgo(lead.lastSeenAt)}</span>
-                        <span className="flex items-center gap-1"><Flame size={9} /> {lead.totalSessions} sessõe{lead.totalSessions === 1 ? '' : 's'}</span>
-                      </div>
+                        </div>
+                        {lead.name && <p className="text-xs" style={{ color: 'var(--muted)' }}>{lead.phoneNumber}</p>}
+                        {lead.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {lead.tags.slice(0, 3).map(t => (
+                              <span key={t} className="text-xs px-2 py-0.5 rounded-full"
+                                style={{ background: 'var(--paper-2)', border: '1px solid var(--line)', color: 'var(--ink-soft)' }}>
+                                {t}
+                              </span>
+                            ))}
+                            {lead.tags.length > 3 && (
+                              <span className="text-xs" style={{ color: 'var(--muted)' }}>+{lead.tags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
+                        <p className="flex items-center gap-1 text-xs mt-2" style={{ color: 'var(--muted)' }}>
+                          <Clock size={11} /> {timeAgo(lead.lastSeenAt)} · {lead.totalSessions} sess{lead.totalSessions === 1 ? 'ão' : 'ões'}
+                        </p>
+                      </MkCard>
                     </div>
                   ))}
                 </div>

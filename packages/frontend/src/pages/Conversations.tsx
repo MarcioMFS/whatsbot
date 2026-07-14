@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { MessageCircle, Clock, Bot, User, RadioTower, Send, Pause, Play } from 'lucide-react'
+import { MessageCircle, Clock, Send, Pause, Play } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
@@ -20,25 +20,36 @@ interface Conv {
   updatedAt: string
 }
 
-const STATUS_LABEL: Record<string, { label: string; color: string }> = {
-  active:    { label: 'Ativa',      color: '#16a34a' },
-  waiting:   { label: 'Aguardando', color: '#2563eb' },
-  suspended: { label: 'Suspensa',   color: '#d97706' },
-  handoff:   { label: 'Humano',     color: '#dc2626' },
+// Acentos discretos (padrão editorial: dot colorido + texto muted, nunca badge saturado)
+const STATUS: Record<string, { label: string; dot: string }> = {
+  active:    { label: 'ativa',      dot: '#1d7a52' },
+  waiting:   { label: 'aguardando', dot: '#9a7400' },
+  suspended: { label: 'suspensa',   dot: 'var(--muted)' },
+  handoff:   { label: 'com você',   dot: '#c2410c' },
 }
 
 function fmtTime(ts?: string): string {
   if (!ts) return ''
-  const d = new Date(ts)
-  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function fmtAgo(ts: string): string {
-  const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000)
-  if (s < 60) return 'agora'
-  if (s < 3600) return `${Math.floor(s / 60)}min`
-  if (s < 86400) return `${Math.floor(s / 3600)}h`
-  return `${Math.floor(s / 86400)}d`
+function timeAgo(iso: string): string {
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (m < 1) return 'agora'
+  if (m < 60) return `${m}min atrás`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h atrás`
+  return `${Math.floor(h / 24)}d atrás`
+}
+
+function StatusDot({ status }: { status: string }) {
+  const st = STATUS[status] ?? { label: status, dot: 'var(--muted)' }
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--muted)' }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: st.dot, display: 'inline-block' }} />
+      {st.label}
+    </span>
+  )
 }
 
 export function Conversations() {
@@ -67,6 +78,15 @@ export function Conversations() {
 
   const conv = convs.find(c => c.id === selected) ?? null
 
+  // auto-scroll quando chegam mensagens novas
+  useEffect(() => {
+    const len = conv?.history.length ?? 0
+    if (len !== lastLenRef.current) {
+      lastLenRef.current = len
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [conv?.history.length])
+
   const sendManual = async () => {
     if (!botId || !conv || !draft.trim() || sending) return
     setSending(true)
@@ -86,129 +106,116 @@ export function Conversations() {
     load()
   }
 
-  // auto-scroll quando chegam mensagens novas
-  useEffect(() => {
-    const len = conv?.history.length ?? 0
-    if (len !== lastLenRef.current) {
-      lastLenRef.current = len
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [conv?.history.length])
+  const paused = conv?.status === 'handoff'
 
   return (
     <MkLayout>
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-7">
+        <div className="flex items-end justify-between mb-7">
           <div>
             <Eyebrow>Operação</Eyebrow>
             <h1 className="mk-display flex items-center gap-2" style={{ fontSize: '1.7rem', fontWeight: 700 }}>
-              <MessageCircle size={22} strokeWidth={1.7} /> Conversas ao vivo
+              <MessageCircle size={22} strokeWidth={1.7} /> Conversas
             </h1>
-            <p className="text-sm" style={{ color: 'var(--muted)' }}>
-              {convs.length} conversa{convs.length === 1 ? '' : 's'} em andamento · atualiza a cada 4s
+            <p className="text-sm" style={{ color: 'var(--muted)', marginTop: 2 }}>
+              {convs.length} em andamento agora
             </p>
           </div>
-          <span className="flex items-center gap-1.5 text-xs" style={{ color: '#16a34a' }}>
-            <RadioTower size={14} /> ao vivo
+          <span className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#1d7a52' }} />
+            ao vivo · 4s
           </span>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-5" style={{ minHeight: '60vh' }}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* lista de conversas */}
-          <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '72vh' }}>
+          <div className="space-y-2 overflow-y-auto pr-0.5" style={{ maxHeight: '72vh' }}>
             {loading && <p className="text-sm" style={{ color: 'var(--muted)' }}>Carregando…</p>}
             {!loading && convs.length === 0 && (
-              <MkCard><p className="text-sm" style={{ color: 'var(--muted)' }}>Nenhuma conversa ativa agora.</p></MkCard>
+              <MkCard style={{ padding: '64px 0', textAlign: 'center', color: 'var(--muted)' }}>
+                <MessageCircle size={32} strokeWidth={1.3} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                <p className="text-sm">Nenhuma conversa ativa agora</p>
+              </MkCard>
             )}
             {convs.map(c => {
-              const st = STATUS_LABEL[c.status] ?? { label: c.status, color: 'var(--muted)' }
               const last = c.history[c.history.length - 1]
+              const isSel = selected === c.id
               return (
-                <button key={c.id} onClick={() => setSelected(c.id)} className="w-full text-left">
-                  <MkCard className={selected === c.id ? 'mk-card-hover' : ''}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-sm">{c.phoneNumber}</span>
-                      <span className="text-xs flex items-center gap-1" style={{ color: 'var(--muted)' }}>
-                        <Clock size={11} /> {fmtAgo(c.updatedAt)}
-                      </span>
-                    </div>
-                    <p className="text-xs mt-1 truncate" style={{ color: 'var(--muted)' }}>
-                      {last ? `${last.role === 'user' ? '👤' : '🤖'} ${last.content.slice(0, 60)}` : '—'}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ color: '#fff', background: st.color }}>
-                        {st.label}
-                      </span>
-                      {c.phase && <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{c.phase}</span>}
-                    </div>
-                  </MkCard>
-                </button>
+                <MkCard key={c.id} onClick={() => setSelected(c.id)}
+                  style={{ padding: 14, border: isSel ? '1px solid var(--ink)' : '1px solid var(--line)' }}>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="font-medium text-sm truncate" style={{ color: 'var(--ink)' }}>{c.phoneNumber}</p>
+                    <span className="text-xs shrink-0 inline-flex items-center gap-1" style={{ color: 'var(--muted)' }}>
+                      <Clock size={11} /> {timeAgo(c.updatedAt)}
+                    </span>
+                  </div>
+                  <p className="text-xs mt-1.5 truncate" style={{ color: 'var(--ink-soft)' }}>
+                    {last ? last.content : '—'}
+                  </p>
+                  <div className="mt-2">
+                    <StatusDot status={c.status} />
+                  </div>
+                </MkCard>
               )
             })}
           </div>
 
           {/* chat */}
           <div className="lg:col-span-2">
-            <MkCard>
+            <MkCard style={{ padding: 0, overflow: 'hidden' }}>
               {!conv ? (
-                <div className="flex items-center justify-center" style={{ height: '64vh', color: 'var(--muted)' }}>
-                  <p className="text-sm">Selecione uma conversa à esquerda</p>
+                <div className="flex flex-col items-center justify-center" style={{ height: '72vh', color: 'var(--muted)' }}>
+                  <MessageCircle size={32} strokeWidth={1.3} style={{ opacity: 0.4, marginBottom: 12 }} />
+                  <p className="text-sm">Selecione uma conversa ao lado</p>
                 </div>
               ) : (
-                <div className="flex flex-col" style={{ height: '64vh' }}>
-                  <div className="flex items-center justify-between pb-3 mb-3" style={{ borderBottom: '1px solid var(--line)' }}>
+                <div className="flex flex-col" style={{ height: '72vh' }}>
+                  {/* header */}
+                  <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper-2)' }}>
                     <div>
-                      <p className="font-semibold text-sm">{conv.phoneNumber}</p>
-                      <p className="text-xs" style={{ color: 'var(--muted)' }}>
-                        {conv.history.length} mensagens · nó atual: {conv.currentNodeId ?? '—'}
-                      </p>
+                      <p className="mk-display font-semibold text-sm">{conv.phoneNumber}</p>
+                      <StatusDot status={conv.status} />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                        style={{ color: '#fff', background: (STATUS_LABEL[conv.status] ?? { color: 'var(--muted)' }).color }}>
-                        {(STATUS_LABEL[conv.status] ?? { label: conv.status }).label}
-                      </span>
-                      <button onClick={togglePause}
-                        className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg"
-                        style={conv.status === 'handoff'
-                          ? { background: '#16a34a', color: '#fff' }
-                          : { background: 'var(--paper)', border: '1px solid var(--line)' }}>
-                        {conv.status === 'handoff'
-                          ? <><Play size={11} /> Devolver pro bot</>
-                          : <><Pause size={11} /> Pausar bot</>}
-                      </button>
-                    </div>
+                    <button onClick={togglePause}
+                      className="inline-flex items-center gap-2 rounded-full text-xs font-semibold transition-all"
+                      style={paused
+                        ? { background: 'var(--ink)', color: 'var(--paper)', padding: '8px 16px' }
+                        : { background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', padding: '7px 15px' }}>
+                      {paused ? <><Play size={12} /> Devolver pro bot</> : <><Pause size={12} /> Assumir conversa</>}
+                    </button>
                   </div>
-                  <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                    {conv.history.map((m, i) => (
-                      <div key={i} className={`flex ${m.role === 'assistant' ? 'justify-end' : 'justify-start'}`}>
-                        <div className="max-w-[78%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-wrap"
-                          style={m.role === 'assistant'
-                            ? { background: 'var(--ink)', color: '#fff', borderBottomRightRadius: 6 }
-                            : { background: 'var(--paper)', border: '1px solid var(--line)', borderBottomLeftRadius: 6 }}>
-                          <div className="flex items-center gap-1.5 mb-0.5 text-[10px]" style={{ opacity: 0.65 }}>
-                            {m.role === 'assistant' ? <Bot size={10} /> : <User size={10} />}
-                            {fmtTime(m.timestamp)}
+
+                  {/* mensagens */}
+                  <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: 'var(--paper)' }}>
+                    {conv.history.map((m, i) => {
+                      const bot = m.role === 'assistant'
+                      return (
+                        <div key={i} className={`flex flex-col ${bot ? 'items-end' : 'items-start'}`}>
+                          <div className="max-w-[76%] text-sm whitespace-pre-wrap"
+                            style={bot
+                              ? { background: 'var(--ink)', color: 'var(--paper)', padding: '9px 14px', borderRadius: '14px 14px 4px 14px', boxShadow: '0 2px 8px rgba(10,10,10,.08)' }
+                              : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}>
+                            {m.content}
                           </div>
-                          {m.content}
+                          <span className="text-[10px] mt-1 px-1" style={{ color: 'var(--muted)' }}>{fmtTime(m.timestamp)}</span>
                         </div>
-                      </div>
-                    ))}
+                      )
+                    })}
                     <div ref={chatEndRef} />
                   </div>
-                  <div className="flex items-center gap-2 pt-3 mt-2" style={{ borderTop: '1px solid var(--line)' }}>
+
+                  {/* composer */}
+                  <div className="flex items-center gap-2 px-4 py-3" style={{ borderTop: '1px solid var(--line)', background: 'var(--paper-2)' }}>
                     <input
-                      className="mk-input flex-1"
-                      placeholder={conv.status === 'handoff'
-                        ? 'Você está no controle — escreva pro lead…'
-                        : 'Mensagem manual (o funil continua ativo)…'}
+                      className="mk-input flex-1 px-4 py-2.5 text-sm"
+                      placeholder={paused ? 'Você está no controle — escreva pro lead…' : 'Mensagem manual (o funil continua ativo)…'}
                       value={draft}
                       onChange={e => setDraft(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendManual() } }}
                     />
                     <button onClick={sendManual} disabled={sending || !draft.trim()}
-                      className="flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg"
-                      style={{ background: 'var(--ink)', color: '#fff', opacity: sending || !draft.trim() ? 0.5 : 1 }}>
+                      className="inline-flex items-center gap-2 rounded-full text-sm font-semibold transition-all disabled:opacity-40"
+                      style={{ background: 'var(--ink)', color: 'var(--paper)', padding: '10px 18px' }}>
                       <Send size={13} /> Enviar
                     </button>
                   </div>
