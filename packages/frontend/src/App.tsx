@@ -4,6 +4,8 @@ import { Dashboard } from './pages/Dashboard.tsx'
 import { BotConfig } from './pages/BotConfig.tsx'
 import { FlowBuilder } from './pages/FlowBuilder.tsx'
 import { Leads } from './pages/Leads.tsx'
+import { Conversations } from './pages/Conversations.tsx'
+import { Kanban } from './pages/Kanban.tsx'
 import { Events } from './pages/Events.tsx'
 import { AgentTrace } from './pages/AgentTrace.tsx'
 import { Products } from './pages/Products.tsx'
@@ -29,6 +31,8 @@ export default function App() {
       <Route path="/bots/:botId/flow/:flowId" element={<ProtectedRoute><FlowBuilder /></ProtectedRoute>} />
       <Route path="/bots/:botId/sales" element={<ProtectedRoute><Vendas /></ProtectedRoute>} />
       <Route path="/bots/:botId/leads" element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+      <Route path="/bots/:botId/conversations" element={<ProtectedRoute><Conversations /></ProtectedRoute>} />
+      <Route path="/bots/:botId/kanban" element={<ProtectedRoute><Kanban /></ProtectedRoute>} />
       <Route path="/bots/:botId/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
       <Route path="/bots/:botId/agent-trace" element={<ProtectedRoute><AgentTrace /></ProtectedRoute>} />
       <Route path="/bots/:botId/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />

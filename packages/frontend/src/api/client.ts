@@ -161,6 +161,8 @@ export const api = {
       request<{ segments: FlowSegment[] }>(`/flows/${flowId}/segments`, { method: 'PUT', body: JSON.stringify({ segments }) }),
   },
   conversations: {
+    live: (botId: string) =>
+      request<unknown[]>(`/conversations/bot/${botId}/live`),
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
   },

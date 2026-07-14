@@ -27,6 +27,20 @@ export class RedisConversationRepository implements ConversationRepository {
     return this.toDomain(JSON.parse(raw))
   }
 
+  async findActiveByBotId(botId: string): Promise<Conversation[]> {
+    const convs: Conversation[] = []
+    let cursor = '0'
+    do {
+      const [next, keys] = await this.redis.scan(cursor, 'MATCH', `conv:active:${botId}:*`, 'COUNT', 200)
+      cursor = next
+      if (keys.length) {
+        const raws = await this.redis.mget(...keys)
+        for (const raw of raws) if (raw) convs.push(this.toDomain(JSON.parse(raw)))
+      }
+    } while (cursor !== '0')
+    return convs.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+  }
+
   async findById(id: string): Promise<Conversation | null> {
     const { rows } = await this.db.query('SELECT * FROM conversations WHERE id = $1', [id])
     return rows[0] ? this.toDomain(rows[0].data) : null

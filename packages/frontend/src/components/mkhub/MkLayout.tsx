@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   LogOut, LayoutDashboard, GitBranch, Users,
-  ShoppingBag, PhoneCall, Settings2,
+  ShoppingBag, PhoneCall, Settings2, MessageCircle, Columns3,
 } from 'lucide-react'
 import { useAuthStore } from '../../stores/authStore.ts'
 import { useUIStore } from '../../stores/uiStore.ts'
@@ -11,6 +11,8 @@ interface BotNavItem { label: string; icon: React.ElementType; href: string; tab
 const BOT_NAV: BotNavItem[] = [
   { label: 'Visão Geral',   icon: LayoutDashboard, href: 'config' },
   { label: 'Flows',         icon: GitBranch,       href: 'config', tab: 'automacao' },
+  { label: 'Conversas',     icon: MessageCircle,   href: 'conversations' },
+  { label: 'Kanban',        icon: Columns3,        href: 'kanban' },
   { label: 'Leads',         icon: Users,           href: 'leads' },
   { label: 'Vendas',        icon: ShoppingBag,     href: 'sales' },
   { label: 'Handoffs',      icon: PhoneCall,       href: 'handoffs' },

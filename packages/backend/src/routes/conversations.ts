@@ -26,6 +26,16 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
     }
   )
 
+  // Conversas AO VIVO (Redis) — alimenta o painel de conversas em tempo real (polling).
+  app.get<{ Params: { botId: string } }>('/bot/:botId/live', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.botId)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+    const conversations = await ctx.conversationRepo.findActiveByBotId?.(bot.id) ?? []
+    return conversations.map(c => c.toJSON())
+  })
+
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
     const user = req.user as { id: string }
     const conversation = await ctx.conversationRepo.findById(req.params.id)
