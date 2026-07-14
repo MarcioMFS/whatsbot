@@ -101,7 +101,7 @@ export function startMessageWorker(
   const worker = new Worker(
     'messages',
     async (job) => {
-      const { botId, phoneNumber, message, msgId, hasImage, imageMeta, hasAudio, audioMeta } = job.data as {
+      const { botId, phoneNumber, message, msgId, hasImage, imageMeta, hasAudio, audioMeta, imageBase64: directImageBase64 } = job.data as {
         botId: string
         phoneNumber: string
         message: string
@@ -110,6 +110,7 @@ export function startMessageWorker(
         imageMeta?: { imgMsg: Record<string, unknown> }
         hasAudio?: boolean
         audioMeta?: { audioMsg: Record<string, unknown> }
+        imageBase64?: string   // Cloud API: mídia já baixada no webhook (sem decrypt)
       }
 
       const bot = await botRepo.findById(botId)
@@ -125,8 +126,8 @@ export function startMessageWorker(
       }
 
       try {
-        let imageBase64: string | undefined
-        if (imageMeta?.imgMsg) {
+        let imageBase64: string | undefined = directImageBase64
+        if (!imageBase64 && imageMeta?.imgMsg) {
           imageBase64 = await decryptWhatsAppMedia(imageMeta.imgMsg)
           console.log(`[worker] image decrypt: ${imageBase64 ? `OK (${imageBase64.length} chars)` : 'FAILED'}`)
         }

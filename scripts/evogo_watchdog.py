@@ -61,7 +61,9 @@ def load_state() -> dict:
 def main() -> None:
     state = load_state()
 
-    ok = all(send_text(inst, self_num, "🩺") for inst, self_num in INSTANCES.items())
+    # texto do probe varia por execução (self-message idêntica em loop é sinal robótico)
+    probe_text = f"ok {datetime.now():%H:%M}"
+    ok = all(send_text(inst, self_num, probe_text) for inst, self_num in INSTANCES.items())
     if ok:
         if state["fails"]:
             log(f"recuperado sem restart (fails era {state['fails']})")
@@ -82,7 +84,7 @@ def main() -> None:
             state["last_restart"] = time.time()
             state["fails"] = 0
             time.sleep(20)
-            recovered = all(send_text(i, n, "🩺") for i, n in INSTANCES.items())
+            recovered = all(send_text(i, n, f"ok {datetime.now():%H:%M}") for i, n in INSTANCES.items())
             status = "✅ envios voltaram" if recovered else "❌ AINDA MUDO — olhar manualmente!"
             log(f"pós-restart: {status}")
             send_text(ALERT_INSTANCE, ALERT_PHONE,

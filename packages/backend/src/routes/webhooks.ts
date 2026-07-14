@@ -3,10 +3,12 @@ import { timingSafeEqual } from 'crypto'
 import { Queue } from 'bullmq'
 import type Redis from 'ioredis'
 import type { BotRepository, Bot } from '@whatsbot/core'
+import type { CloudAPIAdapter } from '../adapters/CloudAPIAdapter.js'
 
 interface WebhookCtx {
   botRepo: BotRepository
   redis: Redis
+  cloudAdapter?: CloudAPIAdapter | null
 }
 
 export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
@@ -144,6 +146,92 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       return reply.code(401).send({ error: 'Invalid webhook token' })
     }
     return processEvolutionWebhook(bot, req, reply)
+  })
+
+  // ── WhatsApp Cloud API oficial (Meta) ─────────────────────────────────────
+  // Verificação do webhook (feita uma vez, ao configurar no painel da Meta).
+  app.get('/cloudapi', async (req, reply) => {
+    const q = req.query as Record<string, string>
+    const verifyToken = process.env.WHATSAPP_CLOUD_VERIFY_TOKEN
+    if (verifyToken && q['hub.mode'] === 'subscribe' && q['hub.verify_token'] === verifyToken) {
+      return reply.code(200).send(q['hub.challenge'])
+    }
+    return reply.code(403).send()
+  })
+
+  // Mensagens entrantes da Meta. Bot é resolvido pelo phone_number_id
+  // (evolutionConfig.instanceName === "cloudapi:<phone_number_id>").
+  app.post('/cloudapi', rl, async (req, reply) => {
+    const payload = req.body as {
+      entry?: Array<{ changes?: Array<{ value?: Record<string, unknown> }> }>
+    }
+    // A Meta reenvia sem cessar se não receber 200 — sempre confirme.
+    reply.code(200).send({ ok: true })
+
+    for (const entry of payload.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        const value = change.value as {
+          metadata?: { phone_number_id?: string }
+          messages?: Array<Record<string, any>>
+        } | undefined
+        const pnid = value?.metadata?.phone_number_id
+        if (!pnid || !value?.messages?.length) continue
+
+        const bots = await ctx.botRepo.findAllActive()
+        const bot = bots.find(b => b.evolutionConfig.instanceName === `cloudapi:${pnid}`)
+        if (!bot) {
+          console.warn(`[cloudapi] webhook para phone_number_id=${pnid} sem bot correspondente`)
+          continue
+        }
+
+        for (const m of value.messages) {
+          const msgId = m.id as string | undefined
+          if (msgId) {
+            const already = await ctx.redis.set(`webhook:dedup:${bot.id}:${msgId}`, '1', 'EX', 60, 'NX')
+            if (!already) continue
+          }
+
+          const phoneNumber = (m.from as string | undefined) ?? ''
+          if (!phoneNumber) continue
+
+          let message = ''
+          let imageBase64: string | undefined
+          if (m.type === 'text') {
+            message = m.text?.body ?? ''
+          } else if (m.type === 'button') {
+            message = m.button?.text ?? ''
+          } else if (m.type === 'interactive') {
+            message = m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? ''
+          } else if (m.type === 'image' || m.type === 'document') {
+            const media = m[m.type] as { id?: string; caption?: string; mime_type?: string } | undefined
+            const supported = m.type === 'image' ||
+              media?.mime_type === 'application/pdf' || (media?.mime_type ?? '').startsWith('image/')
+            if (supported && media?.id && ctx.cloudAdapter) {
+              const dl = await ctx.cloudAdapter.downloadMedia(media.id)
+              if (dl) imageBase64 = dl.base64
+            }
+            message = media?.caption || '[image]'
+          } else {
+            console.warn(`[cloudapi] tipo de mensagem não tratado: ${m.type}`)
+            continue
+          }
+
+          if (!message.trim() && !imageBase64) continue
+
+          await messageQueue.add('process', {
+            botId: bot.id,
+            phoneNumber,
+            message,
+            msgId,
+            hasImage: !!imageBase64,
+            imageBase64,
+          }, {
+            attempts: 8,
+            backoff: { type: 'exponential', delay: 1500 },
+          })
+        }
+      }
+    }
   })
 }
 

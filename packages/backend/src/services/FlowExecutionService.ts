@@ -2583,7 +2583,9 @@ export class FlowExecutionService {
     messageLength: number,
   ): Promise<void> {
     if (!bot.globalConfig?.typingSimulation) return
-    const seconds = Math.min(5, Math.max(2, 1 + messageLength / 40))
+    // jitter ±20%: cadência nunca é idêntica entre leads (sinal anti-spam)
+    const base = Math.min(5, Math.max(2, 1 + messageLength / 40))
+    const seconds = base * (0.8 + Math.random() * 0.4)
     try {
       await this.messaging.sendPresence?.({ instanceName, instanceId, phoneNumber, state: 'composing' })
     } catch { /* presence é cosmético */ }
