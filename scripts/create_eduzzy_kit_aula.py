@@ -173,7 +173,7 @@ CAP_GARANTIA = (
 T16 = (
     "Resumindo: planejamentos, atividades e provas com gabarito, pareceres descritivos e material "
     "completo de alfabetização — tudo pronto, editável e personalizado pra sua turminha.\n\n"
-    "E as 30 primeiras professoras de hoje ganham *3 bônus surpresa*, revelados após o cadastro. 🎁\n\n"
+    "E as 30 primeiras professoras de hoje ganham *3 bônus surpresa* já inclusos no kit. 🎁\n\n"
     "Vamos finalizar seu cadastro e nunca mais perder domingo planejando aula? 😀\n\n"
     "Responda *EU QUERO*"
 )
@@ -203,8 +203,8 @@ T_POST = (
     "Vou te enviar os materiais agora — salva tudo no seu celular ou notebook!"
 )
 T_DELIVERED = (
-    "Prontinho, professora! 🥰 Esse é só o começo: seus *bônus surpresa* e os demais materiais "
-    "chegam ainda hoje por aqui.\n\n"
+    "Prontinho, professora! 🥰 Seu Kit completo está aí — e os *bônus surpresa* já estão "
+    "inclusos nos materiais que você acabou de receber. 🎁\n\n"
     "Qualquer dúvida, me chama. Boas aulas — e bons domingos! 💙"
 )
 
