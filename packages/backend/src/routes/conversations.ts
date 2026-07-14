@@ -1,11 +1,12 @@
 import type { FastifyInstance } from 'fastify'
-import type { ConversationRepository, BotRepository, AgentTraceRepository } from '@whatsbot/core'
+import type { ConversationRepository, BotRepository, AgentTraceRepository, MessagingPort } from '@whatsbot/core'
 import { buildConversationStateView } from '../services/ConversationStateView.js'
 
 interface ConvCtx {
   conversationRepo: ConversationRepository
   botRepo: BotRepository
   agentTrace: AgentTraceRepository
+  messaging: MessagingPort
 }
 
 export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
@@ -55,6 +56,69 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
     if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
     return { trace: await ctx.agentTrace.listByConversation(req.params.id) }
   })
+
+  // ── Controle manual (painel Conversas ao vivo) ────────────────────────────
+
+  // Envia mensagem manual pro lead pelo número do bot. Se houver conversa ativa,
+  // registra no histórico (aparece no chat); sem conversa, só envia (recuperação de lead).
+  app.post<{ Params: { botId: string; phone: string }; Body: { message?: string } }>(
+    '/bot/:botId/phone/:phone/send',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const message = (req.body?.message ?? '').trim()
+      if (!message) return reply.code(400).send({ error: 'message obrigatória' })
+
+      await ctx.messaging.sendMessage({
+        instanceName: bot.evolutionConfig.instanceName,
+        instanceId: bot.evolutionConfig.instanceId,
+        phoneNumber: req.params.phone,
+        message,
+      })
+
+      const conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      if (conversation) {
+        conversation.addAssistantMessage(message)
+        await ctx.conversationRepo.save(conversation)
+      }
+      return { ok: true, inConversation: !!conversation }
+    }
+  )
+
+  // Pausa o funil pra esse lead (status handoff — o bot ignora mensagens até retomar).
+  app.post<{ Params: { botId: string; phone: string } }>(
+    '/bot/:botId/phone/:phone/pause',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      if (!conversation) return reply.code(404).send({ error: 'Sem conversa ativa' })
+      conversation.handoff()
+      await ctx.conversationRepo.save(conversation)
+      return { ok: true, status: 'handoff' }
+    }
+  )
+
+  // Devolve pro bot no ponto em que estava (status waiting no nó atual —
+  // a próxima mensagem do lead continua o fluxo dali).
+  app.post<{ Params: { botId: string; phone: string } }>(
+    '/bot/:botId/phone/:phone/resume',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      if (!conversation) return reply.code(404).send({ error: 'Sem conversa ativa' })
+      conversation.resume()
+      await ctx.conversationRepo.save(conversation)
+      return { ok: true, status: 'waiting', node: conversation.currentNodeId }
+    }
+  )
 
   // Debug state view — current_phase, locked_state, cart, intent, etc.
   app.get<{ Params: { botId: string; phone: string } }>(

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { MessageCircle, Clock, Bot, User, RadioTower } from 'lucide-react'
+import { MessageCircle, Clock, Bot, User, RadioTower, Send, Pause, Play } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
@@ -46,6 +46,8 @@ export function Conversations() {
   const [convs, setConvs] = useState<Conv[]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const lastLenRef = useRef(0)
 
@@ -64,6 +66,25 @@ export function Conversations() {
   }, [load])
 
   const conv = convs.find(c => c.id === selected) ?? null
+
+  const sendManual = async () => {
+    if (!botId || !conv || !draft.trim() || sending) return
+    setSending(true)
+    try {
+      await api.conversations.send(botId, conv.phoneNumber, draft.trim())
+      setDraft('')
+      load()
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const togglePause = async () => {
+    if (!botId || !conv) return
+    if (conv.status === 'handoff') await api.conversations.resume(botId, conv.phoneNumber)
+    else await api.conversations.pause(botId, conv.phoneNumber)
+    load()
+  }
 
   // auto-scroll quando chegam mensagens novas
   useEffect(() => {
@@ -142,10 +163,21 @@ export function Conversations() {
                         {conv.history.length} mensagens · nó atual: {conv.currentNodeId ?? '—'}
                       </p>
                     </div>
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                      style={{ color: '#fff', background: (STATUS_LABEL[conv.status] ?? { color: 'var(--muted)' }).color }}>
-                      {(STATUS_LABEL[conv.status] ?? { label: conv.status }).label}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                        style={{ color: '#fff', background: (STATUS_LABEL[conv.status] ?? { color: 'var(--muted)' }).color }}>
+                        {(STATUS_LABEL[conv.status] ?? { label: conv.status }).label}
+                      </span>
+                      <button onClick={togglePause}
+                        className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg"
+                        style={conv.status === 'handoff'
+                          ? { background: '#16a34a', color: '#fff' }
+                          : { background: 'var(--paper)', border: '1px solid var(--line)' }}>
+                        {conv.status === 'handoff'
+                          ? <><Play size={11} /> Devolver pro bot</>
+                          : <><Pause size={11} /> Pausar bot</>}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                     {conv.history.map((m, i) => (
@@ -163,6 +195,22 @@ export function Conversations() {
                       </div>
                     ))}
                     <div ref={chatEndRef} />
+                  </div>
+                  <div className="flex items-center gap-2 pt-3 mt-2" style={{ borderTop: '1px solid var(--line)' }}>
+                    <input
+                      className="mk-input flex-1"
+                      placeholder={conv.status === 'handoff'
+                        ? 'Você está no controle — escreva pro lead…'
+                        : 'Mensagem manual (o funil continua ativo)…'}
+                      value={draft}
+                      onChange={e => setDraft(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendManual() } }}
+                    />
+                    <button onClick={sendManual} disabled={sending || !draft.trim()}
+                      className="flex items-center gap-1.5 text-sm font-semibold px-3.5 py-2 rounded-lg"
+                      style={{ background: 'var(--ink)', color: '#fff', opacity: sending || !draft.trim() ? 0.5 : 1 }}>
+                      <Send size={13} /> Enviar
+                    </button>
                   </div>
                 </div>
               )}

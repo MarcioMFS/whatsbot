@@ -163,6 +163,14 @@ export const api = {
   conversations: {
     live: (botId: string) =>
       request<unknown[]>(`/conversations/bot/${botId}/live`),
+    send: (botId: string, phone: string, message: string) =>
+      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/send`, {
+        method: 'POST', body: JSON.stringify({ message }),
+      }),
+    pause: (botId: string, phone: string) =>
+      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/pause`, { method: 'POST' }),
+    resume: (botId: string, phone: string) =>
+      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/resume`, { method: 'POST' }),
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
   },
