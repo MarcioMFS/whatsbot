@@ -171,17 +171,15 @@ function rig(opts: { routingRules?: Array<{ tag: string; flowId: string }> } = {
 
 const PHONE = '5511977776666'
 
-/** conduz o funil até ficar aguardando no capture alvo */
-async function walkTo(r: Rig & { bot: Bot }, target: 'c1' | 'c2' | 'c3' | 'c4' | 'c5') {
+/** conduz o funil v9 até ficar aguardando no capture alvo */
+async function walkTo(r: Rig & { bot: Bot }, target: 'c_faixa' | 'c_amostra' | 'c_fecho' | 'c5') {
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'Olá! Posso ter mais informações sobre isso?')
-  if (target === 'c1') return
+  if (target === 'c_faixa') return
+  await r.svc.handleIncomingMessage(r.bot, PHONE, '1')              // faixa direto (menu)
+  if (target === 'c_amostra') return
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')            // MAIÚSCULO de propósito
-  if (target === 'c2') return
-  await r.svc.handleIncomingMessage(r.bot, PHONE, '1')
-  if (target === 'c3') return
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Sim, quero ver')
-  if (target === 'c4') return
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'EU QUERO')       // c4 → pix → c5
+  if (target === 'c_fecho') return
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER') // fecho → pix → c5
 }
 
 function convOf(r: Rig): Conversation | undefined {
@@ -216,32 +214,32 @@ test('grafo: edges íntegras, captures com timeout, regex compila, sem CAIXA ALT
 
 // ─── 1. Caminho feliz completo (com as pegadinhas que já quebraram) ──────────
 
-test('caminho feliz: anúncio → SIM maiúsculo → menu "1" → amostra → eu quero → pix → comprovante → entrega', async () => {
+test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLVER → pix 17,90 → comprovante → entrega', async () => {
   const r = rig()
 
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'Olá! Posso ter mais informações sobre isso?')
-  assert.equal(convOf(r)?.currentNodeId, 'c1')
-  assert.equal(r.msgs.texts.length, 1, 'abertura em 1 bolha')
-
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← bug do case-sensitive
-  assert.equal(convOf(r)?.currentNodeId, 'c2', '"SIM" maiúsculo deve avançar')
+  assert.equal(convOf(r)?.currentNodeId, 'c_faixa')
+  assert.equal(r.msgs.texts.length, 1, 'abertura em 1 bolha (problema + faixa)')
 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, '1')    // ← menu
-  assert.equal(convOf(r)?.currentNodeId, 'c3')
+  assert.equal(convOf(r)?.currentNodeId, 'c_amostra')
   assert.ok(r.msgs.all.some(m => m.includes('2 a 3 anos')), 'menu "1" vira rótulo "2 a 3 anos"')
-  assert.ok(!r.msgs.all.some(m => m.includes(': 1')), 'não pode ecoar o dígito cru')
+  assert.ok(r.msgs.media.length >= 1, 'capa do kit enviada na etapa da solução')
 
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Sim, quero ver')
-  assert.equal(convOf(r)?.currentNodeId, 'c4')
-  assert.ok(r.msgs.media.length >= 2, 'amostras (2 imagens) enviadas')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← case-insensitive
+  assert.equal(convOf(r)?.currentNodeId, 'c_fecho', '"SIM" maiúsculo avança pra oferta')
+  assert.equal(r.msgs.media.length, 3, '3 páginas reais de amostra')
+  assert.ok(r.msgs.all.some(m => m.includes('R$ 27')), 'âncora R$27 presente')
+  assert.ok(r.msgs.all.some(m => m.includes('17,90')), 'condição 17,90 presente')
 
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'EU QUERO')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER')
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   const last = r.msgs.all[r.msgs.all.length - 1]
   assert.equal(last, 'equipenotadez@jim.com', 'chave pix isolada na última bolha (copiável)')
+  assert.ok(r.msgs.all.some(m => m.includes('17,90')), 'pix no valor 17,90')
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
   r.msgs.clear()
@@ -256,7 +254,7 @@ test('caminho feliz: anúncio → SIM maiúsculo → menu "1" → amostra → eu
 
 test('faixa "3 a 4 anos" por extenso fica verbatim (não vira item 3 do menu)', async () => {
   const r = rig()
-  await walkTo(r, 'c2')
+  await walkTo(r, 'c_faixa')
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, '3 a 4 anos')
   assert.ok(r.msgs.all.some(m => m.includes('3 a 4 anos')), 'eco correto')
@@ -267,14 +265,14 @@ test('faixa "3 a 4 anos" por extenso fica verbatim (não vira item 3 do menu)', 
 
 test('pergunta no fechamento: re-âncora sem avançar; 2ª ESPAÇADA → handoff terminal; msgs seguintes ignoradas', async () => {
   const r2 = rig()
-  await walkTo(r2, 'c4')
-  assert.equal(convOf(r2)?.currentNodeId, 'c4')
+  await walkTo(r2, 'c_fecho')
+  assert.equal(convOf(r2)?.currentNodeId, 'c_fecho')
 
   r2.msgs.clear()
   await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'É impresso ou digital?')
-  assert.equal(convOf(r2)?.currentNodeId, 'c4', 'pergunta NÃO avança o funil')
-  assert.ok(r2.msgs.all.some(m => m.toLowerCase().includes('eu quero')), 're-âncora repete a pergunta do funil')
-  assert.ok(!r2.msgs.all.some(m => m.includes('47,90')), 'não pode ter avançado pro preço')
+  assert.equal(convOf(r2)?.currentNodeId, 'c_fecho', 'pergunta NÃO avança o funil')
+  assert.ok(r2.msgs.all.some(m => m.toLowerCase().includes('quero resolver')), 're-âncora repete a pergunta do funil')
+  assert.ok(!r2.msgs.all.some(m => m.includes('equipenotadez')), 'não pode ter avançado pro pix')
 
   // simula ESPAÇAMENTO (>30s/60s): rejeição espaçada de verdade conta pro escalonamento
   const conv1 = convOf(r2)!
@@ -293,32 +291,33 @@ test('pergunta no fechamento: re-âncora sem avançar; 2ª ESPAÇADA → handoff
 
 test('RAJADA no fechamento: 2 msgs seguidas NÃO escalam nem repetem o aparte; funil segue vivo', async () => {
   const r = rig()
-  await walkTo(r, 'c4')
+  await walkTo(r, 'c_fecho')
 
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'quanto fica?')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'tem parcelado?')
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'tem pra maternal?')   // <30s depois (rajada)
   assert.notEqual(convOf(r)?.status, 'handoff', 'rajada NÃO escala pro dono')
-  assert.equal(convOf(r)?.currentNodeId, 'c4', 'continua aguardando no mesmo lugar')
-  const apartes = r.msgs.all.filter(m => m.toLowerCase().includes('eu quero')).length
+  assert.equal(convOf(r)?.currentNodeId, 'c_fecho', 'continua aguardando no mesmo lugar')
+  const apartes = r.msgs.all.filter(m => m.toLowerCase().includes('quero resolver')).length
   assert.equal(apartes, 1, 'aparte enviado UMA vez (sem papagaio)')
 
   // e a resposta válida em seguida DESCE o funil normalmente
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'eu quero sim')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'quero resolver sim')
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'resposta válida avança pro pix')
   assert.ok(r.msgs.all.includes('equipenotadez@jim.com'), 'pix enviado')
 })
 
 // ─── 4. Objeção de preço → downsell imediato ─────────────────────────────────
 
-test('objeção de preço no pós-pix dispara downsell R$17,90 na hora', async () => {
+test('objeção de agenda no pós-pix é acolhida (garantia) e o funil segue aguardando', async () => {
   const r = rig()
   await walkTo(r, 'c5')
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Não tenho esse valor hoje')
-  assert.ok(r.msgs.all.some(m => m.includes('17,90')), 'downsell imediato')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Só recebo semana que vem')
+  assert.ok(r.msgs.all.some(m => m.includes('garantia')), 'acolhe com garantia, sem pressão')
   assert.ok(!r.msgs.all.some(m => m.includes('não consegui confirmar')), 'não é rejeição de comprovante')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'continua aguardando o comprovante/retorno')
 })
 
 // ─── 5. "Já paguei" sem comprovante nunca confirma ───────────────────────────

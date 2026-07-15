@@ -116,71 +116,86 @@ def capture(id, x, y, label, var, timeout=30, extra=None):
 def delay(id, x, y, seconds=3):
     return n(id, "delay", x, y, {"label": "Pausa", "seconds": seconds})
 
-# ── Copy (anti-spam: máx 3 bolhas por bloco, sem CAIXA ALTA, 1-2 emojis,
-# abertura com variações por lead — regras do sales_skills_mining Tier 3) ──────
+# ── Copy v9 — roteiro problema-primeiro (Kely/Marcio 15/07) ───────────────────
+# Estrutura: dor → solução(capa) → prova → amostra real → âncora 27→17,90 → "quero resolver"
 T1_VARIACOES = [
     (
-        "Oi! Claro, te explico rapidinho 😊 Aqui é a Juliana, da equipe Nota Dez 📚\n\n"
-        "A gente ajuda professoras do infantil com planinhos de aula, atividades lúdicas, "
-        "pareceres e modelinhos do dia a dia — prontos e editáveis.\n\n"
-        "Quer conhecer? Responda *sim* que eu te mostro ⤵️"
+        "Oi! Aqui é a Juliana 📚\n\n"
+        "Se você joga muitas horas montando plano de aula, atividade e parecer do zero toda "
+        "semana, eu quero te mostrar uma forma de resolver isso hoje mesmo.\n\n"
+        "Qual a faixa etária da sua turma?\n"
+        "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
     (
-        "Oi, professora! Pode deixar que eu te conto 😊 Juliana aqui, da equipe Nota Dez 📚\n\n"
-        "Trabalhamos com materiais de aula prontos e editáveis pra sua turminha — "
-        "planinhos, atividades lúdicas e pareceres descritivos.\n\n"
-        "Me responde um *sim* que eu te mostro como funciona"
+        "Oi, professora! Juliana aqui 📚\n\n"
+        "Quantas horas da sua semana vão embora montando planejamento, atividade e parecer "
+        "do zero? Eu te mostro um jeito de resolver isso ainda hoje.\n\n"
+        "Me diz a faixa etária da sua turma:\n"
+        "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
     (
-        "Olá! Já te explico 😊 Sou a Juliana, da equipe Nota Dez 📚\n\n"
-        "Se você dá aula pro infantil e vive montando planinho, atividade e parecer do zero, "
-        "isso aqui é pra você.\n\n"
-        "Responda *sim* e eu te mostro em 2 minutinhos ⤵️"
+        "Olá! Sou a Juliana 📚\n\n"
+        "Se o seu fim de semana vive indo embora em plano de aula e parecer feito do zero, "
+        "isso aqui é pra você — dá pra resolver hoje.\n\n"
+        "Qual a faixa etária da sua turma?\n"
+        "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
 ]
-T2 = (
-    "Que bom que cheguei na hora certa! 🥰\n\n"
-    "Nos próximos 2 minutinhos, vou te mostrar como ter todos os seus materiais de aula prontos "
-    "e editáveis no seu celular ou notebook — sem levar trabalho pra casa e sem perder seus "
-    "fins de semana montando do zero."
+T2_DOR = (
+    "Perfeito, {{faixa_etaria}} então!\n\n"
+    "Deixa eu te perguntar uma coisa: quantas vezes esse mês você ficou até tarde (ou usou "
+    "o domingo) só pra montar o planejamento da semana?\n\n"
+    "A maioria das professoras que eu falo aqui responde \"toda semana\". E o pior: mesmo com "
+    "todo esse esforço, ainda tem aquele medo de a coordenação não aprovar de primeira."
 )
-T3 = (
-    "Inclusive, qual a idade dos alunos da sua turminha, professora?\n\n"
-    "Responda com a faixa:\n"
-    "1️⃣ 2 a 3 anos\n"
-    "2️⃣ 3 a 4 anos\n"
-    "3️⃣ 4 a 5 anos\n"
-    "4️⃣ 5 a 6 anos"
+T3_SOLUCAO = (
+    "Existe uma forma de virar esse jogo: em vez de criar cada material do zero, você acessa "
+    "um acervo pronto — organizado por faixa etária e por campo de experiência da BNCC — e "
+    "só adapta pra sua turma.\n\n"
+    "Isso aqui é o que fica disponível pra você 👇"
 )
-T4 = (
-    "Pronto, já registrei! 😍 Seu *Kit Aula Pronta Infantil* virá 100% personalizado:\n\n"
-    "✅ Faixa da sua turminha: {{faixa_etaria}}\n"
-    "✅ Todos os campos de experiência da *BNCC*\n"
-    "✅ Mais de 1 mil materiais prontos e editáveis, feitos e revisados por professoras referência"
+CAP_CAPA = "Reduz o tempo de planejamento de horas pra minutos."
+T4_PROVA = (
+    ("E não sou só eu que falo isso. Quem já resolveu esse problema com o material conta como foi 👇"
+     if HAS_PRINTS else
+     "E não sou só eu que falo isso: mais de 13 mil professoras já pararam de perder o fim de "
+     "semana com planejamento usando esse acervo.")
 )
-T67 = (
-    "Com o kit, você economiza as madrugadas e os fins de semana montando aula, entrega "
-    "relatórios que a coordenação aprova de primeira — e sobra tempo pra você e sua família 💆🏻‍♀️\n\n"
-    "Quer ver uma *amostra* dos materiais? Responda *sim, quero ver* ⬇️"
+T5_ASK = (
+    "Quer ver como fica na prática? Separei uma amostra real do que você recebe — "
+    "atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* que eu te mostro 👇"
 )
-CAP_PLANOS = (
-    "Olha a qualidade do que você acessa ainda hoje, pelo celular ou notebook 🥰\n\n"
-    "Planos de aula editáveis, organizados por campo de experiência ⤵️"
+CAP_AM1 = "Página real do acervo — atividade lúdica de labirinto 🌟"
+CAP_AM2 = "Página real — traçar e escrever, pronta pra imprimir ✏️"
+CAP_AM3 = (
+    "Modelo de rotina diária pronto 🕐\n\n"
+    "Repara: não é modelo genérico. É material pronto pra você só personalizar com o nome "
+    "da turma e usar."
 )
-CAP_ATIVIDADES = "Atividades lúdicas e sensoriais prontas pra sua turminha ⤵️"
-T16 = (
-    "E além dos planos de aula, você recebe: mais de 200 modelos de relatórios descritivos por "
-    "faixa etária, 50 rotinas semanais, fichas de observação, projetos pedagógicos e materiais "
-    "para as datas comemorativas.\n\n"
-    "São mais de 13 mil professoras com o kit — acesso vitalício, suporte no WhatsApp e e-mail, "
-    "e *garantia incondicional de 30 dias*: não gostou, devolvemos.\n\n"
-    "Vamos garantir o seu e nunca mais perder domingo planejando aula? Responda *eu quero* 😀"
+T6_PRECO = (
+    "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente "
+    "fica disponível por R$ 27.\n\n"
+    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 17,90*, "
+    "com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada "
+    "centavo. Risco zero pra você.\n\n"
+    "Isso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema "
+    "que te consome toda semana."
 )
-T18 = (
-    "Tudo isso sairia por ~R$ 47,90~… mas hoje, para as primeiras 30 professoras, o kit completo "
-    "sai por *R$ 27,90* — taxa única.\n\n"
-    "Pra garantir: faz o Pix na chave que vou te mandar e me envia o *print do comprovante* aqui "
-    "mesmo, que eu já libero seu acesso ⤵️"
+T7_FECHO = (
+    "Essa condição de *R$ 17,90* é válida só pra quem está nessa conversa comigo agora — "
+    "depois volta pro valor cheio.\n\n"
+    "Você prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver "
+    "isso ainda hoje?\n\n"
+    "Me diz *quero resolver* que eu já libero seu acesso."
+)
+T_PIX_AFTER = (
+    "Fechado! 🎉 Vou te passar o Pix de *R$ 17,90* aqui embaixo — assim que pagar, me envia "
+    "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
+)
+T_OBJ = (
+    "Entendo perfeitamente, professora 💙 Sem pressa: seu acesso fica guardado aqui.\n\n"
+    "Quando ficar bom pra você, me avisa que eu te mando o Pix de novo — e a *garantia de "
+    "30 dias* continua valendo."
 )
 T_REJ = (
     "Hmm, não consegui confirmar esse comprovante 🤔\n\n"
@@ -197,183 +212,119 @@ T_DELIVERED = (
     "Qualquer dúvida, me chama. Boas aulas — e bons domingos! 💙"
 )
 
-# ── Remarketing (30min → 3h → 12h silencioso) ─────────────────────────────────
-RM1A = (
-    "Professora, ainda está aí? 👀\n\n"
-    "Vou ser direta: você *realmente* vai deixar pra depois a organização do seu trabalho?\n\n"
-    "Enquanto isso, o planejamento continua comendo suas noites e seus domingos…\n\n"
-    "Responda *sim* que eu te mostro a solução em 2 minutinhos"
+# Remarketing suave (problema-primeiro, sem cara de carrinho abandonado)
+RM_SOFT = (
+    "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o "
+    "planejamento dessa semana? 😊\n\n"
+    "Se ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito "
+    "mais simples que eu te falei."
 )
-RM1B = (
-    "Tá bem, professora… vou guardar sua condição especial só até hoje à noite.\n\n"
-    "Depois disso, o acesso com desconto vai pra próxima professora da fila.\n\n"
-    "Se quiser retomar, é só responder *sim* 💙"
-)
-RM2A = (
-    "Professora, faltou só me dizer a idade da sua turminha! 🥺\n\n"
-    "É literalmente 1 resposta pra eu montar seu kit personalizado…\n\n"
-    "Responda a faixa: 2 a 3, 3 a 4, 4 a 5 ou 5 a 6 anos ⤵️"
-)
-RM3A = (
-    "Posso ser sincera, professora? 😅\n\n"
-    "Quem chega até aqui e some geralmente está pensando \"depois eu vejo\"…\n\n"
-    "Mas \"depois\" é mais um domingo inteiro montando aula do zero.\n\n"
-    "A amostra é grátis e leva 30 segundos. Responda *sim, quero ver* ⬇️"
-)
-RM4A = (
-    "Professora, você viu *tudo* que vai receber… e parou bem na última etapa. 😳\n\n"
-    "Ficou com o pé atrás? Normal. Por isso existe a *garantia incondicional de 30 dias*: "
-    "não gostou, devolvemos cada centavo. Risco zero.\n\n"
-    "Você realmente vai deixar pra depois a organização do seu trabalho?\n\n"
-    "Responda *eu quero* e resolve isso hoje"
-)
-RM4B = (
-    "Última mensagem, prometo 🙏\n\n"
-    "Amanhã você vai planejar aula do jeito de sempre — ou com mais de 1 mil materiais prontos na mão.\n\n"
-    "A condição especial de hoje não volta. Responda *eu quero* agora."
-)
-RM5A = (
-    "Professora, vi que você chegou até o final e não concluiu… 🥺\n\n"
-    "Foi o valor? Então deixa eu fazer algo que não faço sempre.\n\n"
-    "Só nesta conversa: de ~R$ 27,90~ por *R$ 17,90* — pra nunca mais perder "
-    "seu domingo planejando aula.\n\n"
-    "Faz o Pix de R$ 17,90 na chave abaixo e me manda o comprovante ⤵️"
-)
-RM5B = (
-    "Vou encerrar por aqui, professora 💙\n\n"
-    "O Pix de *R$ 17,90* vale só até o fim do dia — a chave está logo acima ⤴️\n\n"
-    "Me manda o comprovante que eu libero seu acesso na hora. Boa aula — e bons domingos!"
+RM_REOFFER = (
+    "Que bom te ver por aqui de novo! 😊\n\n"
+    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 17,90* pelo acesso "
+    "completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
 )
 
-# ── Graph (blocos de no máx 3 bolhas entre perguntas) ────────────────────────
+# ── Graph v9 ──────────────────────────────────────────────────────────────────
 Y = [50 + i * 150 for i in range(30)]
+FAIXA_EXTRA = {
+    "validationRegex": "[1-6]|anos|tod",
+    "valueMap": {"1": "2 a 3 anos", "2": "3 a 4 anos", "3": "4 a 5 anos", "4": "5 a 6 anos", "todas": "todas as faixas"},
+    "errorMessage": ("Só preciso da faixa da sua turminha 😊 Responda *1*, *2*, *3* ou *4*:\n"
+                     "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"),
+}
+FECHO_EXTRA = {
+    "validationRegex": "resolver|quero|sim|ok|okay|claro|bora|vamos|pode|fech|aceito|libera|👍",
+    "errorMessage": ("Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\n"
+                     "Enquanto isso, me confirma: quer resolver isso hoje? Me diz *quero resolver* "
+                     "que eu já libero seu acesso ⤵️"),
+}
+
 nodes = [
-    # Bot dedicado à oferta: qualquer mensagem inicia o funil.
-    n("trigger", "trigger", 100, Y[0], {
-        "label": "Início (qualquer mensagem)",
-        "triggerType": "any_message",
-    }),
-    # Guarda: 1ª mensagem é IMAGEM e o lead já tinha chegado no Pix (conversa expirou)
-    # → provável comprovante atrasado; confirma com humano em vez de reiniciar o funil.
-    n("cond_img", "condition", 400, Y[1], {
-        "label": "1ª msg é imagem?", "variable": "__imageBase64", "operator": "regex", "value": ".+",
-    }),
-    n("cond_buyer", "condition", 700, Y[1], {
-        "label": "Já chegou no Pix?", "variable": "__lead_tags", "operator": "contains", "value": "eduzzy-checkout",
-    }),
+    n("trigger", "trigger", 100, Y[0], {"label": "Início (qualquer mensagem)", "triggerType": "any_message"}),
+    n("cond_img", "condition", 400, Y[1], {"label": "1ª msg é imagem?", "variable": "__imageBase64", "operator": "regex", "value": ".+"}),
+    n("cond_buyer", "condition", 700, Y[1], {"label": "Já chegou no Pix?", "variable": "__lead_tags", "operator": "contains", "value": "eduzzy-checkout"}),
     n("ho_late", "handoff_request", 700, Y[2], {
         "label": "Comprovante atrasado", "reason": "pix_failed", "notifyOwner": True,
-        "userMessage": "Recebi! 🙏 Vou confirmar seu pagamento com a equipe e já te retorno por aqui, professora 😊",
-    }),
+        "userMessage": "Recebi! 🙏 Vou confirmar seu pagamento com a equipe e já te retorno por aqui, professora 😊"}),
     n("tag_entry", "tag_lead", 100, Y[1], {"label": "Tag eduzzy", "add": ["eduzzy", "kit-aula-pronta"]}),
-    # Abertura com variações (anti-blast-idêntico)
-    n("t1", "distributor", 100, Y[2], {"label": "Abertura Juliana (3 variações)", "variations": T1_VARIACOES}),
-    capture("c1", 100, Y[3], "Aguardar sim", "resposta_inicial", timeout=15),
-    text("t2", 100, Y[4], "Hora certa", T2),
-    image("img_capa", 100, Y[5], "Capa do kit", IMG["capa"]),
-    text("t3", 100, Y[6], "Pergunta faixa etária", T3),
-    # valida a faixa: resposta fora do formato re-pergunta e segura o funil
-    n("c2", "capture", 100, Y[7], {
-        "label": "Aguardar faixa", "variableName": "faixa_etaria",
-        "timeoutMinutes": 30, "timeoutBehavior": "suspend",
-        "suspendedReason": "eduzzy_faixa_etaria",
-        "validationRegex": "[1-6]|anos|tod",
-        "valueMap": {"1": "2 a 3 anos", "2": "3 a 4 anos", "3": "4 a 5 anos", "4": "5 a 6 anos", "todas": "todas as faixas"},
-        "errorMessage": "Só preciso da faixa da sua turminha 😊 Responda *1*, *2*, *3* ou *4*:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
-        "recoveryHints": ["anos", "faixa", "turminha"],
-    }),
-    text("t4", 100, Y[8], "Registro + 1 mil materiais", T4),
-    image("img_materiais", 100, Y[9], "Imagem materiais", IMG["materiais"]),
-    text("t6", 100, Y[10], "Benefícios + CTA amostra", T67),
-    capture("c3", 100, Y[11], "Aguardar quero ver", "quer_amostra", timeout=20),
-    image("img_planos", 100, Y[12], "Planos BNCC", IMG["planos"], caption=CAP_PLANOS),
-    image("img_amostra1", 250, Y[12], "Amostra real: labirinto", IMG["amostra1"],
-          caption="Página real do kit — atividade lúdica de labirinto 🌟"),
-    image("img_amostra2", 400, Y[12], "Amostra real: traçar", IMG["amostra2"],
-          caption="Página real do kit — traçar e escrever ✏️"),
-    image("img_amostra3", 550, Y[12], "Amostra real: rotina", IMG["amostra3"],
-          caption="Página real do kit — modelo de rotina diária pronto pra usar 🕐"),
-    text("t16", 100, Y[14], "Extras + garantia + CTA final", T16),
-    capture("c4", 100, Y[15], "Aguardar eu quero", "eu_quero", timeout=20, extra={
-        "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|fech|aceito|garantir|comprar|manda|👍",
-        "errorMessage": ("Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\n"
-                         "Enquanto isso, me confirma: vamos garantir o seu kit e nunca mais perder "
-                         "domingo planejando aula? Responda *eu quero* ⤵️"),
-    }),
-    text("t18", 100, Y[16], "Preço + pedir print", T18),
-    n("pix_main", "pix", 100, Y[17], {
-        "label": "Pix R$27,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
-        "amount": "27,90", "description": "Kit Aula Pronta Infantil",
-        "expiresInMinutes": 120, "outputVariable": "paymentIntentId",
-    }),
-    n("tag_checkout", "tag_lead", 100, Y[18], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
-    # espera comprovante; resposta → valida; sumiu 45min → downsell
-    capture("c5", 100, Y[19], "Aguardar comprovante", "pos_checkout", timeout=45),
-    # objeção de preço dita na cara → downsell na hora (sem esperar os 45min do timeout)
-    n("classify_pos", "classify_intent", 250, Y[19], {
+
+    # E1 — problema + qualificação (faixa direto, sem imagem)
+    n("t1", "distributor", 100, Y[2], {"label": "Abertura problema (3 variações)", "variations": T1_VARIACOES}),
+    capture("c_faixa", 100, Y[3], "Aguardar faixa", "faixa_etaria", timeout=20, extra=FAIXA_EXTRA),
+
+    # E2-E5 — dor → solução+capa → prova → convite da amostra
+    text("t2", 100, Y[4], "Nomeando a dor", T2_DOR),
+    text("t3", 100, Y[5], "Solução", T3_SOLUCAO),
+    image("img_capa", 100, Y[6], "Capa do kit", IMG["capa"], caption=CAP_CAPA),
+    text("t4", 100, Y[7], "Prova social", T4_PROVA),
+] + ([image("img_print1", 250, Y[7], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
+    text("t5", 100, Y[8], "Convite amostra", T5_ASK),
+    capture("c_amostra", 100, Y[9], "Aguardar sim amostra", "quer_amostra", timeout=20),
+
+    # E5 — amostra real (3 páginas do kit)
+    image("img_am1", 100, Y[10], "Amostra labirinto", IMG["amostra1"], caption=CAP_AM1),
+    image("img_am2", 250, Y[10], "Amostra traçar", IMG["amostra2"], caption=CAP_AM2),
+    image("img_am3", 400, Y[10], "Amostra rotina", IMG["amostra3"], caption=CAP_AM3),
+
+    # E6-E7 — âncora 27→17,90 + fechamento "quero resolver"
+    text("t6", 100, Y[11], "Âncora 27→17,90", T6_PRECO),
+    text("t7", 100, Y[12], "Fechamento", T7_FECHO),
+    capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
+
+    # Pix 17,90 + comprovante (mesma espinha validada)
+    n("pix_main", "pix", 100, Y[14], {
+        "label": "Pix R$17,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "17,90", "description": "Kit Aula Pronta Infantil — condição especial",
+        "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
+    text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
+    n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
+    capture("c5", 100, Y[17], "Aguardar comprovante", "pos_checkout", timeout=180),
+    n("classify_pos", "classify_intent", 250, Y[17], {
         "label": "Triagem pós-pix", "intents": [
-            {"handle": "objection", "label": "Objeção de preço",
+            {"handle": "objection", "label": "Objeção/agenda",
              "patterns": ["não tenho", "nao tenho", "tá caro", "ta caro", "muito caro", "sem dinheiro",
                           "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",
-                          "depois eu", "mês que vem", "mes que vem", "quando receber"]},
-            {"handle": "validate", "label": "Comprovante/resto", "isDefault": True},
-        ],
-    }),
-    n("v1", "ai_validate_receipt", 100, Y[20], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
-    n("pc", "payment_confirmed", 250, Y[20], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),
-    text("t_rej", 400, Y[20], "Comprovante rejeitado", T_REJ),
-    capture("c6", 550, Y[20], "Reenviar comprovante", "comprovante_retry", timeout=60),
-    n("v2", "ai_validate_receipt", 700, Y[20], {"label": "Validar 2ª", "paymentIntentVariable": "paymentIntentId"}),
-    n("ho", "handoff_request", 850, Y[20], {
+                          "depois eu", "mês que vem", "mes que vem", "quando receber", "semana que vem"]},
+            {"handle": "validate", "label": "Comprovante/resto", "isDefault": True}]}),
+    text("t_obj", 400, Y[17], "Acolhe objeção", T_OBJ),
+    n("v1", "ai_validate_receipt", 100, Y[18], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
+    n("pc", "payment_confirmed", 250, Y[18], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),
+    n("label_pago", "label", 400, Y[18], {"label": "Etiqueta Pago", "labelName": "Pago", "labelId": "4"}),
+    text("t_rej", 550, Y[18], "Comprovante rejeitado", T_REJ),
+    capture("c6", 700, Y[18], "Reenviar comprovante", "comprovante_retry", timeout=60),
+    n("v2", "ai_validate_receipt", 850, Y[18], {"label": "Validar 2ª", "paymentIntentVariable": "paymentIntentId"}),
+    n("ho", "handoff_request", 1000, Y[18], {
         "label": "Handoff comprovante", "reason": "pix_failed", "notifyOwner": True,
-        "userMessage": "Vou pedir pra equipe confirmar seu pagamento manualmente — já te retorno por aqui! 😊",
-    }),
-    n("label_pago", "label", 250, Y[21], {"label": "Etiqueta Pago", "labelName": "Pago", "labelId": "4"}),
-    n("end", "end", 100, Y[21], {"label": "Fim"}),
+        "userMessage": "Vou pedir pra equipe confirmar seu pagamento manualmente — já te retorno por aqui! 😊"}),
+    n("end", "end", 100, Y[19], {"label": "Fim"}),
 
-    # ── Entrega do kit (após pagamento confirmado) ──────────────────────
+    # ── Entrega (inalterada) ─────────────────────────────────────────────
 ] + [
-    n(f"doc{i:02d}", "image", 1000, 50 + i * 120, {
+    n(f"doc{i:02d}", "image", 1300, 50 + i * 120, {
         "label": f"Kit {i:02d}", "mediaType": "document",
         "mediaUrl": f"{MEDIA_BASE}/kit/{f}", "filename": f.replace("-", " ").replace(".pdf", "") + ".pdf",
     }) for i, f in enumerate(KIT_FILES, 1)
 ] + [
-    text("t_delivered", 1000, 50 + 17 * 120, "Entrega concluída", T_DELIVERED),
+    text("t_delivered", 1300, 50 + 17 * 120, "Entrega concluída", T_DELIVERED),
 
-    # ── Remarketing: começo (2 toques) ──────────────────────────────────
-    text("rm1a", 400, Y[3], "RM início 30min", RM1A),
-    capture("c1r", 400, Y[4], "RM início retry", "rm_inicio", timeout=180),
-    text("rm1b", 400, Y[5], "RM início 3h", RM1B),
-    capture("c1r2", 400, Y[6], "RM início última", "rm_inicio2", timeout=720),
-    # faixa etária (1 toque)
-    text("rm2a", 400, Y[7], "RM faixa 30min", RM2A),
-    capture("c2r", 400, Y[8], "RM faixa retry", "rm_faixa", timeout=720),
-    # amostra (1 toque)
-    text("rm3a", 400, Y[11], "RM amostra 30min", RM3A),
-    capture("c3r", 400, Y[12], "RM amostra retry", "rm_amostra", timeout=720),
-    # fechamento (2 toques)
-    text("rm4a", 400, Y[15], "RM fechamento 30min", RM4A),
-    capture("c4r", 400, Y[16], "RM fechamento retry", "rm_fechamento", timeout=180),
-    text("rm4b", 400, Y[17], "RM fechamento 3h", RM4B),
-    capture("c4r2", 400, Y[18], "RM fechamento última", "rm_fechamento2", timeout=720),
-    # downsell pós-pix (2 toques)
-    n("tag_downsell", "tag_lead", 400, Y[19], {"label": "Tag downsell", "add": ["eduzzy-downsell"]}),
-    text("rm5a", 550, Y[19], "Downsell 17,90", RM5A),
-    n("pix_ds", "pix", 700, Y[19], {
-        "label": "Pix R$17,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
-        "amount": "17,90", "description": "Kit Aula Pronta Infantil (condição especial)",
-        "expiresInMinutes": 120, "outputVariable": "paymentIntentId",
-    }),
-    capture("c5b", 550, Y[21], "Downsell aguardar comprovante", "rm_downsell", timeout=180),
-    text("rm5b", 700, Y[21], "Downsell última", RM5B),
-    capture("c5c", 850, Y[21], "Downsell última espera", "rm_downsell2", timeout=720),
+    # ── Remarketing suave (problema-primeiro, 3h; reoferta só no fechamento) ──
+    text("rm_s1", 400, Y[3], "RM suave faixa", RM_SOFT),
+    capture("c_faixa_r", 400, Y[4], "RM faixa retorno", "rm_faixa", timeout=720),
+    text("rm_s2", 400, Y[9], "RM suave amostra", RM_SOFT),
+    capture("c_am_r", 400, Y[10], "RM amostra retorno", "rm_amostra", timeout=720),
+    text("rm_s3", 400, Y[13], "RM suave fechamento", RM_SOFT),
+    capture("c_f_r", 400, Y[14], "RM fechamento retorno", "rm_fechamento", timeout=720),
+    text("t_reoffer", 550, Y[14], "Reoferta 17,90", RM_REOFFER),
+    text("rm_s4", 400, Y[16], "RM suave pós-pix", RM_SOFT),
+    capture("c5_r", 550, Y[16], "RM pós-pix retorno", "rm_pospix", timeout=720),
 ]
 
-# corrente principal
 chain = [
-    "tag_entry", "t1", "c1", "t2", "img_capa", "t3", "c2",
-    "t4", "img_materiais", "t6", "c3", "img_planos", "img_amostra1", "img_amostra2", "img_amostra3",
-    "t16", "c4", "t18", "pix_main", "tag_checkout", "c5",
+    "tag_entry", "t1", "c_faixa", "t2", "t3", "img_capa", "t4",
+] + (["img_print1"] if HAS_PRINTS else []) + [
+    "t5", "c_amostra", "img_am1", "img_am2", "img_am3",
+    "t6", "t7", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
 if not INCLUDE_IMAGES:
@@ -394,41 +345,32 @@ if not INCLUDE_IMAGES:
 
 edges = [e(chain[i], chain[i + 1]) for i in range(len(chain) - 1)]
 
-# ── Remarketing edges (saída "timeout" dos captures) ─────────────────────────
+# ── Edges: guardas, remarketing suave, comprovante, entrega ──────────────────
 edges += [
-    # guarda de comprovante atrasado na entrada
+    # guarda de comprovante atrasado
     e("trigger", "cond_img"),
     e("cond_img", "cond_buyer", "true"), e("cond_img", "tag_entry", "false"),
     e("cond_buyer", "ho_late", "true"), e("cond_buyer", "tag_entry", "false"),
     e("ho_late", "end", "output"),
-    # começo: c1 → rm1a → c1r(→t2) → rm1b → c1r2(→t2) → end
-    e("c1", "rm1a", "timeout"), e("rm1a", "c1r"), e("c1r", "t2"),
-    e("c1r", "rm1b", "timeout"), e("rm1b", "c1r2"), e("c1r2", "t2"),
-    e("c1r2", "end", "timeout"),
-    # faixa: c2 → rm2a → c2r(→t4) → end
-    e("c2", "rm2a", "timeout"), e("rm2a", "c2r"), e("c2r", "t4"),
-    e("c2r", "end", "timeout"),
-    # amostra: c3 → rm3a → c3r(→img_planos) → end
-    e("c3", "rm3a", "timeout"), e("rm3a", "c3r"),
-    e("c3r", "img_planos" if INCLUDE_IMAGES else "t16"),
-    e("c3r", "end", "timeout"),
-    # fechamento: c4 → rm4a → c4r(→t18) → rm4b → c4r2(→t18) → end
-    e("c4", "rm4a", "timeout"), e("rm4a", "c4r"), e("c4r", "t18"),
-    e("c4r", "rm4b", "timeout"), e("rm4b", "c4r2"), e("c4r2", "t18"),
-    e("c4r2", "end", "timeout"),
-    # comprovante: c5 → triagem → (objeção → downsell imediato | resto → v1)
+    # remarketing suave: 1 toque problema-primeiro; retorno continua de onde parou
+    e("c_faixa", "rm_s1", "timeout"), e("rm_s1", "c_faixa_r"),
+    e("c_faixa_r", "t2"), e("c_faixa_r", "end", "timeout"),
+    e("c_amostra", "rm_s2", "timeout"), e("rm_s2", "c_am_r"),
+    e("c_am_r", "img_am1"), e("c_am_r", "end", "timeout"),
+    e("c_fecho", "rm_s3", "timeout"), e("rm_s3", "c_f_r"),
+    e("c_f_r", "t_reoffer"), e("t_reoffer", "pix_main"), e("c_f_r", "end", "timeout"),
+    # pós-pix: triagem (objeção acolhe e segue aguardando; resto valida)
     e("c5", "classify_pos"),
-    e("classify_pos", "tag_downsell", "objection"),
+    e("classify_pos", "t_obj", "objection"), e("t_obj", "c5"),
     e("classify_pos", "v1", "validate"),
+    e("c5", "rm_s4", "timeout"), e("rm_s4", "c5_r"),
+    e("c5_r", "classify_pos"), e("c5_r", "end", "timeout"),
+    # comprovante
     e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
-    e("pc", "label_pago"), e("label_pago", "doc01"),
     e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),
-    e("v2", "pc", "approved"), e("v2", "ho", "rejected"), e("ho", "end", "output"),
-    # downsell: c5 --45min--> tag → rm5a → pix_ds → c5b(→v1) → rm5b → c5c(→v1) → end
-    e("c5", "tag_downsell", "timeout"), e("tag_downsell", "rm5a"),
-    e("rm5a", "pix_ds"), e("pix_ds", "c5b"), e("c5b", "v1"),
-    e("c5b", "rm5b", "timeout"), e("rm5b", "c5c"), e("c5c", "v1"),
-    e("c5c", "end", "timeout"),
+    e("v2", "pc", "approved"), e("v2", "ho", "rejected"),
+    # entrega
+    e("pc", "label_pago"), e("label_pago", "doc01"),
 ]
 edges += [e(f"doc{i:02d}", f"doc{i+1:02d}") for i in range(1, len(KIT_FILES))]
 edges += [e(f"doc{len(KIT_FILES):02d}", "t_delivered"), e("t_delivered", "end")]
