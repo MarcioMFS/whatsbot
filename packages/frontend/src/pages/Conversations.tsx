@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { MessageCircle, Clock, Send, Pause, Play } from 'lucide-react'
+import { MessageCircle, Clock, Send, Pause, Play, Gift } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
@@ -69,6 +69,8 @@ export function Conversations() {
   const [loading, setLoading] = useState(true)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [deliverables, setDeliverables] = useState<{ available: boolean; docs: number }>({ available: false, docs: 0 })
+  const [delivering, setDelivering] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const lastLenRef = useRef(0)
 
@@ -85,6 +87,11 @@ export function Conversations() {
     const t = setInterval(load, 4000)
     return () => clearInterval(t)
   }, [load])
+
+  useEffect(() => {
+    if (!botId) return
+    api.conversations.deliverables(botId).then(setDeliverables).catch(() => {})
+  }, [botId])
 
   const conv = convs.find(c => c.id === selected) ?? null
 
@@ -117,6 +124,20 @@ export function Conversations() {
   }
 
   const paused = conv?.status === 'handoff'
+
+  const deliverNow = async () => {
+    if (!botId || !conv || delivering) return
+    if (!window.confirm(`Enviar os entregáveis (${deliverables.docs} arquivos) para ${conv.phoneNumber} agora? O lead será marcado como comprador.`)) return
+    setDelivering(true)
+    try {
+      await api.conversations.deliver(botId, conv.phoneNumber)
+      load()
+    } catch (e) {
+      window.alert(`Falha na entrega: ${(e as Error).message}`)
+    } finally {
+      setDelivering(false)
+    }
+  }
 
   return (
     <MkLayout>
@@ -186,6 +207,14 @@ export function Conversations() {
                       <p className="mk-display font-semibold text-sm">{conv.phoneNumber}</p>
                       <StatusDot status={conv.status} />
                     </div>
+                    <div className="flex items-center gap-2">
+                    {deliverables.available && (
+                      <button onClick={deliverNow} disabled={delivering}
+                        className="inline-flex items-center gap-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50"
+                        style={{ background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', padding: '7px 15px' }}>
+                        <Gift size={12} /> {delivering ? 'Entregando…' : 'Entregar produto'}
+                      </button>
+                    )}
                     <button onClick={togglePause}
                       className="inline-flex items-center gap-2 rounded-full text-xs font-semibold transition-all"
                       style={paused
@@ -193,6 +222,7 @@ export function Conversations() {
                         : { background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', padding: '7px 15px' }}>
                       {paused ? <><Play size={12} /> Devolver pro bot</> : <><Pause size={12} /> Assumir conversa</>}
                     </button>
+                    </div>
                   </div>
 
                   {/* mensagens */}

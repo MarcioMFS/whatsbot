@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import type { ConversationRepository, BotRepository, AgentTraceRepository, MessagingPort } from '@whatsbot/core'
+import { Conversation } from '@whatsbot/core'
+import type { ConversationRepository, BotRepository, AgentTraceRepository, MessagingPort, FlowRepository, Flow } from '@whatsbot/core'
+import type { FlowExecutionService } from '../services/FlowExecutionService.js'
 import { buildConversationStateView } from '../services/ConversationStateView.js'
 
 interface ConvCtx {
@@ -7,6 +9,15 @@ interface ConvCtx {
   botRepo: BotRepository
   agentTrace: AgentTraceRepository
   messaging: MessagingPort
+  flowRepo: FlowRepository
+  flowExecService: FlowExecutionService
+}
+
+// Entregáveis do bot = nó payment_confirmed do flow ativo (a corrente de entrega pendura nele)
+function deliveryInfo(flow: Flow | null) {
+  const pc = flow?.nodes.find(n => n.type === 'payment_confirmed')
+  const docs = flow?.nodes.filter(n => n.type === 'image' && (n.data as { mediaType?: string }).mediaType === 'document') ?? []
+  return { available: !!pc, docs: docs.length, startNodeId: pc?.id ?? null }
 }
 
 export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
@@ -58,6 +69,42 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
   })
 
   // ── Controle manual (painel Conversas ao vivo) ────────────────────────────
+
+  // O bot tem entregáveis? (mostra/esconde o botão "Entregar produto" na UI)
+  app.get<{ Params: { botId: string } }>('/bot/:botId/deliverables', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.botId)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+    const flow = bot.activeFlowId ? await ctx.flowRepo.findById(bot.activeFlowId) : null
+    const info = deliveryInfo(flow)
+    return { available: info.available, docs: info.docs }
+  })
+
+  // Entrega manual: roda o flow a partir do payment_confirmed (confirmação + entregáveis
+  // + tag buyer + fim) — mesmo caminho da entrega automática pós-comprovante.
+  app.post<{ Params: { botId: string; phone: string } }>(
+    '/bot/:botId/phone/:phone/deliver',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const flow = bot.activeFlowId ? await ctx.flowRepo.findById(bot.activeFlowId) : null
+      const info = deliveryInfo(flow)
+      if (!flow || !info.startNodeId) return reply.code(400).send({ error: 'Bot sem entregáveis no flow ativo' })
+
+      let conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      if (!conversation) {
+        conversation = Conversation.create({
+          botId: bot.id, flowId: flow.id, phoneNumber: req.params.phone,
+          triggerNodeId: info.startNodeId,
+        })
+      }
+      conversation.moveToNode(info.startNodeId)
+      await ctx.flowExecService.resumeFromNode(bot, flow, conversation)
+      return { ok: true, docs: info.docs }
+    }
+  )
 
   // Envia mensagem manual pro lead pelo número do bot. Se houver conversa ativa,
   // registra no histórico (aparece no chat); sem conversa, só envia (recuperação de lead).

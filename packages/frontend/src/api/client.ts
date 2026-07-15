@@ -171,6 +171,10 @@ export const api = {
       request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/pause`, { method: 'POST', body: '{}' }),
     resume: (botId: string, phone: string) =>
       request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/resume`, { method: 'POST', body: '{}' }),
+    deliverables: (botId: string) =>
+      request<{ available: boolean; docs: number }>(`/conversations/bot/${botId}/deliverables`),
+    deliver: (botId: string, phone: string) =>
+      request<{ ok: boolean; docs: number }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/deliver`, { method: 'POST', body: '{}' }),
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
   },
