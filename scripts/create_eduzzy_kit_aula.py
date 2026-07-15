@@ -302,6 +302,7 @@ nodes = [
         "label": "Handoff comprovante", "reason": "pix_failed", "notifyOwner": True,
         "userMessage": "Vou pedir pra equipe confirmar seu pagamento manualmente — já te retorno por aqui! 😊",
     }),
+    n("label_pago", "label", 250, Y[21], {"label": "Etiqueta Pago", "labelName": "Pago", "labelId": "4"}),
     n("end", "end", 100, Y[21], {"label": "Fim"}),
 
     # ── Entrega do kit (após pagamento confirmado) ──────────────────────
@@ -392,7 +393,7 @@ edges += [
     # comprovante: c5 → v1 → approved pc / rejected t_rej → c6 → v2 → pc | handoff
     e("c5", "v1"),
     e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
-    e("pc", "doc01"),
+    e("pc", "label_pago"), e("label_pago", "doc01"),
     e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),
     e("v2", "pc", "approved"), e("v2", "ho", "rejected"), e("ho", "end", "output"),
     # downsell: c5 --45min--> tag → rm5a → pix_ds → c5b(→v1) → rm5b → c5c(→v1) → end

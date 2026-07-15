@@ -73,6 +73,7 @@ export interface PixNodeData extends NodeData {
 
 export interface LabelNodeData extends NodeData {
   labelName: string
+  labelId?: string  // evolution-go: id da etiqueta do WhatsApp Business (padrões: 1..5; "Pago"=4)
 }
 
 export interface TagLeadNodeData extends NodeData {

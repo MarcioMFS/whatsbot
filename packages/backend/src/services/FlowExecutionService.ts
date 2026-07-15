@@ -1130,14 +1130,19 @@ export class FlowExecutionService {
 
       case 'label': {
         const data = node.data as LabelNodeData
-        if (data.labelName) {
+        // evolution-go: POST /label/chat {jid, labelId}. IDs padrão do WhatsApp Business:
+        // 1 Novo cliente · 2 Novo pedido · 3 Pagamento pendente · 4 Pago · 5 Pedido finalizado.
+        const labelId = data.labelId ?? data.labelName
+        if (labelId) {
           const evolutionUrl = process.env.EVOLUTION_URL ?? 'http://localhost:8082'
           try {
-            await fetch(`${evolutionUrl}/chat/updateContact/${instance}`, {
-              method: 'PUT',
+            const jid = phone.includes('@') ? phone : `${phone}@s.whatsapp.net`
+            const res = await fetch(`${evolutionUrl}/label/chat`, {
+              method: 'POST',
               headers: { 'Content-Type': 'application/json', apikey: instance },
-              body: JSON.stringify({ number: phone, label: data.labelName }),
+              body: JSON.stringify({ jid, labelId: String(labelId) }),
             })
+            if (!res.ok) console.error(`[label] evolution-go ${res.status}: ${(await res.text()).slice(0, 120)}`)
           } catch (err) {
             console.error('[label] Evolution label error:', err)
           }
