@@ -2431,7 +2431,15 @@ export class FlowExecutionService {
         }
         conversation.handoff()
         lead?.addTag('needs_human')
-        return flow.getNextNodes(node.id, 'output')[0]?.id ?? flow.getNextNodes(node.id)[0]?.id
+        // Handoff é TERMINAL: o flow para aqui e o status 'handoff' fica travado (bot mudo
+        // até o humano devolver). Seguir adiante (ex.: nó end ligado na saída) sobrescrevia
+        // o status, encerrava a conversa e a PRÓXIMA mensagem do cliente reiniciava o funil
+        // por cima do atendimento humano — bug visto em produção (2026-07-15).
+        const dangling = flow.getNextNodes(node.id)
+        if (dangling.length) {
+          console.log(`[FlowExecution] handoff_request é terminal — ignorando saída para ${dangling[0].id}`)
+        }
+        return undefined
       }
 
       case 'end':
