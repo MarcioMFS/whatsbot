@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { BotModuleState } from '../module/Module.js'
 
-export type AIProvider = 'claude' | 'groq'
+export type AIProvider = 'claude' | 'gemini' | 'groq'
 
 export interface BotProductInfo {
   name: string
