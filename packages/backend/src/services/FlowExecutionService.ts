@@ -771,7 +771,15 @@ export class FlowExecutionService {
         }
 
         // ── accept: store value + audit metadata ───────────────────────────
-        const capturedValue = hasImage ? (imageBase64 ? '[image]' : message) : message
+        let capturedValue = hasImage ? (imageBase64 ? '[image]' : message) : message
+        // Menu-style: valueMap traduz a resposta crua pro rótulo ("1" → "2 a 3 anos").
+        // Casa o texto exato ou o primeiro dígito (cobre "1", "1️⃣", "opção 1").
+        if (data.valueMap && !hasImage) {
+          const raw = capturedValue.trim().toLowerCase()
+          const digit = raw.match(/\d/)?.[0]
+          const mapped = data.valueMap[raw] ?? (digit ? data.valueMap[digit] : undefined)
+          if (mapped) capturedValue = mapped
+        }
         conversation.setVariable(data.variableName, capturedValue)
         conversation.setVariable('__capture_reject_count', '0')  // aceitou → zera a rede de segurança (auto-handoff)
         conversation.setVariable(`__capture_meta_${data.variableName}`, JSON.stringify({

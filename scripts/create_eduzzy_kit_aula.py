@@ -272,6 +272,7 @@ nodes = [
         "timeoutMinutes": 30, "timeoutBehavior": "suspend",
         "suspendedReason": "eduzzy_faixa_etaria",
         "validationRegex": "[1-6]|anos|tod",
+        "valueMap": {"1": "2 a 3 anos", "2": "3 a 4 anos", "3": "4 a 5 anos", "4": "5 a 6 anos", "todas": "todas as faixas"},
         "errorMessage": "Só preciso da faixa da sua turminha 😊 Responda *1*, *2*, *3* ou *4*:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
         "recoveryHints": ["anos", "faixa", "turminha"],
     }),

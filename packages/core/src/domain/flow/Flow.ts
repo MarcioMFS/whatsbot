@@ -216,6 +216,7 @@ export interface CaptureInterceptor {
 
 export interface CaptureNodeData extends NodeData {
   variableName: string
+  valueMap?: Record<string, string>  // menu: traduz resposta crua → rótulo ("1" → "2 a 3 anos") antes de gravar
   validationRegex?: string
   errorMessage?: string
   timeoutMinutes?: number
