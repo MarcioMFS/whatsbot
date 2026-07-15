@@ -2690,7 +2690,9 @@ export class FlowExecutionService {
   private safeRegexTest(pattern: string, input: string): boolean {
     try {
       const capped = input.length > 500 ? input.slice(0, 500) : input
-      return new RegExp(pattern).test(capped)
+      // 'i': validação de resposta nunca é case-sensitive ("Sim" travava no padrão "sim" —
+      // 2 rejeições → auto-handoff; travou clientes reais em 2026-07-15)
+      return new RegExp(pattern, 'i').test(capped)
     } catch {
       console.warn(`[safeRegexTest] regex inválida no flow: ${pattern.slice(0, 80)}`)
       return true
