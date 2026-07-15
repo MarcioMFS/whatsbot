@@ -50,7 +50,9 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       const msgId = (info?.ID ?? keyApi?.id ?? '') as string
       if (msgId) {
         const dedupKey = `webhook:dedup:${bot.id}:${msgId}`
-        const already = await ctx.redis.set(dedupKey, '1', 'EX', 30, 'NX')
+        // 10 min: o evolution-go reentrega webhooks bem depois de 30s quando um send trava;
+        // com TTL curto a reentrega passava e a mesma mensagem rodava o flow de novo.
+        const already = await ctx.redis.set(dedupKey, '1', 'EX', 600, 'NX')
         if (!already) return reply.code(200).send({ ok: true, dup: true })
       }
 

@@ -26,9 +26,13 @@ export class EvolutionAPIAdapter implements MessagingPort {
       apikey,
     }
 
+    // Timeout duro: um send pendurado (evolution-go "info query timed out" leva 60s+)
+    // segurava a execução além do lock por telefone e a reentrega do webhook rodava a
+    // MESMA mensagem em paralelo → bolhas duplicadas (visto em prod 2026-07-15).
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...options,
       headers: { ...headers, ...(options.headers as Record<string, string> ?? {}) },
+      signal: (options as { signal?: AbortSignal }).signal ?? AbortSignal.timeout(20_000),
     })
 
     if (!res.ok) {
