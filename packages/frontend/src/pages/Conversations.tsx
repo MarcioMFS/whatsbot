@@ -26,6 +26,7 @@ const STATUS: Record<string, { label: string; dot: string }> = {
   waiting:   { label: 'aguardando', dot: '#9a7400' },
   suspended: { label: 'suspensa',   dot: 'var(--muted)' },
   handoff:   { label: 'com você',   dot: '#c2410c' },
+  ended:     { label: 'encerrada',  dot: 'var(--line)' },
 }
 
 // Formatação do WhatsApp nas bolhas: *negrito*, _itálico_, ~tachado~ (com escape de HTML antes)
@@ -76,8 +77,21 @@ export function Conversations() {
 
   const load = useCallback(() => {
     if (!botId) return
-    api.conversations.live(botId)
-      .then(data => { setConvs(data as Conv[]); setLoading(false) })
+    // ativas (Redis) + encerradas (histórico no banco) — inbox completo
+    Promise.all([
+      api.conversations.live(botId),
+      api.conversations.list(botId, 100).catch(() => []),
+    ])
+      .then(([live, ended]) => {
+        const liveArr = live as Conv[]
+        const liveIds = new Set(liveArr.map(c => c.id))
+        const endedArr = (ended as Conv[]).filter(c => !liveIds.has(c.id))
+        const all = [...liveArr, ...endedArr].sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        )
+        setConvs(all)
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [botId])
 
@@ -149,7 +163,7 @@ export function Conversations() {
               <MessageCircle size={22} strokeWidth={1.7} /> Conversas
             </h1>
             <p className="text-sm" style={{ color: 'var(--muted)', marginTop: 2 }}>
-              {convs.length} em andamento agora
+              {convs.filter(c => c.status !== 'ended').length} em andamento · {convs.filter(c => c.status === 'ended').length} encerradas
             </p>
           </div>
           <span className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
@@ -215,6 +229,7 @@ export function Conversations() {
                         <Gift size={12} /> {delivering ? 'Entregando…' : 'Entregar produto'}
                       </button>
                     )}
+                    {conv.status !== 'ended' && (
                     <button onClick={togglePause}
                       className="inline-flex items-center gap-2 rounded-full text-xs font-semibold transition-all"
                       style={paused
@@ -222,6 +237,7 @@ export function Conversations() {
                         : { background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', padding: '7px 15px' }}>
                       {paused ? <><Play size={12} /> Devolver pro bot</> : <><Pause size={12} /> Assumir conversa</>}
                     </button>
+                    )}
                     </div>
                   </div>
 
