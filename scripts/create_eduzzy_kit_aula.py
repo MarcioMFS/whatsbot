@@ -62,6 +62,7 @@ INCLUDE_IMAGES = True
 HAS_PRINTS = False
 MEDIA_BASE = "https://whatsbot.mfslabs.com.br/media/eduzzy"
 IMG = {
+    "capa":      f"{MEDIA_BASE}/00-capa-kit.jpg",
     "hero":      f"{MEDIA_BASE}/01-hero.jpg",
     "materiais": f"{MEDIA_BASE}/02-materiais.jpg",
     "planos":    f"{MEDIA_BASE}/03-planos-bncc.jpg",
@@ -70,6 +71,9 @@ IMG = {
     "print2":    f"{MEDIA_BASE}/06-print2.jpg",  # TODO print real
     "print3":    f"{MEDIA_BASE}/07-print3.jpg",  # TODO print real
     "print4":    f"{MEDIA_BASE}/08-print4.jpg",  # TODO print real
+    "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit
+    "amostra2":  f"{MEDIA_BASE}/amostra-2-tracar.jpg",
+    "amostra3":  f"{MEDIA_BASE}/amostra-3-rotina.jpg",
     "garantia":  f"{MEDIA_BASE}/09-garantia.jpg",
     "cupom":     f"{MEDIA_BASE}/10-cupom.jpg",
 }
@@ -266,7 +270,7 @@ nodes = [
     n("t1", "distributor", 100, Y[2], {"label": "Abertura Juliana (3 variações)", "variations": T1_VARIACOES}),
     capture("c1", 100, Y[3], "Aguardar sim", "resposta_inicial", timeout=15),
     text("t2", 100, Y[4], "Hora certa", T2),
-    image("img_hero", 100, Y[5], "Imagem hero", IMG["hero"]),
+    image("img_capa", 100, Y[5], "Capa do kit", IMG["capa"]),
     text("t3", 100, Y[6], "Pergunta faixa etária", T3),
     # valida a faixa: resposta fora do formato re-pergunta e segura o funil
     n("c2", "capture", 100, Y[7], {
@@ -281,11 +285,16 @@ nodes = [
     text("t4", 100, Y[8], "Registro + 1 mil materiais", T4),
     image("img_materiais", 100, Y[9], "Imagem materiais", IMG["materiais"]),
     text("t6", 100, Y[10], "Benefícios + CTA amostra", T67),
-    capture("c3", 100, Y[11], "Aguardar quero ver", "quer_amostra"),
+    capture("c3", 100, Y[11], "Aguardar quero ver", "quer_amostra", timeout=20),
     image("img_planos", 100, Y[12], "Planos BNCC", IMG["planos"], caption=CAP_PLANOS),
-    image("img_atividades", 100, Y[13], "Atividades lúdicas", IMG["atividades"], caption=CAP_ATIVIDADES),
+    image("img_amostra1", 250, Y[12], "Amostra real: labirinto", IMG["amostra1"],
+          caption="Página real do kit — atividade lúdica de labirinto 🌟"),
+    image("img_amostra2", 400, Y[12], "Amostra real: traçar", IMG["amostra2"],
+          caption="Página real do kit — traçar e escrever ✏️"),
+    image("img_amostra3", 550, Y[12], "Amostra real: rotina", IMG["amostra3"],
+          caption="Página real do kit — modelo de rotina diária pronto pra usar 🕐"),
     text("t16", 100, Y[14], "Extras + garantia + CTA final", T16),
-    capture("c4", 100, Y[15], "Aguardar eu quero", "eu_quero", extra={
+    capture("c4", 100, Y[15], "Aguardar eu quero", "eu_quero", timeout=20, extra={
         "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|fech|aceito|garantir|comprar|manda|👍",
         "errorMessage": ("Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\n"
                          "Enquanto isso, me confirma: vamos garantir o seu kit e nunca mais perder "
@@ -362,8 +371,8 @@ nodes = [
 
 # corrente principal
 chain = [
-    "tag_entry", "t1", "c1", "t2", "img_hero", "t3", "c2",
-    "t4", "img_materiais", "t6", "c3", "img_planos", "img_atividades",
+    "tag_entry", "t1", "c1", "t2", "img_capa", "t3", "c2",
+    "t4", "img_materiais", "t6", "c3", "img_planos", "img_amostra1", "img_amostra2", "img_amostra3",
     "t16", "c4", "t18", "pix_main", "tag_checkout", "c5",
 ]
 

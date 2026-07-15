@@ -123,15 +123,15 @@
    }
   },
   {
-   "id": "img_hero",
+   "id": "img_capa",
    "type": "image",
    "position": {
     "x": 100,
     "y": 800
    },
    "data": {
-    "label": "Imagem hero",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/01-hero.jpg"
+    "label": "Capa do kit",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/00-capa-kit.jpg"
    }
   },
   {
@@ -221,7 +221,7 @@
    "data": {
     "label": "Aguardar quero ver",
     "variableName": "quer_amostra",
-    "timeoutMinutes": 30,
+    "timeoutMinutes": 20,
     "timeoutBehavior": "suspend",
     "suspendedReason": "eduzzy_quer_amostra",
     "recoveryHints": [
@@ -246,16 +246,42 @@
    }
   },
   {
-   "id": "img_atividades",
+   "id": "img_amostra1",
    "type": "image",
    "position": {
-    "x": 100,
-    "y": 2000
+    "x": 250,
+    "y": 1850
    },
    "data": {
-    "label": "Atividades lúdicas",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/04-atividades.jpg",
-    "caption": "Atividades lúdicas e sensoriais prontas pra sua turminha ⤵️"
+    "label": "Amostra real: labirinto",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-1-labirinto.jpg",
+    "caption": "Página real do kit — atividade lúdica de labirinto 🌟"
+   }
+  },
+  {
+   "id": "img_amostra2",
+   "type": "image",
+   "position": {
+    "x": 400,
+    "y": 1850
+   },
+   "data": {
+    "label": "Amostra real: traçar",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-2-tracar.jpg",
+    "caption": "Página real do kit — traçar e escrever ✏️"
+   }
+  },
+  {
+   "id": "img_amostra3",
+   "type": "image",
+   "position": {
+    "x": 550,
+    "y": 1850
+   },
+   "data": {
+    "label": "Amostra real: rotina",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-3-rotina.jpg",
+    "caption": "Página real do kit — modelo de rotina diária pronto pra usar 🕐"
    }
   },
   {
@@ -280,7 +306,7 @@
    "data": {
     "label": "Aguardar eu quero",
     "variableName": "eu_quero",
-    "timeoutMinutes": 30,
+    "timeoutMinutes": 20,
     "timeoutBehavior": "suspend",
     "suspendedReason": "eduzzy_eu_quero",
     "recoveryHints": [
@@ -1060,15 +1086,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-t2-img_hero",
+   "id": "e-t2-img_capa",
    "source": "t2",
-   "target": "img_hero",
+   "target": "img_capa",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_hero-t3",
-   "source": "img_hero",
+   "id": "e-img_capa-t3",
+   "source": "img_capa",
    "target": "t3",
    "sourceHandle": null,
    "targetHandle": null
@@ -1116,15 +1142,29 @@
    "targetHandle": null
   },
   {
-   "id": "e-img_planos-img_atividades",
+   "id": "e-img_planos-img_amostra1",
    "source": "img_planos",
-   "target": "img_atividades",
+   "target": "img_amostra1",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_atividades-t16",
-   "source": "img_atividades",
+   "id": "e-img_amostra1-img_amostra2",
+   "source": "img_amostra1",
+   "target": "img_amostra2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_amostra2-img_amostra3",
+   "source": "img_amostra2",
+   "target": "img_amostra3",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_amostra3-t16",
+   "source": "img_amostra3",
    "target": "t16",
    "sourceHandle": null,
    "targetHandle": null
