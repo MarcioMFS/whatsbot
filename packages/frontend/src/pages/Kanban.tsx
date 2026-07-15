@@ -121,8 +121,9 @@ export function Kanban() {
           </div>
         </div>
 
-        {/* colunas com largura fixa + scroll horizontal (nunca espremem) */}
-        <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '62vh' }}>
+        {/* Quadro na altura da viewport: colunas rolam POR DENTRO (vertical) e o
+            scroll horizontal fica sempre à vista — sem precisar descer a página. */}
+        <div className="flex gap-4 overflow-x-auto pb-2" style={{ height: 'calc(100vh - 200px)' }}>
           {COLUMNS.map(col => {
             const items = byCol.get(col.key)!
             const isOver = overCol === col.key
@@ -131,12 +132,13 @@ export function Kanban() {
                 onDragOver={e => { e.preventDefault(); setOverCol(col.key) }}
                 onDragLeave={() => setOverCol(o => (o === col.key ? null : o))}
                 onDrop={() => onDrop(col)}
-                className="shrink-0 rounded-2xl transition-all"
+                className="shrink-0 rounded-2xl transition-all flex flex-col"
                 style={{
                   width: 250,
                   padding: '12px 10px',
                   background: isOver ? 'var(--paper-2)' : 'transparent',
                   border: isOver ? '1px dashed var(--ink)' : '1px dashed transparent',
+                  height: '100%',
                 }}>
                 <div className="flex items-center justify-between px-1.5 mb-3">
                   <span className="mk-eyebrow inline-flex items-center gap-2" style={{ fontSize: '.62rem' }}>
@@ -145,7 +147,7 @@ export function Kanban() {
                   </span>
                   <span className="text-xs" style={{ color: 'var(--muted)' }}>{items.length}</span>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 overflow-y-auto flex-1 pr-0.5">
                   {items.length === 0 && (
                     <div className="rounded-xl text-center text-xs py-6"
                       style={{ color: 'var(--muted)', border: '1px dashed var(--line)' }}>

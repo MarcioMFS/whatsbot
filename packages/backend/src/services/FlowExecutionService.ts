@@ -1010,8 +1010,11 @@ export class FlowExecutionService {
         const data = node.data as DistributorNodeData
         const variations = data.variations?.filter(Boolean) ?? []
         if (variations.length > 0) {
-          const msg = variations[Math.floor(Math.random() * variations.length)]
+          const msg = this.interpolate(variations[Math.floor(Math.random() * variations.length)], conversation.variables)
+          await this.simulateTyping(bot, instance, instanceId, phone, msg.length)
           await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: msg })
+          // sem isso a bolha não aparece no painel de Conversas nem no contexto da IA
+          conversation.addAssistantMessage(msg)
         }
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
