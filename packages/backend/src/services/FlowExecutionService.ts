@@ -773,11 +773,14 @@ export class FlowExecutionService {
         // ── accept: store value + audit metadata ───────────────────────────
         let capturedValue = hasImage ? (imageBase64 ? '[image]' : message) : message
         // Menu-style: valueMap traduz a resposta crua pro rótulo ("1" → "2 a 3 anos").
-        // Casa o texto exato ou o primeiro dígito (cobre "1", "1️⃣", "opção 1").
+        // O atalho do dígito só vale quando a resposta é ESSENCIALMENTE um dígito
+        // ("1", "1️⃣", "opção 2") — resposta por extenso ("3 a 4 anos" tem 2 dígitos)
+        // fica como digitada, senão mapearia pro item errado do menu.
         if (data.valueMap && !hasImage) {
           const raw = capturedValue.trim().toLowerCase()
-          const digit = raw.match(/\d/)?.[0]
-          const mapped = data.valueMap[raw] ?? (digit ? data.valueMap[digit] : undefined)
+          const digits = raw.match(/\d/g) ?? []
+          const digitKey = digits.length === 1 && raw.length <= 10 ? digits[0] : undefined
+          const mapped = data.valueMap[raw] ?? (digitKey ? data.valueMap[digitKey] : undefined)
           if (mapped) capturedValue = mapped
         }
         conversation.setVariable(data.variableName, capturedValue)
