@@ -28,6 +28,16 @@ const STATUS: Record<string, { label: string; dot: string }> = {
   handoff:   { label: 'com você',   dot: '#c2410c' },
 }
 
+// Formatação do WhatsApp nas bolhas: *negrito*, _itálico_, ~tachado~ (com escape de HTML antes)
+function waHtml(text: string): string {
+  const esc = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  return esc
+    .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
+    .replace(/~([^~\n]+)~/g, '<s>$1</s>')
+    .replace(/_([^_\n]+)_/g, '<em>$1</em>')
+}
+
 function fmtTime(ts?: string): string {
   if (!ts) return ''
   return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -194,9 +204,8 @@ export function Conversations() {
                           <div className="max-w-[76%] text-sm whitespace-pre-wrap"
                             style={bot
                               ? { background: 'var(--ink)', color: 'var(--paper)', padding: '9px 14px', borderRadius: '14px 14px 4px 14px', boxShadow: '0 2px 8px rgba(10,10,10,.08)' }
-                              : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}>
-                            {m.content}
-                          </div>
+                              : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}
+                            dangerouslySetInnerHTML={{ __html: waHtml(m.content) }} />
                           <span className="text-[10px] mt-1 px-1" style={{ color: 'var(--muted)' }}>{fmtTime(m.timestamp)}</span>
                         </div>
                       )
