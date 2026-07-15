@@ -99,13 +99,15 @@ def image(id, x, y, label, url, caption=None):
     if caption: data["caption"] = caption
     return n(id, "image", x, y, data)
 
-def capture(id, x, y, label, var, timeout=30):
-    return n(id, "capture", x, y, {
+def capture(id, x, y, label, var, timeout=30, extra=None):
+    data = {
         "label": label, "variableName": var,
         "timeoutMinutes": timeout, "timeoutBehavior": "suspend",
         "suspendedReason": f"eduzzy_{var}",
         "recoveryHints": ["sim", "quero", "kit", "professora"],
-    })
+    }
+    if extra: data.update(extra)
+    return n(id, "capture", x, y, data)
 
 def delay(id, x, y, seconds=3):
     return n(id, "delay", x, y, {"label": "Pausa", "seconds": seconds})
@@ -114,19 +116,19 @@ def delay(id, x, y, seconds=3):
 # abertura com variações por lead — regras do sales_skills_mining Tier 3) ──────
 T1_VARIACOES = [
     (
-        "Oi! Aqui é a Juliana, da equipe Nota Dez 📚\n\n"
-        "Você, professora do infantil, está precisando de planinhos de aula, atividades lúdicas, "
-        "pareceres e modelinhos do dia a dia, prontos e editáveis?\n\n"
-        "Responda *sim* que eu te mostro ⤵️"
+        "Oi! Claro, te explico rapidinho 😊 Aqui é a Juliana, da equipe Nota Dez 📚\n\n"
+        "A gente ajuda professoras do infantil com planinhos de aula, atividades lúdicas, "
+        "pareceres e modelinhos do dia a dia — prontos e editáveis.\n\n"
+        "Quer conhecer? Responda *sim* que eu te mostro ⤵️"
     ),
     (
-        "Oi, professora! Juliana aqui, da equipe Nota Dez 📚\n\n"
-        "Cheguei com uma coisa boa: materiais de aula prontos e editáveis pra sua turminha — "
+        "Oi, professora! Pode deixar que eu te conto 😊 Juliana aqui, da equipe Nota Dez 📚\n\n"
+        "Trabalhamos com materiais de aula prontos e editáveis pra sua turminha — "
         "planinhos, atividades lúdicas e pareceres descritivos.\n\n"
-        "Me responde um *sim* que eu te conto como funciona"
+        "Me responde um *sim* que eu te mostro como funciona"
     ),
     (
-        "Olá! Sou a Juliana, da equipe Nota Dez 📚\n\n"
+        "Olá! Já te explico 😊 Sou a Juliana, da equipe Nota Dez 📚\n\n"
         "Se você dá aula pro infantil e vive montando planinho, atividade e parecer do zero, "
         "isso aqui é pra você.\n\n"
         "Responda *sim* e eu te mostro em 2 minutinhos ⤵️"
@@ -262,7 +264,12 @@ nodes = [
     n("tag_entry", "tag_lead", 100, Y[1], {"label": "Tag eduzzy", "add": ["eduzzy", "kit-aula-pronta"]}),
     # Abertura com variações (anti-blast-idêntico)
     n("t1", "distributor", 100, Y[2], {"label": "Abertura Juliana (3 variações)", "variations": T1_VARIACOES}),
-    capture("c1", 100, Y[3], "Aguardar sim", "resposta_inicial"),
+    capture("c1", 100, Y[3], "Aguardar sim", "resposta_inicial", timeout=15, extra={
+        "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|manda|show|beleza|blz|isso|aham|uhum|conhecer|interess|informa|saber|oi|ol[aá]|👍",
+        "errorMessage": ("Boa pergunta, professora! 😊 Se precisar, nossa equipe também te responde por aqui.\n\n"
+                         "Enquanto isso, me confirma: quer conhecer o *Kit Aula Pronta Infantil*? "
+                         "Responda *sim* que eu te mostro ⤵️"),
+    }),
     text("t2", 100, Y[4], "Hora certa", T2),
     image("img_hero", 100, Y[5], "Imagem hero", IMG["hero"]),
     text("t3", 100, Y[6], "Pergunta faixa etária", T3),
@@ -279,11 +286,20 @@ nodes = [
     text("t4", 100, Y[8], "Registro + 1 mil materiais", T4),
     image("img_materiais", 100, Y[9], "Imagem materiais", IMG["materiais"]),
     text("t6", 100, Y[10], "Benefícios + CTA amostra", T67),
-    capture("c3", 100, Y[11], "Aguardar quero ver", "quer_amostra"),
+    capture("c3", 100, Y[11], "Aguardar quero ver", "quer_amostra", extra={
+        "validationRegex": "sim|quero|ver|claro|ok|okay|bora|vamos|pode|manda|mostra|👍|amostra",
+        "errorMessage": ("Anotei sua pergunta, professora! 😊\n\n"
+                         "Enquanto isso: quer ver uma *amostra* dos materiais? Responda *sim, quero ver* ⬇️"),
+    }),
     image("img_planos", 100, Y[12], "Planos BNCC", IMG["planos"], caption=CAP_PLANOS),
     image("img_atividades", 100, Y[13], "Atividades lúdicas", IMG["atividades"], caption=CAP_ATIVIDADES),
     text("t16", 100, Y[14], "Extras + garantia + CTA final", T16),
-    capture("c4", 100, Y[15], "Aguardar eu quero", "eu_quero"),
+    capture("c4", 100, Y[15], "Aguardar eu quero", "eu_quero", extra={
+        "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|fech|aceito|garantir|comprar|manda|👍",
+        "errorMessage": ("Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\n"
+                         "Enquanto isso, me confirma: vamos garantir o seu kit e nunca mais perder "
+                         "domingo planejando aula? Responda *eu quero* ⤵️"),
+    }),
     text("t18", 100, Y[16], "Preço + pedir print", T18),
     n("pix_main", "pix", 100, Y[17], {
         "label": "Pix R$27,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
@@ -293,6 +309,16 @@ nodes = [
     n("tag_checkout", "tag_lead", 100, Y[18], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
     # espera comprovante; resposta → valida; sumiu 45min → downsell
     capture("c5", 100, Y[19], "Aguardar comprovante", "pos_checkout", timeout=45),
+    # objeção de preço dita na cara → downsell na hora (sem esperar os 45min do timeout)
+    n("classify_pos", "classify_intent", 250, Y[19], {
+        "label": "Triagem pós-pix", "intents": [
+            {"handle": "objection", "label": "Objeção de preço",
+             "patterns": ["não tenho", "nao tenho", "tá caro", "ta caro", "muito caro", "sem dinheiro",
+                          "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",
+                          "depois eu", "mês que vem", "mes que vem", "quando receber"]},
+            {"handle": "validate", "label": "Comprovante/resto", "isDefault": True},
+        ],
+    }),
     n("v1", "ai_validate_receipt", 100, Y[20], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
     n("pc", "payment_confirmed", 250, Y[20], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),
     text("t_rej", 400, Y[20], "Comprovante rejeitado", T_REJ),
@@ -390,8 +416,10 @@ edges += [
     e("c4", "rm4a", "timeout"), e("rm4a", "c4r"), e("c4r", "t18"),
     e("c4r", "rm4b", "timeout"), e("rm4b", "c4r2"), e("c4r2", "t18"),
     e("c4r2", "end", "timeout"),
-    # comprovante: c5 → v1 → approved pc / rejected t_rej → c6 → v2 → pc | handoff
-    e("c5", "v1"),
+    # comprovante: c5 → triagem → (objeção → downsell imediato | resto → v1)
+    e("c5", "classify_pos"),
+    e("classify_pos", "tag_downsell", "objection"),
+    e("classify_pos", "v1", "validate"),
     e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
     e("pc", "label_pago"), e("label_pago", "doc01"),
     e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),

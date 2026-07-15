@@ -1,6 +1,7 @@
 import { useSearchParams } from 'react-router-dom'
-import { Package, ShoppingBag, Tag, CreditCard } from 'lucide-react'
+import { Package, ShoppingBag, Tag, CreditCard, BarChart3 } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
+import { FlowFunnel } from '../components/FlowFunnel.tsx'
 import { Products } from './Products.tsx'
 import { Orders } from './Orders.tsx'
 import { PackageOffers } from './PackageOffers.tsx'
@@ -10,6 +11,7 @@ import PaymentIntents from './PaymentIntents.tsx'
 // de UM item de sidebar, em vez de 4 rotas soltas. Re-hospeda as páginas existentes via `embedded`
 // (sem reescrever a lógica). Ver Brain/spec_dashboard_poda.md.
 const TABS = [
+  { id: 'funil', label: 'Funil', icon: BarChart3 },
   { id: 'produtos', label: 'Produtos', icon: Package },
   { id: 'pedidos', label: 'Pedidos', icon: ShoppingBag },
   { id: 'ofertas', label: 'Ofertas', icon: Tag },
@@ -36,6 +38,7 @@ export function Vendas() {
         })}
       </div>
 
+      {tab === 'funil' && <FlowFunnel />}
       {tab === 'produtos' && <Products embedded />}
       {tab === 'pedidos' && <Orders embedded />}
       {tab === 'ofertas' && <PackageOffers embedded />}

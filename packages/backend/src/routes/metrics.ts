@@ -4,11 +4,16 @@ import type { MetricsAggregator } from '../services/MetricsAggregator.js'
 import type { PatternDistiller } from '../services/PatternDistiller.js'
 import type { PatternPerformanceService } from '../services/PatternPerformanceService.js'
 
+import type { Pool } from 'pg'
+import type { FlowRepository } from '@whatsbot/core'
+
 interface MetricsCtx {
   aggregator: MetricsAggregator
   distiller: PatternDistiller
   performance: PatternPerformanceService
   botRepo: BotRepository
+  flowRepo?: FlowRepository
+  db?: Pool
 }
 
 // F1 — painel de funil. READ-ONLY. O dono vê o funil do PRÓPRIO bot + o funil GLOBAL anônimo
@@ -21,6 +26,47 @@ export async function metricsRoutes(app: FastifyInstance, ctx: MetricsCtx) {
     return !!bot && bot.ownerId === userId
   }
   const clampDays = (d: unknown): number => Math.min(Math.max(Number(d) || 30, 1), 365)
+
+  // Funil node-a-node do flow ativo (funis roteirizados): leads distintos que alcançaram
+  // cada marco (perguntas/pix/pagamento) da coluna principal do flow (convenção: x<=150;
+  // remarketing/entrega ficam nas colunas à direita). Ordenado pela posição vertical.
+  app.get<{ Params: { botId: string }; Querystring: { days?: string } }>('/flow-funnel/:botId', async (req, reply) => {
+    const user = req.user as { id: string }
+    const bot = await ctx.botRepo.findById(req.params.botId)
+    if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+    if (!ctx.flowRepo || !ctx.db) return reply.code(501).send({ error: 'flow-funnel indisponível' })
+    const flow = bot.activeFlowId ? await ctx.flowRepo.findById(bot.activeFlowId) : null
+    if (!flow) return { stages: [], windowDays: 0 }
+
+    const windowDays = clampDays(req.query.days)
+    const milestones = flow.nodes
+      .filter(n => ['capture', 'pix', 'payment_confirmed'].includes(n.type) && (n.position?.x ?? 999) <= 150)
+      .sort((a, b) => (a.position?.y ?? 0) - (b.position?.y ?? 0))
+      .map(n => ({ id: n.id, label: (n.data as { label?: string }).label ?? n.id }))
+
+    const ids = milestones.map(m => m.id)
+    const { rows } = await ctx.db.query(
+      `SELECT payload->>'nodeId' AS nid, count(DISTINCT phone_number) AS c
+       FROM conversation_events
+       WHERE bot_id = $1 AND event_type = 'node_reached'
+         AND occurred_at > now() - ($2 || ' days')::interval
+         AND payload->>'nodeId' = ANY($3)
+       GROUP BY 1`,
+      [bot.id, String(windowDays), ids]
+    )
+    const { rows: started } = await ctx.db.query(
+      `SELECT count(DISTINCT phone_number) AS c FROM conversation_events
+       WHERE bot_id = $1 AND event_type = 'flow_started'
+         AND occurred_at > now() - ($2 || ' days')::interval`,
+      [bot.id, String(windowDays)]
+    )
+    const byId = new Map(rows.map(r => [r.nid as string, Number(r.c)]))
+    const stages = [
+      { id: 'entrada', label: 'Entraram no funil', count: Number(started[0]?.c ?? 0) },
+      ...milestones.map(m => ({ ...m, count: byId.get(m.id) ?? 0 })),
+    ]
+    return { windowDays, stages }
+  })
 
   // Funil do bot do dono + funil global anônimo (agregado de todos os bots, só counts).
   app.get<{ Params: { botId: string }; Querystring: { days?: string } }>('/funnel/:botId', async (req, reply) => {

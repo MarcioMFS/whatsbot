@@ -265,6 +265,9 @@ export const api = {
   },
   // Painel evolutivo (read-only): funil de conversão, store de padrões, performance por versão.
   metrics: {
+    flowFunnel: (botId: string, days = 30) =>
+      request<{ windowDays: number; stages: Array<{ id: string; label: string; count: number }> }>(
+        `/metrics/flow-funnel/${botId}?days=${days}`),
     funnel: (botId: string, days = 30) =>
       request<{ bot: FunnelResult; global: FunnelResult | null; globalSuppressed: boolean }>(`/metrics/funnel/${botId}?days=${days}`),
     patterns: (vertical?: string) =>
