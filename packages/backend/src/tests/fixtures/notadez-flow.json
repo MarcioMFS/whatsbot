@@ -1,0 +1,1641 @@
+{
+ "id": "39521ee9-8565-4d7e-91c9-c175f11876a9",
+ "botId": "fe994a71-a0b1-433e-992b-a584cec8a839",
+ "name": "Nota Dez — Kit Aula Pronta Infantil",
+ "isDefault": true,
+ "nodes": [
+  {
+   "id": "trigger",
+   "type": "trigger",
+   "position": {
+    "x": 100,
+    "y": 50
+   },
+   "data": {
+    "label": "Início (qualquer mensagem)",
+    "triggerType": "any_message"
+   }
+  },
+  {
+   "id": "cond_img",
+   "type": "condition",
+   "position": {
+    "x": 400,
+    "y": 200
+   },
+   "data": {
+    "label": "1ª msg é imagem?",
+    "variable": "__imageBase64",
+    "operator": "regex",
+    "value": ".+"
+   }
+  },
+  {
+   "id": "cond_buyer",
+   "type": "condition",
+   "position": {
+    "x": 700,
+    "y": 200
+   },
+   "data": {
+    "label": "Já chegou no Pix?",
+    "variable": "__lead_tags",
+    "operator": "contains",
+    "value": "eduzzy-checkout"
+   }
+  },
+  {
+   "id": "ho_late",
+   "type": "handoff_request",
+   "position": {
+    "x": 700,
+    "y": 350
+   },
+   "data": {
+    "label": "Comprovante atrasado",
+    "reason": "pix_failed",
+    "notifyOwner": true,
+    "userMessage": "Recebi! 🙏 Vou confirmar seu pagamento com a equipe e já te retorno por aqui, professora 😊"
+   }
+  },
+  {
+   "id": "tag_entry",
+   "type": "tag_lead",
+   "position": {
+    "x": 100,
+    "y": 200
+   },
+   "data": {
+    "label": "Tag eduzzy",
+    "add": [
+     "eduzzy",
+     "kit-aula-pronta"
+    ]
+   }
+  },
+  {
+   "id": "t1",
+   "type": "distributor",
+   "position": {
+    "x": 100,
+    "y": 350
+   },
+   "data": {
+    "label": "Abertura Juliana (3 variações)",
+    "variations": [
+     "Oi! Claro, te explico rapidinho 😊 Aqui é a Juliana, da equipe Nota Dez 📚\n\nA gente ajuda professoras do infantil com planinhos de aula, atividades lúdicas, pareceres e modelinhos do dia a dia — prontos e editáveis.\n\nQuer conhecer? Responda *sim* que eu te mostro ⤵️",
+     "Oi, professora! Pode deixar que eu te conto 😊 Juliana aqui, da equipe Nota Dez 📚\n\nTrabalhamos com materiais de aula prontos e editáveis pra sua turminha — planinhos, atividades lúdicas e pareceres descritivos.\n\nMe responde um *sim* que eu te mostro como funciona",
+     "Olá! Já te explico 😊 Sou a Juliana, da equipe Nota Dez 📚\n\nSe você dá aula pro infantil e vive montando planinho, atividade e parecer do zero, isso aqui é pra você.\n\nResponda *sim* e eu te mostro em 2 minutinhos ⤵️"
+    ]
+   }
+  },
+  {
+   "id": "c1",
+   "type": "capture",
+   "position": {
+    "x": 100,
+    "y": 500
+   },
+   "data": {
+    "label": "Aguardar sim",
+    "variableName": "resposta_inicial",
+    "timeoutMinutes": 15,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_resposta_inicial",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ],
+    "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|manda|show|beleza|blz|isso|aham|uhum|conhecer|interess|informa|saber|oi|ol[aá]|👍",
+    "errorMessage": "Boa pergunta, professora! 😊 Se precisar, nossa equipe também te responde por aqui.\n\nEnquanto isso, me confirma: quer conhecer o *Kit Aula Pronta Infantil*? Responda *sim* que eu te mostro ⤵️"
+   }
+  },
+  {
+   "id": "t2",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 650
+   },
+   "data": {
+    "label": "Hora certa",
+    "message": "Que bom que cheguei na hora certa! 🥰\n\nNos próximos 2 minutinhos, vou te mostrar como ter todos os seus materiais de aula prontos e editáveis no seu celular ou notebook — sem levar trabalho pra casa e sem perder seus fins de semana montando do zero."
+   }
+  },
+  {
+   "id": "img_hero",
+   "type": "image",
+   "position": {
+    "x": 100,
+    "y": 800
+   },
+   "data": {
+    "label": "Imagem hero",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/01-hero.jpg"
+   }
+  },
+  {
+   "id": "t3",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 950
+   },
+   "data": {
+    "label": "Pergunta faixa etária",
+    "message": "Inclusive, qual a idade dos alunos da sua turminha, professora?\n\nResponda com a faixa:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
+   }
+  },
+  {
+   "id": "c2",
+   "type": "capture",
+   "position": {
+    "x": 100,
+    "y": 1100
+   },
+   "data": {
+    "label": "Aguardar faixa",
+    "variableName": "faixa_etaria",
+    "timeoutMinutes": 30,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_faixa_etaria",
+    "validationRegex": "[1-6]|anos|tod",
+    "valueMap": {
+     "1": "2 a 3 anos",
+     "2": "3 a 4 anos",
+     "3": "4 a 5 anos",
+     "4": "5 a 6 anos",
+     "todas": "todas as faixas"
+    },
+    "errorMessage": "Só preciso da faixa da sua turminha 😊 Responda *1*, *2*, *3* ou *4*:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
+    "recoveryHints": [
+     "anos",
+     "faixa",
+     "turminha"
+    ]
+   }
+  },
+  {
+   "id": "t4",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 1250
+   },
+   "data": {
+    "label": "Registro + 1 mil materiais",
+    "message": "Pronto, já registrei! 😍 Seu *Kit Aula Pronta Infantil* virá 100% personalizado:\n\n✅ Faixa da sua turminha: {{faixa_etaria}}\n✅ Todos os campos de experiência da *BNCC*\n✅ Mais de 1 mil materiais prontos e editáveis, feitos e revisados por professoras referência"
+   }
+  },
+  {
+   "id": "img_materiais",
+   "type": "image",
+   "position": {
+    "x": 100,
+    "y": 1400
+   },
+   "data": {
+    "label": "Imagem materiais",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/02-materiais.jpg"
+   }
+  },
+  {
+   "id": "t6",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 1550
+   },
+   "data": {
+    "label": "Benefícios + CTA amostra",
+    "message": "Com o kit, você economiza as madrugadas e os fins de semana montando aula, entrega relatórios que a coordenação aprova de primeira — e sobra tempo pra você e sua família 💆🏻‍♀️\n\nQuer ver uma *amostra* dos materiais? Responda *sim, quero ver* ⬇️"
+   }
+  },
+  {
+   "id": "c3",
+   "type": "capture",
+   "position": {
+    "x": 100,
+    "y": 1700
+   },
+   "data": {
+    "label": "Aguardar quero ver",
+    "variableName": "quer_amostra",
+    "timeoutMinutes": 30,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_quer_amostra",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ],
+    "validationRegex": "sim|quero|ver|claro|ok|okay|bora|vamos|pode|manda|mostra|👍|amostra",
+    "errorMessage": "Anotei sua pergunta, professora! 😊\n\nEnquanto isso: quer ver uma *amostra* dos materiais? Responda *sim, quero ver* ⬇️"
+   }
+  },
+  {
+   "id": "img_planos",
+   "type": "image",
+   "position": {
+    "x": 100,
+    "y": 1850
+   },
+   "data": {
+    "label": "Planos BNCC",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/03-planos-bncc.jpg",
+    "caption": "Olha a qualidade do que você acessa ainda hoje, pelo celular ou notebook 🥰\n\nPlanos de aula editáveis, organizados por campo de experiência ⤵️"
+   }
+  },
+  {
+   "id": "img_atividades",
+   "type": "image",
+   "position": {
+    "x": 100,
+    "y": 2000
+   },
+   "data": {
+    "label": "Atividades lúdicas",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/04-atividades.jpg",
+    "caption": "Atividades lúdicas e sensoriais prontas pra sua turminha ⤵️"
+   }
+  },
+  {
+   "id": "t16",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 2150
+   },
+   "data": {
+    "label": "Extras + garantia + CTA final",
+    "message": "E além dos planos de aula, você recebe: mais de 200 modelos de relatórios descritivos por faixa etária, 50 rotinas semanais, fichas de observação, projetos pedagógicos e materiais para as datas comemorativas.\n\nSão mais de 13 mil professoras com o kit — acesso vitalício, suporte no WhatsApp e e-mail, e *garantia incondicional de 30 dias*: não gostou, devolvemos.\n\nVamos garantir o seu e nunca mais perder domingo planejando aula? Responda *eu quero* 😀"
+   }
+  },
+  {
+   "id": "c4",
+   "type": "capture",
+   "position": {
+    "x": 100,
+    "y": 2300
+   },
+   "data": {
+    "label": "Aguardar eu quero",
+    "variableName": "eu_quero",
+    "timeoutMinutes": 30,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_eu_quero",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ],
+    "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|fech|aceito|garantir|comprar|manda|👍",
+    "errorMessage": "Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\nEnquanto isso, me confirma: vamos garantir o seu kit e nunca mais perder domingo planejando aula? Responda *eu quero* ⤵️"
+   }
+  },
+  {
+   "id": "t18",
+   "type": "text_message",
+   "position": {
+    "x": 100,
+    "y": 2450
+   },
+   "data": {
+    "label": "Preço + pedir print",
+    "message": "Tudo isso sairia por ~R$ 47,90~… mas hoje, para as primeiras 30 professoras, o kit completo sai por *R$ 27,90* — taxa única.\n\nPra garantir: faz o Pix na chave que vou te mandar e me envia o *print do comprovante* aqui mesmo, que eu já libero seu acesso ⤵️"
+   }
+  },
+  {
+   "id": "pix_main",
+   "type": "pix",
+   "position": {
+    "x": 100,
+    "y": 2600
+   },
+   "data": {
+    "label": "Pix R$27,90",
+    "pixKey": "equipenotadez@jim.com",
+    "recipientName": "Equipe Nota Dez",
+    "amount": "27,90",
+    "description": "Kit Aula Pronta Infantil",
+    "expiresInMinutes": 120,
+    "outputVariable": "paymentIntentId"
+   }
+  },
+  {
+   "id": "tag_checkout",
+   "type": "tag_lead",
+   "position": {
+    "x": 100,
+    "y": 2750
+   },
+   "data": {
+    "label": "Tag chegou no pix",
+    "add": [
+     "eduzzy-checkout"
+    ]
+   }
+  },
+  {
+   "id": "c5",
+   "type": "capture",
+   "position": {
+    "x": 100,
+    "y": 2900
+   },
+   "data": {
+    "label": "Aguardar comprovante",
+    "variableName": "pos_checkout",
+    "timeoutMinutes": 45,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_pos_checkout",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "classify_pos",
+   "type": "classify_intent",
+   "position": {
+    "x": 250,
+    "y": 2900
+   },
+   "data": {
+    "label": "Triagem pós-pix",
+    "intents": [
+     {
+      "handle": "objection",
+      "label": "Objeção de preço",
+      "patterns": [
+       "não tenho",
+       "nao tenho",
+       "tá caro",
+       "ta caro",
+       "muito caro",
+       "sem dinheiro",
+       "só tenho",
+       "so tenho",
+       "mais barato",
+       "desconto",
+       "não posso",
+       "nao posso",
+       "depois eu",
+       "mês que vem",
+       "mes que vem",
+       "quando receber"
+      ]
+     },
+     {
+      "handle": "validate",
+      "label": "Comprovante/resto",
+      "isDefault": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "v1",
+   "type": "ai_validate_receipt",
+   "position": {
+    "x": 100,
+    "y": 3050
+   },
+   "data": {
+    "label": "Validar comprovante",
+    "paymentIntentVariable": "paymentIntentId"
+   }
+  },
+  {
+   "id": "pc",
+   "type": "payment_confirmed",
+   "position": {
+    "x": 250,
+    "y": 3050
+   },
+   "data": {
+    "label": "Pagto confirmado",
+    "confirmationMessage": "Pagamento confirmado! 🎉",
+    "postPurchaseMessage": "Aqui está seu *Kit Aula Pronta Infantil* 🎁\n\nVou te enviar os materiais agora — salva tudo no seu celular ou notebook!"
+   }
+  },
+  {
+   "id": "t_rej",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 3050
+   },
+   "data": {
+    "label": "Comprovante rejeitado",
+    "message": "Hmm, não consegui confirmar esse comprovante 🤔\n\nConfere se o Pix foi pra chave *equipenotadez@jim.com* e me envia o *print* de novo, por favor?"
+   }
+  },
+  {
+   "id": "c6",
+   "type": "capture",
+   "position": {
+    "x": 550,
+    "y": 3050
+   },
+   "data": {
+    "label": "Reenviar comprovante",
+    "variableName": "comprovante_retry",
+    "timeoutMinutes": 60,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_comprovante_retry",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "v2",
+   "type": "ai_validate_receipt",
+   "position": {
+    "x": 700,
+    "y": 3050
+   },
+   "data": {
+    "label": "Validar 2ª",
+    "paymentIntentVariable": "paymentIntentId"
+   }
+  },
+  {
+   "id": "ho",
+   "type": "handoff_request",
+   "position": {
+    "x": 850,
+    "y": 3050
+   },
+   "data": {
+    "label": "Handoff comprovante",
+    "reason": "pix_failed",
+    "notifyOwner": true,
+    "userMessage": "Vou pedir pra equipe confirmar seu pagamento manualmente — já te retorno por aqui! 😊"
+   }
+  },
+  {
+   "id": "label_pago",
+   "type": "label",
+   "position": {
+    "x": 250,
+    "y": 3200
+   },
+   "data": {
+    "label": "Etiqueta Pago",
+    "labelName": "Pago",
+    "labelId": "4"
+   }
+  },
+  {
+   "id": "end",
+   "type": "end",
+   "position": {
+    "x": 100,
+    "y": 3200
+   },
+   "data": {
+    "label": "Fim"
+   }
+  },
+  {
+   "id": "doc01",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 170
+   },
+   "data": {
+    "label": "Kit 01",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/01-Tracar-Numeros-1-a-20.pdf",
+    "filename": "01 Tracar Numeros 1 a 20.pdf"
+   }
+  },
+  {
+   "id": "doc02",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 290
+   },
+   "data": {
+    "label": "Kit 02",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/02-Tracar-Letras-A-a-Z.pdf",
+    "filename": "02 Tracar Letras A a Z.pdf"
+   }
+  },
+  {
+   "id": "doc03",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 410
+   },
+   "data": {
+    "label": "Kit 03",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/03-Contar-e-Circular-1-a-10.pdf",
+    "filename": "03 Contar e Circular 1 a 10.pdf"
+   }
+  },
+  {
+   "id": "doc04",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 530
+   },
+   "data": {
+    "label": "Kit 04",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/04-Formas-e-Cores-para-Colorir.pdf",
+    "filename": "04 Formas e Cores para Colorir.pdf"
+   }
+  },
+  {
+   "id": "doc05",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 650
+   },
+   "data": {
+    "label": "Kit 05",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/05-Labirintos.pdf",
+    "filename": "05 Labirintos.pdf"
+   }
+  },
+  {
+   "id": "doc06",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 770
+   },
+   "data": {
+    "label": "Kit 06",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/06-Ligue-os-Pontos.pdf",
+    "filename": "06 Ligue os Pontos.pdf"
+   }
+  },
+  {
+   "id": "doc07",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 890
+   },
+   "data": {
+    "label": "Kit 07",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/07-Associe-os-Iguais.pdf",
+    "filename": "07 Associe os Iguais.pdf"
+   }
+  },
+  {
+   "id": "doc08",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1010
+   },
+   "data": {
+    "label": "Kit 08",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/08-Sequencia-Logica.pdf",
+    "filename": "08 Sequencia Logica.pdf"
+   }
+  },
+  {
+   "id": "doc09",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1130
+   },
+   "data": {
+    "label": "Kit 09",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/09-Maior-e-Menor.pdf",
+    "filename": "09 Maior e Menor.pdf"
+   }
+  },
+  {
+   "id": "doc10",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1250
+   },
+   "data": {
+    "label": "Kit 10",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/10-Animais-Tracar-Nomes.pdf",
+    "filename": "10 Animais Tracar Nomes.pdf"
+   }
+  },
+  {
+   "id": "doc11",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1370
+   },
+   "data": {
+    "label": "Kit 11",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/11-Modelos-de-Rotina.pdf",
+    "filename": "11 Modelos de Rotina.pdf"
+   }
+  },
+  {
+   "id": "doc12",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1490
+   },
+   "data": {
+    "label": "Kit 12",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/12-Coordenacao-Motora-Infantil.pdf",
+    "filename": "12 Coordenacao Motora Infantil.pdf"
+   }
+  },
+  {
+   "id": "doc13",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1610
+   },
+   "data": {
+    "label": "Kit 13",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/13-Caderno-de-Atividades-Completo.pdf",
+    "filename": "13 Caderno de Atividades Completo.pdf"
+   }
+  },
+  {
+   "id": "doc14",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1730
+   },
+   "data": {
+    "label": "Kit 14",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/14-Atividades-Ludicas-Psicomotricidade.pdf",
+    "filename": "14 Atividades Ludicas Psicomotricidade.pdf"
+   }
+  },
+  {
+   "id": "doc15",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1850
+   },
+   "data": {
+    "label": "Kit 15",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/15-Alfabetizacao-4-e-5-Anos.pdf",
+    "filename": "15 Alfabetizacao 4 e 5 Anos.pdf"
+   }
+  },
+  {
+   "id": "doc16",
+   "type": "image",
+   "position": {
+    "x": 1000,
+    "y": 1970
+   },
+   "data": {
+    "label": "Kit 16",
+    "mediaType": "document",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/kit/16-Atividades-para-Criancas.pdf",
+    "filename": "16 Atividades para Criancas.pdf"
+   }
+  },
+  {
+   "id": "t_delivered",
+   "type": "text_message",
+   "position": {
+    "x": 1000,
+    "y": 2090
+   },
+   "data": {
+    "label": "Entrega concluída",
+    "message": "Prontinho, professora! 🥰 Seu kit completo está aí — e os *bônus surpresa* já estão inclusos nos materiais que você acabou de receber.\n\nQualquer dúvida, me chama. Boas aulas — e bons domingos! 💙"
+   }
+  },
+  {
+   "id": "rm1a",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 500
+   },
+   "data": {
+    "label": "RM início 30min",
+    "message": "Professora, ainda está aí? 👀\n\nVou ser direta: você *realmente* vai deixar pra depois a organização do seu trabalho?\n\nEnquanto isso, o planejamento continua comendo suas noites e seus domingos…\n\nResponda *sim* que eu te mostro a solução em 2 minutinhos"
+   }
+  },
+  {
+   "id": "c1r",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 650
+   },
+   "data": {
+    "label": "RM início retry",
+    "variableName": "rm_inicio",
+    "timeoutMinutes": 180,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_inicio",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm1b",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 800
+   },
+   "data": {
+    "label": "RM início 3h",
+    "message": "Tá bem, professora… vou guardar sua condição especial só até hoje à noite.\n\nDepois disso, o acesso com desconto vai pra próxima professora da fila.\n\nSe quiser retomar, é só responder *sim* 💙"
+   }
+  },
+  {
+   "id": "c1r2",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 950
+   },
+   "data": {
+    "label": "RM início última",
+    "variableName": "rm_inicio2",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_inicio2",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm2a",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 1100
+   },
+   "data": {
+    "label": "RM faixa 30min",
+    "message": "Professora, faltou só me dizer a idade da sua turminha! 🥺\n\nÉ literalmente 1 resposta pra eu montar seu kit personalizado…\n\nResponda a faixa: 2 a 3, 3 a 4, 4 a 5 ou 5 a 6 anos ⤵️"
+   }
+  },
+  {
+   "id": "c2r",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 1250
+   },
+   "data": {
+    "label": "RM faixa retry",
+    "variableName": "rm_faixa",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_faixa",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm3a",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 1700
+   },
+   "data": {
+    "label": "RM amostra 30min",
+    "message": "Posso ser sincera, professora? 😅\n\nQuem chega até aqui e some geralmente está pensando \"depois eu vejo\"…\n\nMas \"depois\" é mais um domingo inteiro montando aula do zero.\n\nA amostra é grátis e leva 30 segundos. Responda *sim, quero ver* ⬇️"
+   }
+  },
+  {
+   "id": "c3r",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 1850
+   },
+   "data": {
+    "label": "RM amostra retry",
+    "variableName": "rm_amostra",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_amostra",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm4a",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 2300
+   },
+   "data": {
+    "label": "RM fechamento 30min",
+    "message": "Professora, você viu *tudo* que vai receber… e parou bem na última etapa. 😳\n\nFicou com o pé atrás? Normal. Por isso existe a *garantia incondicional de 30 dias*: não gostou, devolvemos cada centavo. Risco zero.\n\nVocê realmente vai deixar pra depois a organização do seu trabalho?\n\nResponda *eu quero* e resolve isso hoje"
+   }
+  },
+  {
+   "id": "c4r",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 2450
+   },
+   "data": {
+    "label": "RM fechamento retry",
+    "variableName": "rm_fechamento",
+    "timeoutMinutes": 180,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_fechamento",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm4b",
+   "type": "text_message",
+   "position": {
+    "x": 400,
+    "y": 2600
+   },
+   "data": {
+    "label": "RM fechamento 3h",
+    "message": "Última mensagem, prometo 🙏\n\nAmanhã você vai planejar aula do jeito de sempre — ou com mais de 1 mil materiais prontos na mão.\n\nA condição especial de hoje não volta. Responda *eu quero* agora."
+   }
+  },
+  {
+   "id": "c4r2",
+   "type": "capture",
+   "position": {
+    "x": 400,
+    "y": 2750
+   },
+   "data": {
+    "label": "RM fechamento última",
+    "variableName": "rm_fechamento2",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_fechamento2",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "tag_downsell",
+   "type": "tag_lead",
+   "position": {
+    "x": 400,
+    "y": 2900
+   },
+   "data": {
+    "label": "Tag downsell",
+    "add": [
+     "eduzzy-downsell"
+    ]
+   }
+  },
+  {
+   "id": "rm5a",
+   "type": "text_message",
+   "position": {
+    "x": 550,
+    "y": 2900
+   },
+   "data": {
+    "label": "Downsell 17,90",
+    "message": "Professora, vi que você chegou até o final e não concluiu… 🥺\n\nFoi o valor? Então deixa eu fazer algo que não faço sempre.\n\nSó nesta conversa: de ~R$ 27,90~ por *R$ 17,90* — pra nunca mais perder seu domingo planejando aula.\n\nFaz o Pix de R$ 17,90 na chave abaixo e me manda o comprovante ⤵️"
+   }
+  },
+  {
+   "id": "pix_ds",
+   "type": "pix",
+   "position": {
+    "x": 700,
+    "y": 2900
+   },
+   "data": {
+    "label": "Pix R$17,90",
+    "pixKey": "equipenotadez@jim.com",
+    "recipientName": "Equipe Nota Dez",
+    "amount": "17,90",
+    "description": "Kit Aula Pronta Infantil (condição especial)",
+    "expiresInMinutes": 120,
+    "outputVariable": "paymentIntentId"
+   }
+  },
+  {
+   "id": "c5b",
+   "type": "capture",
+   "position": {
+    "x": 550,
+    "y": 3200
+   },
+   "data": {
+    "label": "Downsell aguardar comprovante",
+    "variableName": "rm_downsell",
+    "timeoutMinutes": 180,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_downsell",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm5b",
+   "type": "text_message",
+   "position": {
+    "x": 700,
+    "y": 3200
+   },
+   "data": {
+    "label": "Downsell última",
+    "message": "Vou encerrar por aqui, professora 💙\n\nO Pix de *R$ 17,90* vale só até o fim do dia — a chave está logo acima ⤴️\n\nMe manda o comprovante que eu libero seu acesso na hora. Boa aula — e bons domingos!"
+   }
+  },
+  {
+   "id": "c5c",
+   "type": "capture",
+   "position": {
+    "x": 850,
+    "y": 3200
+   },
+   "data": {
+    "label": "Downsell última espera",
+    "variableName": "rm_downsell2",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_downsell2",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  }
+ ],
+ "edges": [
+  {
+   "id": "e-tag_entry-t1",
+   "source": "tag_entry",
+   "target": "t1",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t1-c1",
+   "source": "t1",
+   "target": "c1",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1-t2",
+   "source": "c1",
+   "target": "t2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t2-img_hero",
+   "source": "t2",
+   "target": "img_hero",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_hero-t3",
+   "source": "img_hero",
+   "target": "t3",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t3-c2",
+   "source": "t3",
+   "target": "c2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c2-t4",
+   "source": "c2",
+   "target": "t4",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t4-img_materiais",
+   "source": "t4",
+   "target": "img_materiais",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_materiais-t6",
+   "source": "img_materiais",
+   "target": "t6",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t6-c3",
+   "source": "t6",
+   "target": "c3",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c3-img_planos",
+   "source": "c3",
+   "target": "img_planos",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_planos-img_atividades",
+   "source": "img_planos",
+   "target": "img_atividades",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_atividades-t16",
+   "source": "img_atividades",
+   "target": "t16",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t16-c4",
+   "source": "t16",
+   "target": "c4",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4-t18",
+   "source": "c4",
+   "target": "t18",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t18-pix_main",
+   "source": "t18",
+   "target": "pix_main",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-pix_main-tag_checkout",
+   "source": "pix_main",
+   "target": "tag_checkout",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-tag_checkout-c5",
+   "source": "tag_checkout",
+   "target": "c5",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-trigger-cond_img",
+   "source": "trigger",
+   "target": "cond_img",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_img-cond_buyer-true",
+   "source": "cond_img",
+   "target": "cond_buyer",
+   "sourceHandle": "true",
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_img-tag_entry-false",
+   "source": "cond_img",
+   "target": "tag_entry",
+   "sourceHandle": "false",
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_buyer-ho_late-true",
+   "source": "cond_buyer",
+   "target": "ho_late",
+   "sourceHandle": "true",
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_buyer-tag_entry-false",
+   "source": "cond_buyer",
+   "target": "tag_entry",
+   "sourceHandle": "false",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ho_late-end-output",
+   "source": "ho_late",
+   "target": "end",
+   "sourceHandle": "output",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1-rm1a-timeout",
+   "source": "c1",
+   "target": "rm1a",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm1a-c1r",
+   "source": "rm1a",
+   "target": "c1r",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1r-t2",
+   "source": "c1r",
+   "target": "t2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1r-rm1b-timeout",
+   "source": "c1r",
+   "target": "rm1b",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm1b-c1r2",
+   "source": "rm1b",
+   "target": "c1r2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1r2-t2",
+   "source": "c1r2",
+   "target": "t2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c1r2-end-timeout",
+   "source": "c1r2",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c2-rm2a-timeout",
+   "source": "c2",
+   "target": "rm2a",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm2a-c2r",
+   "source": "rm2a",
+   "target": "c2r",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c2r-t4",
+   "source": "c2r",
+   "target": "t4",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c2r-end-timeout",
+   "source": "c2r",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c3-rm3a-timeout",
+   "source": "c3",
+   "target": "rm3a",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm3a-c3r",
+   "source": "rm3a",
+   "target": "c3r",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c3r-img_planos",
+   "source": "c3r",
+   "target": "img_planos",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c3r-end-timeout",
+   "source": "c3r",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4-rm4a-timeout",
+   "source": "c4",
+   "target": "rm4a",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm4a-c4r",
+   "source": "rm4a",
+   "target": "c4r",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4r-t18",
+   "source": "c4r",
+   "target": "t18",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4r-rm4b-timeout",
+   "source": "c4r",
+   "target": "rm4b",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm4b-c4r2",
+   "source": "rm4b",
+   "target": "c4r2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4r2-t18",
+   "source": "c4r2",
+   "target": "t18",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c4r2-end-timeout",
+   "source": "c4r2",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5-classify_pos",
+   "source": "c5",
+   "target": "classify_pos",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_pos-tag_downsell-objection",
+   "source": "classify_pos",
+   "target": "tag_downsell",
+   "sourceHandle": "objection",
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_pos-v1-validate",
+   "source": "classify_pos",
+   "target": "v1",
+   "sourceHandle": "validate",
+   "targetHandle": null
+  },
+  {
+   "id": "e-v1-pc-approved",
+   "source": "v1",
+   "target": "pc",
+   "sourceHandle": "approved",
+   "targetHandle": null
+  },
+  {
+   "id": "e-v1-t_rej-rejected",
+   "source": "v1",
+   "target": "t_rej",
+   "sourceHandle": "rejected",
+   "targetHandle": null
+  },
+  {
+   "id": "e-pc-label_pago",
+   "source": "pc",
+   "target": "label_pago",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-label_pago-doc01",
+   "source": "label_pago",
+   "target": "doc01",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_rej-c6",
+   "source": "t_rej",
+   "target": "c6",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c6-v2",
+   "source": "c6",
+   "target": "v2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c6-end-timeout",
+   "source": "c6",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-v2-pc-approved",
+   "source": "v2",
+   "target": "pc",
+   "sourceHandle": "approved",
+   "targetHandle": null
+  },
+  {
+   "id": "e-v2-ho-rejected",
+   "source": "v2",
+   "target": "ho",
+   "sourceHandle": "rejected",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ho-end-output",
+   "source": "ho",
+   "target": "end",
+   "sourceHandle": "output",
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5-tag_downsell-timeout",
+   "source": "c5",
+   "target": "tag_downsell",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-tag_downsell-rm5a",
+   "source": "tag_downsell",
+   "target": "rm5a",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm5a-pix_ds",
+   "source": "rm5a",
+   "target": "pix_ds",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-pix_ds-c5b",
+   "source": "pix_ds",
+   "target": "c5b",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5b-v1",
+   "source": "c5b",
+   "target": "v1",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5b-rm5b-timeout",
+   "source": "c5b",
+   "target": "rm5b",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm5b-c5c",
+   "source": "rm5b",
+   "target": "c5c",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5c-v1",
+   "source": "c5c",
+   "target": "v1",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5c-end-timeout",
+   "source": "c5c",
+   "target": "end",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc01-doc02",
+   "source": "doc01",
+   "target": "doc02",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc02-doc03",
+   "source": "doc02",
+   "target": "doc03",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc03-doc04",
+   "source": "doc03",
+   "target": "doc04",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc04-doc05",
+   "source": "doc04",
+   "target": "doc05",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc05-doc06",
+   "source": "doc05",
+   "target": "doc06",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc06-doc07",
+   "source": "doc06",
+   "target": "doc07",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc07-doc08",
+   "source": "doc07",
+   "target": "doc08",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc08-doc09",
+   "source": "doc08",
+   "target": "doc09",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc09-doc10",
+   "source": "doc09",
+   "target": "doc10",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc10-doc11",
+   "source": "doc10",
+   "target": "doc11",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc11-doc12",
+   "source": "doc11",
+   "target": "doc12",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc12-doc13",
+   "source": "doc12",
+   "target": "doc13",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc13-doc14",
+   "source": "doc13",
+   "target": "doc14",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc14-doc15",
+   "source": "doc14",
+   "target": "doc15",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc15-doc16",
+   "source": "doc15",
+   "target": "doc16",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-doc16-t_delivered",
+   "source": "doc16",
+   "target": "t_delivered",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_delivered-end",
+   "source": "t_delivered",
+   "target": "end",
+   "sourceHandle": null,
+   "targetHandle": null
+  }
+ ]
+}

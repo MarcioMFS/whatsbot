@@ -824,7 +824,10 @@ export class FlowExecutionService {
   }
 
   private async executeFlow(bot: Bot, flow: Flow, conversation: Conversation, lead?: Lead): Promise<void> {
-    const maxSteps = 20
+    // Anti-loop com folga pra cadeias longas legítimas: a entrega do kit é
+    // capture→validate→confirmed→label→16 docs→final→end = 23 passos; com o teto
+    // antigo (20) o doc16 era o último passo e a mensagem final NUNCA saía.
+    const maxSteps = 48
     let steps = 0
     const isStart = conversation.currentNodeId === flow.getTriggerNode().id
 
@@ -862,6 +865,10 @@ export class FlowExecutionService {
 
         if (nextNodeId === null) break // waiting for user input
         if (!nextNodeId) {
+          // Terminal SEM próximo nó: se o nó colocou a conversa em handoff, o status é
+          // sagrado — encerrar aqui sobrescrevia o handoff e a próxima mensagem do
+          // cliente reiniciava o funil por cima do humano (bug de prod, 2x).
+          if (conversation.status === 'handoff') break
           conversation.end()
           this.recordOutcome(conversation, deriveTerminalOutcome(conversation.phase), Cart.fromVariables(conversation.variables).totalCentavos || undefined)
           break
