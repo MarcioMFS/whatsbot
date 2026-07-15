@@ -168,9 +168,9 @@ export const api = {
         method: 'POST', body: JSON.stringify({ message }),
       }),
     pause: (botId: string, phone: string) =>
-      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/pause`, { method: 'POST' }),
+      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/pause`, { method: 'POST', body: '{}' }),
     resume: (botId: string, phone: string) =>
-      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/resume`, { method: 'POST' }),
+      request<{ ok: boolean }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/resume`, { method: 'POST', body: '{}' }),
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
   },
