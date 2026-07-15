@@ -55,9 +55,14 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       }
 
       const chat = (info?.Chat ?? keyApi?.remoteJid ?? '') as string
-      const jid = chat.endsWith('@lid') && keyApi?.remoteJidAlt
-        ? (keyApi.remoteJidAlt as string)
-        : chat
+      // LID (tráfego de anúncio): Chat vem como <id>@lid — identidade anônima que NÃO recebe
+      // envio direto. O número real vem em Info.SenderAlt (evolution-go) ou key.remoteJidAlt
+      // (evolution api). Sem resolver isso, o bot "responde" pra um endereço que não existe.
+      const senderAlt = ((info?.SenderAlt ?? info?.RecipientAlt ?? keyApi?.remoteJidAlt) as string | undefined) ?? ''
+      const jid = chat.endsWith('@lid') && senderAlt ? senderAlt : chat
+      if (chat.endsWith('@lid') && !senderAlt) {
+        console.warn(`[webhook] lid_sem_alt chat=${chat} infoKeys=${JSON.stringify(Object.keys(info ?? {}))}`)
+      }
       const phoneNumber = jid.split('@')[0]
 
       // Owner test mode: allow owner's fromMe messages through when enabled
