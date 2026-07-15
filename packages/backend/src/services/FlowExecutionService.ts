@@ -130,8 +130,9 @@ export class FlowExecutionService {
   }
 
   private emit(botId: string, convId: string | null | undefined, phone: string, type: Parameters<ConversationEventRepository['emit']>[0]['eventType'], payload: Record<string, unknown> = {}): void {
-    if (!convId) return
-    this.eventRepo?.emit({ botId, conversationId: convId, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(e => console.error('[FlowExecution] event emit failed:', e?.message))
+    // convId null é válido (ex.: ack inline pós-compra, sem conversa) — descartar aqui
+    // apagava a telemetria post_purchase_support_started (alarme quebrado da baseline).
+    this.eventRepo?.emit({ botId, conversationId: convId ?? null, phoneNumber: phone, eventType: type, payload, occurredAt: new Date() }).catch(e => console.error('[FlowExecution] event emit failed:', e?.message))
   }
 
   // Scored recovery — returns 0..1, threshold = 0.6
