@@ -265,7 +265,7 @@ test('faixa "3 a 4 anos" por extenso fica verbatim (não vira item 3 do menu)', 
 
 // ─── 3. Aparte: pergunta não avança; re-âncora; 2º aparte → handoff TERMINAL ──
 
-test('pergunta no fechamento: re-âncora sem avançar; 2ª → handoff terminal; msgs seguintes ignoradas', async () => {
+test('pergunta no fechamento: re-âncora sem avançar; 2ª ESPAÇADA → handoff terminal; msgs seguintes ignoradas', async () => {
   const r2 = rig()
   await walkTo(r2, 'c4')
   assert.equal(convOf(r2)?.currentNodeId, 'c4')
@@ -276,14 +276,38 @@ test('pergunta no fechamento: re-âncora sem avançar; 2ª → handoff terminal;
   assert.ok(r2.msgs.all.some(m => m.toLowerCase().includes('eu quero')), 're-âncora repete a pergunta do funil')
   assert.ok(!r2.msgs.all.some(m => m.includes('47,90')), 'não pode ter avançado pro preço')
 
+  // simula ESPAÇAMENTO (>30s/60s): rejeição espaçada de verdade conta pro escalonamento
+  const conv1 = convOf(r2)!
+  conv1.setVariable('__capture_reject_at', String(Date.now() - 40_000))
+  conv1.setVariable('__capture_errmsg_at', String(Date.now() - 70_000))
+
   r2.msgs.clear()
   await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'e vem apostila junto?')
-  assert.equal(convOf(r2)?.status, 'handoff', '2º aparte escala pro humano')
+  assert.equal(convOf(r2)?.status, 'handoff', '2º aparte ESPAÇADO escala pro humano')
 
   r2.msgs.clear()
   await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'alô?')
   assert.equal(r2.msgs.texts.length, 0, 'handoff é mudo (nada de funil por cima do humano)')
   assert.equal(convOf(r2)?.status, 'handoff', 'handoff é TERMINAL (não vira ended)')
+})
+
+test('RAJADA no fechamento: 2 msgs seguidas NÃO escalam nem repetem o aparte; funil segue vivo', async () => {
+  const r = rig()
+  await walkTo(r, 'c4')
+
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'quanto fica?')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'tem pra maternal?')   // <30s depois (rajada)
+  assert.notEqual(convOf(r)?.status, 'handoff', 'rajada NÃO escala pro dono')
+  assert.equal(convOf(r)?.currentNodeId, 'c4', 'continua aguardando no mesmo lugar')
+  const apartes = r.msgs.all.filter(m => m.toLowerCase().includes('eu quero')).length
+  assert.equal(apartes, 1, 'aparte enviado UMA vez (sem papagaio)')
+
+  // e a resposta válida em seguida DESCE o funil normalmente
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'eu quero sim')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'resposta válida avança pro pix')
+  assert.ok(r.msgs.all.includes('equipenotadez@jim.com'), 'pix enviado')
 })
 
 // ─── 4. Objeção de preço → downsell imediato ─────────────────────────────────

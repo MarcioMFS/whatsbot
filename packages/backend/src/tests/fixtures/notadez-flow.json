@@ -107,9 +107,7 @@
      "quero",
      "kit",
      "professora"
-    ],
-    "validationRegex": "sim|quero|ok|okay|claro|bora|vamos|pode|manda|show|beleza|blz|isso|aham|uhum|conhecer|interess|informa|saber|oi|ol[aá]|👍",
-    "errorMessage": "Boa pergunta, professora! 😊 Se precisar, nossa equipe também te responde por aqui.\n\nEnquanto isso, me confirma: quer conhecer o *Kit Aula Pronta Infantil*? Responda *sim* que eu te mostro ⤵️"
+    ]
    }
   },
   {
@@ -231,9 +229,7 @@
      "quero",
      "kit",
      "professora"
-    ],
-    "validationRegex": "sim|quero|ver|claro|ok|okay|bora|vamos|pode|manda|mostra|👍|amostra",
-    "errorMessage": "Anotei sua pergunta, professora! 😊\n\nEnquanto isso: quer ver uma *amostra* dos materiais? Responda *sim, quero ver* ⬇️"
+    ]
    }
   },
   {

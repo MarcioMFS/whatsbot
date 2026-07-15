@@ -761,12 +761,18 @@ export class FlowExecutionService {
             await this.convRepo.save(conversation)
             return
           }
-          await this.messaging.sendMessage({
-            instanceName: instance,
-            instanceId,
-            phoneNumber,
-            message: data.errorMessage ?? 'Entrada inválida. Tente novamente.',
-          })
+          // Re-âncora NÃO repete em rajada: se já mandamos o aparte há <60s, fica em
+          // silêncio aguardando (evita "papagaio" quando a pessoa manda 2-3 msgs seguidas).
+          const lastErrAt = Number(conversation.variables['__capture_errmsg_at'] ?? 0)
+          if (!lastErrAt || Date.now() - lastErrAt >= 60_000) {
+            conversation.setVariable('__capture_errmsg_at', String(Date.now()))
+            await this.messaging.sendMessage({
+              instanceName: instance,
+              instanceId,
+              phoneNumber,
+              message: data.errorMessage ?? 'Entrada inválida. Tente novamente.',
+            })
+          }
           await this.convRepo.save(conversation)
           return
         }
@@ -786,6 +792,8 @@ export class FlowExecutionService {
         }
         conversation.setVariable(data.variableName, capturedValue)
         conversation.setVariable('__capture_reject_count', '0')  // aceitou → zera a rede de segurança (auto-handoff)
+        conversation.setVariable('__capture_errmsg_at', '')       // próximo capture ganha aparte novo
+        conversation.setVariable('__capture_reject_at', '')
         conversation.setVariable(`__capture_meta_${data.variableName}`, JSON.stringify({
           msgId: msgId ?? null,
           direction: 'inbound',
@@ -2532,7 +2540,16 @@ export class FlowExecutionService {
     if ((cfg?.enabled ?? true) === false) return false
     const threshold = cfg?.captureRejects ?? 2
 
+    // Tolerância a RAJADA: várias mensagens em sequência são a MESMA pessoa completando
+    // o raciocínio ("Sim" + "as duas turmas"), não teimosia. Rejeição a <30s da anterior
+    // não incrementa o contador — só rejeições ESPAÇADAS contam pro escalonamento.
     const key = '__capture_reject_count'
+    const atKey = '__capture_reject_at'
+    const lastAt = Number(params.conversation.variables[atKey] ?? 0)
+    const now = Date.now()
+    params.conversation.setVariable(atKey, String(now))
+    if (lastAt && now - lastAt < 30_000) return false
+
     const count = Number(params.conversation.variables[key] ?? 0) + 1
     params.conversation.setVariable(key, String(count))
     if (count < threshold) return false
