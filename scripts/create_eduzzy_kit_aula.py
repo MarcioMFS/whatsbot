@@ -85,8 +85,9 @@ IMG = {
 # ⚠️ Com os áudios na corrente, INCLUDE_IMAGES=False deixaria dor/fechamento sem
 # conteúdo (nó de mídia sem caption sai da corrente) — restaurar textos se usar.
 AUDIO = {
-    "dor":   f"{MEDIA_BASE}/audio-dor.ogg",    # substitui o texto da dor (t2 vira eco curto)
-    "fecho": f"{MEDIA_BASE}/audio-fecho.ogg",  # substitui o fechamento (CTA fica em texto)
+    "dor":      f"{MEDIA_BASE}/audio-dor.ogg",      # substitui o texto da dor (t2 vira eco curto)
+    "material": f"{MEDIA_BASE}/audio-material.ogg", # explica o acervo (após capa+mockup, antes da prova)
+    "fecho":    f"{MEDIA_BASE}/audio-fecho.ogg",    # substitui o fechamento (CTA fica em texto)
 }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -271,6 +272,8 @@ nodes = [
     text("t3", 100, Y[5], "Solução", T3_SOLUCAO),
     image("img_capa", 100, Y[6], "Capa do kit", IMG["capa"], caption=CAP_CAPA),
     image("img_materiais", 250, Y[6], "Mockup 1.000 materiais", IMG["materiais"], caption=CAP_MATERIAIS),
+    n("audio_material", "image", 400, Y[6], {
+        "label": "Áudio: explicando o material", "mediaUrl": AUDIO["material"], "mediaType": "audio"}),
     text("t4", 100, Y[7], "Prova social", T4_PROVA),
 ] + ([image("img_print1", 250, Y[7], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
     text("t5", 100, Y[8], "Convite amostra", T5_ASK),
@@ -343,7 +346,7 @@ nodes = [
 ]
 
 chain = [
-    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "t3", "img_capa", "img_materiais", "t4",
+    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "t3", "img_capa", "img_materiais", "audio_material", "t4",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
     "t5", "c_amostra", "video_amostra", "img_planos", "img_atividades",
     "t6", "audio_fecho", "t7_cta", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",

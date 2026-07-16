@@ -225,7 +225,7 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   await r.svc.handleIncomingMessage(r.bot, PHONE, '1')    // ← menu
   assert.equal(convOf(r)?.currentNodeId, 'c_amostra')
   assert.ok(r.msgs.all.some(m => m.includes('2 a 3 anos')), 'menu "1" vira rótulo "2 a 3 anos"')
-  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note da dor enviado')
+  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 2, 'voice notes da dor e do material enviados')
   assert.ok(r.msgs.media.some(m => (m.mediaType ?? 'image') === 'image'), 'capa do kit enviada na etapa da solução')
 
   r.msgs.clear()

@@ -183,6 +183,19 @@
    }
   },
   {
+   "id": "audio_material",
+   "type": "image",
+   "position": {
+    "x": 400,
+    "y": 950
+   },
+   "data": {
+    "label": "Áudio: explicando o material",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-material.ogg",
+    "mediaType": "audio"
+   }
+  },
+  {
    "id": "t4",
    "type": "text_message",
    "position": {
@@ -1001,8 +1014,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-img_materiais-t4",
+   "id": "e-img_materiais-audio_material",
    "source": "img_materiais",
+   "target": "audio_material",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-audio_material-t4",
+   "source": "audio_material",
    "target": "t4",
    "sourceHandle": null,
    "targetHandle": null
