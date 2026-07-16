@@ -127,8 +127,21 @@
     "y": 650
    },
    "data": {
-    "label": "Nomeando a dor",
-    "message": "Perfeito, {{faixa_etaria}} então!\n\nDeixa eu te perguntar uma coisa: quantas vezes esse mês você ficou até tarde (ou usou o domingo) só pra montar o planejamento da semana?\n\nA maioria das professoras que eu falo aqui responde \"toda semana\". E o pior: mesmo com todo esse esforço, ainda tem aquele medo de a coordenação não aprovar de primeira."
+    "label": "Eco da faixa",
+    "message": "Perfeito, {{faixa_etaria}} então! 👇"
+   }
+  },
+  {
+   "id": "audio_dor",
+   "type": "image",
+   "position": {
+    "x": 250,
+    "y": 650
+   },
+   "data": {
+    "label": "Áudio: a dor",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-dor.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -267,15 +280,28 @@
    }
   },
   {
-   "id": "t7",
-   "type": "text_message",
+   "id": "audio_fecho",
+   "type": "image",
    "position": {
     "x": 100,
     "y": 1850
    },
    "data": {
-    "label": "Fechamento",
-    "message": "Essa condição de *R$ 19,90* é válida só pra quem está nessa conversa comigo agora — depois volta pro valor cheio.\n\nVocê prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver isso ainda hoje?\n\nMe diz *quero resolver* que eu já libero seu acesso."
+    "label": "Áudio: fechamento 19,90",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-fecho.ogg",
+    "mediaType": "audio"
+   }
+  },
+  {
+   "id": "t7_cta",
+   "type": "text_message",
+   "position": {
+    "x": 250,
+    "y": 1850
+   },
+   "data": {
+    "label": "CTA quero resolver",
+    "message": "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
    }
   },
   {
@@ -947,8 +973,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-t2-t3",
+   "id": "e-t2-audio_dor",
    "source": "t2",
+   "target": "audio_dor",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-audio_dor-t3",
+   "source": "audio_dor",
    "target": "t3",
    "sourceHandle": null,
    "targetHandle": null
@@ -1017,15 +1050,22 @@
    "targetHandle": null
   },
   {
-   "id": "e-t6-t7",
+   "id": "e-t6-audio_fecho",
    "source": "t6",
-   "target": "t7",
+   "target": "audio_fecho",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-t7-c_fecho",
-   "source": "t7",
+   "id": "e-audio_fecho-t7_cta",
+   "source": "audio_fecho",
+   "target": "t7_cta",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-t7_cta-c_fecho",
+   "source": "t7_cta",
    "target": "c_fecho",
    "sourceHandle": null,
    "targetHandle": null

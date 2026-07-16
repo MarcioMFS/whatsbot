@@ -80,6 +80,15 @@ IMG = {
     "cupom":     f"{MEDIA_BASE}/10-cupom.jpg",
 }
 
+# Voice notes da Juliana (MiniMax, gerados pelo Marcio 2026-07-16; OGG/Opus 32k).
+# Roteiros com marcação emocional: ver memória project_eduzzy_kit_aula.
+# ⚠️ Com os áudios na corrente, INCLUDE_IMAGES=False deixaria dor/fechamento sem
+# conteúdo (nó de mídia sem caption sai da corrente) — restaurar textos se usar.
+AUDIO = {
+    "dor":   f"{MEDIA_BASE}/audio-dor.ogg",    # substitui o texto da dor (t2 vira eco curto)
+    "fecho": f"{MEDIA_BASE}/audio-fecho.ogg",  # substitui o fechamento (CTA fica em texto)
+}
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 r = requests.post(f"{BASE}/api/auth/login", json={"email": EMAIL, "password": PASSWORD})
 if r.status_code != 200:
@@ -146,13 +155,8 @@ T1_VARIACOES = [
         "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
 ]
-T2_DOR = (
-    "Perfeito, {{faixa_etaria}} então!\n\n"
-    "Deixa eu te perguntar uma coisa: quantas vezes esse mês você ficou até tarde (ou usou "
-    "o domingo) só pra montar o planejamento da semana?\n\n"
-    "A maioria das professoras que eu falo aqui responde \"toda semana\". E o pior: mesmo com "
-    "todo esse esforço, ainda tem aquele medo de a coordenação não aprovar de primeira."
-)
+# A dor agora é o ÁUDIO da Juliana (AUDIO["dor"]); o texto vira só o eco da faixa.
+T2_ECO = "Perfeito, {{faixa_etaria}} então! 👇"
 T3_SOLUCAO = (
     "Existe uma forma de virar esse jogo: em vez de criar cada material do zero, você acessa "
     "um acervo pronto — organizado por faixa etária e por campo de experiência da BNCC — e "
@@ -184,13 +188,9 @@ T6_PRECO = (
     "Isso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema "
     "que te consome toda semana."
 )
-T7_FECHO = (
-    "Essa condição de *R$ 19,90* é válida só pra quem está nessa conversa comigo agora — "
-    "depois volta pro valor cheio.\n\n"
-    "Você prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver "
-    "isso ainda hoje?\n\n"
-    "Me diz *quero resolver* que eu já libero seu acesso."
-)
+# O fechamento agora é o ÁUDIO (AUDIO["fecho"]); o CTA fica em texto — é ele que
+# a professora copia/responde e o validationRegex do c_fecho valida.
+T7_CTA = "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
 T_PIX_AFTER = (
     "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
@@ -264,8 +264,10 @@ nodes = [
     n("t1", "distributor", 100, Y[2], {"label": "Abertura problema (3 variações)", "variations": T1_VARIACOES}),
     capture("c_faixa", 100, Y[3], "Aguardar faixa", "faixa_etaria", timeout=20, extra=FAIXA_EXTRA),
 
-    # E2-E5 — dor → solução (capa + materiais) → prova → convite da amostra
-    text("t2", 100, Y[4], "Nomeando a dor", T2_DOR),
+    # E2-E5 — eco + ÁUDIO da dor → solução (capa + materiais) → prova → convite da amostra
+    text("t2", 100, Y[4], "Eco da faixa", T2_ECO),
+    n("audio_dor", "image", 250, Y[4], {
+        "label": "Áudio: a dor", "mediaUrl": AUDIO["dor"], "mediaType": "audio"}),
     text("t3", 100, Y[5], "Solução", T3_SOLUCAO),
     image("img_capa", 100, Y[6], "Capa do kit", IMG["capa"], caption=CAP_CAPA),
     image("img_materiais", 250, Y[6], "Mockup 1.000 materiais", IMG["materiais"], caption=CAP_MATERIAIS),
@@ -281,9 +283,11 @@ nodes = [
     image("img_planos", 250, Y[10], "Plano de aula BNCC", IMG["planos"], caption=CAP_PLANOS),
     image("img_atividades", 400, Y[10], "Atividades práticas", IMG["atividades"], caption=CAP_ATIVIDADES),
 
-    # E6-E7 — âncora 47,90→19,90 + fechamento "quero resolver"
+    # E6-E7 — âncora 47,90→19,90 + ÁUDIO do fechamento + CTA escrito
     text("t6", 100, Y[11], "Âncora 47,90→19,90", T6_PRECO),
-    text("t7", 100, Y[12], "Fechamento", T7_FECHO),
+    n("audio_fecho", "image", 100, Y[12], {
+        "label": "Áudio: fechamento 19,90", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
+    text("t7_cta", 250, Y[12], "CTA quero resolver", T7_CTA),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
 
     # Pix 19,90 + comprovante (mesma espinha validada)
@@ -339,10 +343,10 @@ nodes = [
 ]
 
 chain = [
-    "tag_entry", "t1", "c_faixa", "t2", "t3", "img_capa", "img_materiais", "t4",
+    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "t3", "img_capa", "img_materiais", "t4",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
     "t5", "c_amostra", "video_amostra", "img_planos", "img_atividades",
-    "t6", "t7", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
+    "t6", "audio_fecho", "t7_cta", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
 if not INCLUDE_IMAGES:
