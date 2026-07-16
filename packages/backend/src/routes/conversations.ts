@@ -106,6 +106,37 @@ export async function conversationRoutes(app: FastifyInstance, ctx: ConvCtx) {
     }
   )
 
+  // Controle de posição: move a conversa pra um nó específico do funil e DISPARA o flow
+  // dali (voltar ou adiantar). Sem conversa ativa (ex.: encerrada), cria uma já posicionada
+  // no nó — serve pra reengajar um lead a partir de qualquer parte do roteiro.
+  app.post<{ Params: { botId: string; phone: string }; Body: { nodeId?: string } }>(
+    '/bot/:botId/phone/:phone/goto',
+    async (req, reply) => {
+      const user = req.user as { id: string }
+      const bot = await ctx.botRepo.findById(req.params.botId)
+      if (!bot || bot.ownerId !== user.id) return reply.code(404).send({ error: 'Not found' })
+
+      const nodeId = (req.body?.nodeId ?? '').trim()
+      if (!nodeId) return reply.code(400).send({ error: 'nodeId obrigatório' })
+
+      let conversation = await ctx.conversationRepo.findActiveByPhone(bot.id, req.params.phone)
+      const flowId = conversation?.flowId ?? bot.activeFlowId
+      const flow = flowId ? await ctx.flowRepo.findById(flowId) : null
+      if (!flow) return reply.code(400).send({ error: 'Sem flow pra essa conversa' })
+      if (!flow.getNodeById(nodeId)) return reply.code(400).send({ error: 'Nó não existe no flow dessa conversa' })
+
+      if (!conversation) {
+        conversation = Conversation.create({
+          botId: bot.id, flowId: flow.id, phoneNumber: req.params.phone,
+          triggerNodeId: nodeId,
+        })
+      }
+      conversation.moveToNode(nodeId)
+      await ctx.flowExecService.resumeFromNode(bot, flow, conversation)
+      return { ok: true, firedNode: nodeId, node: conversation.currentNodeId, status: conversation.status }
+    }
+  )
+
   // Envia mensagem manual pro lead pelo número do bot. Se houver conversa ativa,
   // registra no histórico (aparece no chat); sem conversa, só envia (recuperação de lead).
   app.post<{ Params: { botId: string; phone: string }; Body: { message?: string } }>(

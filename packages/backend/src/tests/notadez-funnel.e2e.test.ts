@@ -214,7 +214,7 @@ test('grafo: edges íntegras, captures com timeout, regex compila, sem CAIXA ALT
 
 // ─── 1. Caminho feliz completo (com as pegadinhas que já quebraram) ──────────
 
-test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLVER → pix 17,90 → comprovante → entrega', async () => {
+test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLVER → pix 27,90 → comprovante → entrega', async () => {
   const r = rig()
 
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'Olá! Posso ter mais informações sobre isso?')
@@ -231,15 +231,15 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← case-insensitive
   assert.equal(convOf(r)?.currentNodeId, 'c_fecho', '"SIM" maiúsculo avança pra oferta')
   assert.equal(r.msgs.media.length, 3, '3 páginas reais de amostra')
-  assert.ok(r.msgs.all.some(m => m.includes('R$ 27')), 'âncora R$27 presente')
-  assert.ok(r.msgs.all.some(m => m.includes('17,90')), 'condição 17,90 presente')
+  assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora R$47,90 presente')
+  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'condição 27,90 presente')
 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER')
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   const last = r.msgs.all[r.msgs.all.length - 1]
   assert.equal(last, 'equipenotadez@jim.com', 'chave pix isolada na última bolha (copiável)')
-  assert.ok(r.msgs.all.some(m => m.includes('17,90')), 'pix no valor 17,90')
+  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'pix no valor 27,90')
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
   r.msgs.clear()
@@ -357,4 +357,66 @@ test('imagem como 1ª msg de lead que já chegou no pix → confirmação humana
   assert.ok(r.msgs.all.some(m => m.includes('confirmar seu pagamento')), 'mensagem de confirmação humana')
   assert.ok(!r.msgs.all.some(m => m.includes('Juliana')), 'funil NÃO reinicia por cima de comprovante atrasado')
   assert.equal(convOf(r)?.status, 'handoff')
+})
+
+// ─── 8. Controle manual: disparar o funil de um nó específico (goto da tela) ──
+// Mesma mecânica da rota POST /conversations/bot/:botId/phone/:phone/goto:
+// moveToNode(nó) + resumeFromNode — as bolhas do ponto escolhido saem AGORA.
+
+test('goto volta o funil: lead no c5 re-dispara a âncora (t6) — preço sai de novo e espera no c_fecho', async () => {
+  const r = rig()
+  await walkTo(r, 'c5')
+  r.msgs.clear()
+  const conv = convOf(r)!
+  conv.moveToNode('t6')
+  await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
+  assert.equal(convOf(r)?.currentNodeId, 'c_fecho', 'para de novo no fechamento')
+  assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora reenviada')
+  assert.ok(r.msgs.all.some(m => m.includes('quero resolver')), 'fechamento reenviado')
+})
+
+test('goto adianta o funil: lead na faixa vai direto pro pix — chave na última bolha, espera no c5', async () => {
+  const r = rig()
+  await walkTo(r, 'c_faixa')
+  r.msgs.clear()
+  const conv = convOf(r)!
+  conv.moveToNode('t_pix_after')
+  await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
+  assert.equal(convOf(r)?.currentNodeId, 'c5')
+  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix isolada na última bolha')
+  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'pix no valor 27,90')
+})
+
+test('goto revive conversa em handoff: disparar um nó devolve pro bot naquele ponto', async () => {
+  const r = rig()
+  await walkTo(r, 'c_fecho')
+  const conv = convOf(r)!
+  conv.handoff()
+  await r.convs.save(conv)
+  r.msgs.clear()
+  conv.moveToNode('t7')
+  await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
+  assert.equal(convOf(r)?.status, 'waiting', 'sai do handoff e volta a esperar o lead')
+  assert.equal(convOf(r)?.currentNodeId, 'c_fecho')
+  assert.ok(r.msgs.all.some(m => m.includes('quero resolver')))
+})
+
+// ─── 9. Nome do cliente: pushName do WhatsApp vira saudação na abertura ───────
+
+test('pushName "🌸 Profª Maria Clara" → abertura "Oi, Maria!" e lead.name=Maria', async () => {
+  const r = rig()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'quero saber do kit', undefined, { pushName: '🌸 Profª Maria Clara' })
+  const open = r.msgs.all[0] ?? ''
+  assert.ok(open.includes(', Maria!'), `abertura deveria saudar pelo nome: "${open.slice(0, 60)}"`)
+  assert.ok(!open.includes('{{'), 'template cru vazou pro cliente')
+  const lead = await r.leads.findByPhone(BOT_ID, PHONE)
+  assert.equal(lead?.name, 'Maria')
+})
+
+test('pushName inutilizável ("👑 .") → saudação neutra, sem vírgula órfã nem template cru', async () => {
+  const r = rig()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'quero saber do kit', undefined, { pushName: '👑 .' })
+  const open = r.msgs.all[0] ?? ''
+  assert.ok(/^(Oi|Olá)! /.test(open), `saudação neutra esperada: "${open.slice(0, 40)}"`)
+  assert.ok(!open.includes('{{'), 'template cru vazou pro cliente')
 })

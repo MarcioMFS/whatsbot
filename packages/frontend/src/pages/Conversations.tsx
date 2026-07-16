@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { MessageCircle, Clock, Send, Pause, Play, Gift } from 'lucide-react'
+import { MessageCircle, Clock, Send, Pause, Play, Gift, SkipForward } from 'lucide-react'
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
@@ -15,9 +15,16 @@ interface Conv {
   phoneNumber: string
   status: string
   phase?: string
+  flowId?: string
   currentNodeId?: string
   history: Msg[]
   updatedAt: string
+}
+
+interface FlowNodeLite {
+  id: string
+  type: string
+  label: string
 }
 
 // Acentos discretos (padrão editorial: dot colorido + texto muted, nunca badge saturado)
@@ -72,6 +79,9 @@ export function Conversations() {
   const [sending, setSending] = useState(false)
   const [deliverables, setDeliverables] = useState<{ available: boolean; docs: number }>({ available: false, docs: 0 })
   const [delivering, setDelivering] = useState(false)
+  const [flowNodes, setFlowNodes] = useState<Record<string, FlowNodeLite[]>>({})
+  const [gotoSel, setGotoSel] = useState<string | null>(null)
+  const [firing, setFiring] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const lastLenRef = useRef(0)
 
@@ -105,9 +115,22 @@ export function Conversations() {
   useEffect(() => {
     if (!botId) return
     api.conversations.deliverables(botId).then(setDeliverables).catch(() => {})
+    // nós de cada flow do bot — alimenta o controle "disparar daqui" e o rótulo do nó atual
+    api.flows.list(botId).then(flows => {
+      const map: Record<string, FlowNodeLite[]> = {}
+      for (const f of flows as Array<{ id: string; nodes?: Array<{ id: string; type: string; data?: { label?: string } }> }>) {
+        map[f.id] = (f.nodes ?? []).map(nd => ({ id: nd.id, type: nd.type, label: nd.data?.label || nd.id }))
+      }
+      setFlowNodes(map)
+    }).catch(() => {})
   }, [botId])
 
   const conv = convs.find(c => c.id === selected) ?? null
+  const nodes = (conv?.flowId && flowNodes[conv.flowId]) || []
+  const currentNode = nodes.find(nd => nd.id === conv?.currentNodeId) ?? null
+
+  // troca de conversa → o seletor volta a seguir o nó atual dela
+  useEffect(() => { setGotoSel(null) }, [selected])
 
   // auto-scroll quando chegam mensagens novas
   useEffect(() => {
@@ -150,6 +173,25 @@ export function Conversations() {
       window.alert(`Falha na entrega: ${(e as Error).message}`)
     } finally {
       setDelivering(false)
+    }
+  }
+
+  // Dispara o funil a partir do nó escolhido (voltar/adiantar a conversa)
+  const fireGoto = async () => {
+    if (!botId || !conv || firing) return
+    const nodeId = gotoSel ?? conv.currentNodeId
+    if (!nodeId) return
+    const label = nodes.find(nd => nd.id === nodeId)?.label ?? nodeId
+    if (!window.confirm(`Disparar o funil a partir de "${label}" para ${conv.phoneNumber}?\n\nAs mensagens desse ponto serão enviadas agora e a conversa passa a seguir dali (se estava com você, volta pro bot).`)) return
+    setFiring(true)
+    try {
+      await api.conversations.goto(botId, conv.phoneNumber, nodeId)
+      setGotoSel(null)
+      load()
+    } catch (e) {
+      window.alert(`Falha ao disparar: ${(e as Error).message}`)
+    } finally {
+      setFiring(false)
     }
   }
 
@@ -219,7 +261,12 @@ export function Conversations() {
                   <div className="flex items-center justify-between px-5 py-4" style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper-2)' }}>
                     <div>
                       <p className="mk-display font-semibold text-sm">{conv.phoneNumber}</p>
-                      <StatusDot status={conv.status} />
+                      <span className="inline-flex items-center gap-2">
+                        <StatusDot status={conv.status} />
+                        {currentNode && (
+                          <span className="text-xs" style={{ color: 'var(--muted)' }}>· etapa: {currentNode.label}</span>
+                        )}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                     {deliverables.available && (
@@ -240,6 +287,34 @@ export function Conversations() {
                     )}
                     </div>
                   </div>
+
+                  {/* controle do funil: escolhe a etapa e dispara o flow dali (voltar/adiantar) */}
+                  {nodes.length > 0 && (() => {
+                    const selValue = gotoSel ?? (nodes.some(nd => nd.id === conv.currentNodeId) ? conv.currentNodeId! : '')
+                    return (
+                      <div className="flex items-center gap-2 px-5 py-2.5" style={{ borderBottom: '1px solid var(--line)', background: 'var(--paper-2)' }}>
+                        <span className="text-xs shrink-0" style={{ color: 'var(--muted)' }}>Funil</span>
+                        <select
+                          className="mk-input flex-1 text-xs"
+                          style={{ padding: '6px 10px', minWidth: 0 }}
+                          value={selValue}
+                          onChange={e => setGotoSel(e.target.value)}
+                        >
+                          {selValue === '' && <option value="" disabled>— etapa do funil —</option>}
+                          {nodes.map(nd => (
+                            <option key={nd.id} value={nd.id}>
+                              {(nd.id === conv.currentNodeId ? '● ' : '') + nd.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button onClick={fireGoto} disabled={firing || !selValue}
+                          className="inline-flex items-center gap-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 shrink-0"
+                          style={{ background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', padding: '7px 15px' }}>
+                          <SkipForward size={12} /> {firing ? 'Disparando…' : 'Disparar daqui'}
+                        </button>
+                      </div>
+                    )
+                  })()}
 
                   {/* mensagens */}
                   <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: 'var(--paper)' }}>

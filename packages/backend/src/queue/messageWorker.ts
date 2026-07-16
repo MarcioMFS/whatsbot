@@ -101,11 +101,12 @@ export function startMessageWorker(
   const worker = new Worker(
     'messages',
     async (job) => {
-      const { botId, phoneNumber, message, msgId, hasImage, imageMeta, hasAudio, audioMeta, imageBase64: directImageBase64 } = job.data as {
+      const { botId, phoneNumber, message, msgId, pushName, hasImage, imageMeta, hasAudio, audioMeta, imageBase64: directImageBase64 } = job.data as {
         botId: string
         phoneNumber: string
         message: string
         msgId?: string
+        pushName?: string
         hasImage?: boolean
         imageMeta?: { imgMsg: Record<string, unknown> }
         hasAudio?: boolean
@@ -179,7 +180,7 @@ export function startMessageWorker(
           const isLastAttempt = job.attemptsMade >= ((job.opts.attempts ?? 1) - 1)
           await agentRuntime.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { isLastAttempt })
         } else {
-          await flowExecService.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64 })
+          await flowExecService.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64, pushName })
         }
       } finally {
         await redis.del(lockKey)

@@ -78,6 +78,25 @@ function msgHash(s: string): string {
   return (h >>> 0).toString(16)
 }
 
+// pushName do WhatsApp → primeiro nome utilizável em saudação. O pushName é controlado
+// pelo CONTATO (emoji, título, nome de loja, "." etc), então só aceita um token alfabético
+// curto; títulos comuns são pulados. Na dúvida retorna null e a saudação sai neutra.
+const PUSHNAME_TITLES = new Set([
+  'prof', 'profa', 'profe', 'professor', 'professora',
+  'dr', 'dra', 'sr', 'sra', 'srta', 'tia', 'tio', 'pastor', 'pastora',
+])
+export function firstNameFromPushName(pushName?: string): string | null {
+  if (!pushName) return null
+  for (const raw of pushName.split(/\s+/)) {
+    // remove emoji/pontuação/dígito preservando acentos; ª/º contam como letra no Unicode ("Profª")
+    const token = raw.replace(/[^\p{L}]/gu, '').replace(/[ªº]/g, '')
+    if (token.length < 2 || token.length > 20) continue
+    if (PUSHNAME_TITLES.has(token.toLowerCase())) continue
+    return token[0].toUpperCase() + token.slice(1).toLowerCase()
+  }
+  return null
+}
+
 export class FlowExecutionService {
   constructor(
     private flowRepo: FlowRepository,
@@ -244,7 +263,7 @@ export class FlowExecutionService {
     phoneNumber: string,
     message: string,
     imageBase64?: string,
-    inbound?: { msgId?: string; hasImage?: boolean },
+    inbound?: { msgId?: string; hasImage?: boolean; pushName?: string },
   ): Promise<void> {
     // Sem flow ativo ainda pode haver funil por keyword (bot runtime='agent') —
     // o guard de flow inexistente acontece adiante, quando o flowId é resolvido.
@@ -557,6 +576,7 @@ export class FlowExecutionService {
           if (!lead) lead = Lead.create({ botId: bot.id, phoneNumber })
           else lead.recordSession()
           lead.touch()
+          this.applyLeadName(conversation, lead, inbound?.pushName)
           conversation.setVariable('__lead_tags', lead.tags.join(','))
           conversation.setVariable('__lead_temperature', lead.leadTemperature)
           conversation.setVariable('__lead_sessions', String(lead.totalSessions))
@@ -614,6 +634,9 @@ export class FlowExecutionService {
     if (lead.tags.includes('buyer') && lead.leadTemperature === 'cold') {
       lead.setTemperature(lead.lastPaymentConfirmedAt ? 'hot' : 'warm')
     }
+
+    // Nome do cliente (pushName → 1º nome) — saudação pronta pros templates do funil
+    this.applyLeadName(conversation, lead, inbound?.pushName)
 
     // inject lead context into conversation variables (P2 — memory layer)
     conversation.setVariable('__lead_tags', lead.tags.join(','))
@@ -821,6 +844,21 @@ export class FlowExecutionService {
     await this.executeFlow(bot, flow, conversation, lead)
     lead.mergeVariables(conversation.variables)
     await this.leadRepo.save(lead)
+  }
+
+  // Fixa o 1º nome do lead (pushName do WhatsApp, sanitizado) e expõe as variáveis de
+  // saudação pros templates: {{nome}} = "Maria" | "" e {{saudacao_nome}} = ", Maria" | ""
+  // (uso: "Oi{{saudacao_nome}}!" → "Oi, Maria!" ou "Oi!" sem nome — nunca vírgula órfã).
+  private applyLeadName(conversation: Conversation, lead: Lead, pushName?: string): void {
+    if (!lead.name) {
+      const first = firstNameFromPushName(pushName)
+      if (first) lead.setName(first)
+    }
+    // Não sobrescreve valor não-vazio: um capture do flow pode ter perguntado o nome
+    // (variável 'nome' é do operador) — o pushName só preenche o que está vazio.
+    const vars = conversation.variables
+    if (!vars['nome']) conversation.setVariable('nome', lead.name ?? '')
+    if (!vars['saudacao_nome']) conversation.setVariable('saudacao_nome', lead.name ? `, ${lead.name}` : '')
   }
 
   async resumeFromNode(bot: Bot, flow: Flow, conversation: Conversation): Promise<void> {

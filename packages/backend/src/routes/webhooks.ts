@@ -56,6 +56,9 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         if (!already) return reply.code(200).send({ ok: true, dup: true })
       }
 
+      // Nome de exibição do contato (vira saudação personalizada no funil)
+      const pushName = ((info?.PushName ?? raw.pushName ?? '') as string).slice(0, 120)
+
       const chat = (info?.Chat ?? keyApi?.remoteJid ?? '') as string
       // LID (tráfego de anúncio): Chat vem como <id>@lid — identidade anônima que NÃO recebe
       // envio direto. O número real vem em Info.SenderAlt (evolution-go) ou key.remoteJidAlt
@@ -120,6 +123,7 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
         phoneNumber,
         message,
         msgId: msgId || undefined,
+        pushName: pushName || undefined,
         hasImage,
         imageMeta: imageMeta || undefined,
         hasAudio,
@@ -179,6 +183,7 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
       for (const change of entry.changes ?? []) {
         const value = change.value as {
           metadata?: { phone_number_id?: string }
+          contacts?: Array<{ profile?: { name?: string } }>
           messages?: Array<Record<string, any>>
         } | undefined
         const pnid = value?.metadata?.phone_number_id
@@ -230,6 +235,7 @@ export async function webhookRoutes(app: FastifyInstance, ctx: WebhookCtx) {
             phoneNumber,
             message,
             msgId,
+            pushName: (value.contacts?.[0]?.profile?.name ?? '').slice(0, 120) || undefined,
             hasImage: !!imageBase64,
             imageBase64,
           }, {

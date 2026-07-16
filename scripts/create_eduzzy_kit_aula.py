@@ -117,24 +117,26 @@ def delay(id, x, y, seconds=3):
     return n(id, "delay", x, y, {"label": "Pausa", "seconds": seconds})
 
 # ── Copy v9 — roteiro problema-primeiro (Kely/Marcio 15/07) ───────────────────
-# Estrutura: dor → solução(capa) → prova → amostra real → âncora 27→17,90 → "quero resolver"
+# Estrutura: dor → solução(capa) → prova → amostra real → âncora 47,90→27,90 → "quero resolver"
+# {{saudacao_nome}} = ", Maria" (1º nome do pushName do WhatsApp) ou vazio →
+# "Oi, Maria!" / "Oi!" — o motor garante que nunca sai vírgula órfã nem template cru.
 T1_VARIACOES = [
     (
-        "Oi! Aqui é a Juliana 📚\n\n"
+        "Oi{{saudacao_nome}}! Aqui é a Juliana 📚\n\n"
         "Se você joga muitas horas montando plano de aula, atividade e parecer do zero toda "
         "semana, eu quero te mostrar uma forma de resolver isso hoje mesmo.\n\n"
         "Qual a faixa etária da sua turma?\n"
         "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
     (
-        "Oi, professora! Juliana aqui 📚\n\n"
+        "Oi{{saudacao_nome}}! Juliana aqui, professora 📚\n\n"
         "Quantas horas da sua semana vão embora montando planejamento, atividade e parecer "
         "do zero? Eu te mostro um jeito de resolver isso ainda hoje.\n\n"
         "Me diz a faixa etária da sua turma:\n"
         "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ),
     (
-        "Olá! Sou a Juliana 📚\n\n"
+        "Olá{{saudacao_nome}}! Sou a Juliana 📚\n\n"
         "Se o seu fim de semana vive indo embora em plano de aula e parecer feito do zero, "
         "isso aqui é pra você — dá pra resolver hoje.\n\n"
         "Qual a faixa etária da sua turma?\n"
@@ -174,22 +176,22 @@ CAP_AM3 = (
 )
 T6_PRECO = (
     "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente "
-    "fica disponível por R$ 27.\n\n"
-    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 17,90*, "
+    "fica disponível por R$ 47,90.\n\n"
+    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 27,90*, "
     "com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada "
     "centavo. Risco zero pra você.\n\n"
     "Isso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema "
     "que te consome toda semana."
 )
 T7_FECHO = (
-    "Essa condição de *R$ 17,90* é válida só pra quem está nessa conversa comigo agora — "
+    "Essa condição de *R$ 27,90* é válida só pra quem está nessa conversa comigo agora — "
     "depois volta pro valor cheio.\n\n"
     "Você prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver "
     "isso ainda hoje?\n\n"
     "Me diz *quero resolver* que eu já libero seu acesso."
 )
 T_PIX_AFTER = (
-    "Fechado! 🎉 Vou te passar o Pix de *R$ 17,90* aqui embaixo — assim que pagar, me envia "
+    "Fechado! 🎉 Vou te passar o Pix de *R$ 27,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
 )
 T_OBJ = (
@@ -221,7 +223,7 @@ RM_SOFT = (
 )
 RM_REOFFER = (
     "Que bom te ver por aqui de novo! 😊\n\n"
-    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 17,90* pelo acesso "
+    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 27,90* pelo acesso "
     "completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
 )
 
@@ -267,15 +269,15 @@ nodes = [
     image("img_am2", 250, Y[10], "Amostra traçar", IMG["amostra2"], caption=CAP_AM2),
     image("img_am3", 400, Y[10], "Amostra rotina", IMG["amostra3"], caption=CAP_AM3),
 
-    # E6-E7 — âncora 27→17,90 + fechamento "quero resolver"
-    text("t6", 100, Y[11], "Âncora 27→17,90", T6_PRECO),
+    # E6-E7 — âncora 47,90→27,90 + fechamento "quero resolver"
+    text("t6", 100, Y[11], "Âncora 47,90→27,90", T6_PRECO),
     text("t7", 100, Y[12], "Fechamento", T7_FECHO),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
 
-    # Pix 17,90 + comprovante (mesma espinha validada)
+    # Pix 27,90 + comprovante (mesma espinha validada)
     n("pix_main", "pix", 100, Y[14], {
-        "label": "Pix R$17,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
-        "amount": "17,90", "description": "Kit Aula Pronta Infantil — condição especial",
+        "label": "Pix R$27,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "27,90", "description": "Kit Aula Pronta Infantil — condição especial",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
     n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
@@ -315,7 +317,7 @@ nodes = [
     capture("c_am_r", 400, Y[10], "RM amostra retorno", "rm_amostra", timeout=720),
     text("rm_s3", 400, Y[13], "RM suave fechamento", RM_SOFT),
     capture("c_f_r", 400, Y[14], "RM fechamento retorno", "rm_fechamento", timeout=720),
-    text("t_reoffer", 550, Y[14], "Reoferta 17,90", RM_REOFFER),
+    text("t_reoffer", 550, Y[14], "Reoferta 27,90", RM_REOFFER),
     text("rm_s4", 400, Y[16], "RM suave pós-pix", RM_SOFT),
     capture("c5_r", 550, Y[16], "RM pós-pix retorno", "rm_pospix", timeout=720),
 ]
@@ -391,7 +393,7 @@ else:
 
 print(f"""
 Próximos passos:
-  1. Pix: equipenotadez@jim.com (R$27,90 / downsell R$17,90) — comprovante validado por IA.
+  1. Pix: equipenotadez@jim.com (valor único R$27,90, âncora R$47,90) — comprovante validado por IA.
   2. Quando tiver prints REAIS de depoimento: suba 05..08-printN.jpg, HAS_PRINTS=True e rode de novo.
   3. Anúncio click-to-WhatsApp com texto pré-preenchido contendo: {KEYWORDS[0]!r}
      Ex.: "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"

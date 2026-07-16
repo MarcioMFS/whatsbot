@@ -83,9 +83,9 @@
    "data": {
     "label": "Abertura problema (3 variações)",
     "variations": [
-     "Oi! Aqui é a Juliana 📚\n\nSe você joga muitas horas montando plano de aula, atividade e parecer do zero toda semana, eu quero te mostrar uma forma de resolver isso hoje mesmo.\n\nQual a faixa etária da sua turma?\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
-     "Oi, professora! Juliana aqui 📚\n\nQuantas horas da sua semana vão embora montando planejamento, atividade e parecer do zero? Eu te mostro um jeito de resolver isso ainda hoje.\n\nMe diz a faixa etária da sua turma:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
-     "Olá! Sou a Juliana 📚\n\nSe o seu fim de semana vive indo embora em plano de aula e parecer feito do zero, isso aqui é pra você — dá pra resolver hoje.\n\nQual a faixa etária da sua turma?\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
+     "Oi{{saudacao_nome}}! Aqui é a Juliana 📚\n\nSe você joga muitas horas montando plano de aula, atividade e parecer do zero toda semana, eu quero te mostrar uma forma de resolver isso hoje mesmo.\n\nQual a faixa etária da sua turma?\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
+     "Oi{{saudacao_nome}}! Juliana aqui, professora 📚\n\nQuantas horas da sua semana vão embora montando planejamento, atividade e parecer do zero? Eu te mostro um jeito de resolver isso ainda hoje.\n\nMe diz a faixa etária da sua turma:\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos",
+     "Olá{{saudacao_nome}}! Sou a Juliana 📚\n\nSe o seu fim de semana vive indo embora em plano de aula e parecer feito do zero, isso aqui é pra você — dá pra resolver hoje.\n\nQual a faixa etária da sua turma?\n1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"
     ]
    }
   },
@@ -248,8 +248,8 @@
     "y": 1700
    },
    "data": {
-    "label": "Âncora 27→17,90",
-    "message": "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente fica disponível por R$ 27.\n\nMas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 17,90*, com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada centavo. Risco zero pra você.\n\nIsso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema que te consome toda semana."
+    "label": "Âncora 47,90→27,90",
+    "message": "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente fica disponível por R$ 47,90.\n\nMas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 27,90*, com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada centavo. Risco zero pra você.\n\nIsso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema que te consome toda semana."
    }
   },
   {
@@ -261,7 +261,7 @@
    },
    "data": {
     "label": "Fechamento",
-    "message": "Essa condição de *R$ 17,90* é válida só pra quem está nessa conversa comigo agora — depois volta pro valor cheio.\n\nVocê prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver isso ainda hoje?\n\nMe diz *quero resolver* que eu já libero seu acesso."
+    "message": "Essa condição de *R$ 27,90* é válida só pra quem está nessa conversa comigo agora — depois volta pro valor cheio.\n\nVocê prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver isso ainda hoje?\n\nMe diz *quero resolver* que eu já libero seu acesso."
    }
   },
   {
@@ -295,10 +295,10 @@
     "y": 2150
    },
    "data": {
-    "label": "Pix R$17,90",
+    "label": "Pix R$27,90",
     "pixKey": "equipenotadez@jim.com",
     "recipientName": "Equipe Nota Dez",
-    "amount": "17,90",
+    "amount": "27,90",
     "description": "Kit Aula Pronta Infantil — condição especial",
     "expiresInMinutes": 120,
     "outputVariable": "paymentIntentId"
@@ -313,7 +313,7 @@
    },
    "data": {
     "label": "Pedir comprovante",
-    "message": "Fechado! 🎉 Vou te passar o Pix de *R$ 17,90* aqui embaixo — assim que pagar, me envia o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
+    "message": "Fechado! 🎉 Vou te passar o Pix de *R$ 27,90* aqui embaixo — assim que pagar, me envia o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
    }
   },
   {
@@ -855,8 +855,8 @@
     "y": 2150
    },
    "data": {
-    "label": "Reoferta 17,90",
-    "message": "Que bom te ver por aqui de novo! 😊\n\nAinda consigo garantir pra você a condição que te mostrei: *R$ 17,90* pelo acesso completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
+    "label": "Reoferta 27,90",
+    "message": "Que bom te ver por aqui de novo! 😊\n\nAinda consigo garantir pra você a condição que te mostrei: *R$ 27,90* pelo acesso completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
    }
   },
   {

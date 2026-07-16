@@ -175,6 +175,11 @@ export const api = {
       request<{ available: boolean; docs: number }>(`/conversations/bot/${botId}/deliverables`),
     deliver: (botId: string, phone: string) =>
       request<{ ok: boolean; docs: number }>(`/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/deliver`, { method: 'POST', body: '{}' }),
+    // Move a conversa pra um nó do funil e dispara o flow dali (voltar/adiantar)
+    goto: (botId: string, phone: string, nodeId: string) =>
+      request<{ ok: boolean; firedNode: string; node: string; status: string }>(
+        `/conversations/bot/${botId}/phone/${encodeURIComponent(phone)}/goto`,
+        { method: 'POST', body: JSON.stringify({ nodeId }) }),
     list: (botId: string, limit?: number) =>
       request<unknown[]>(`/conversations/bot/${botId}${limit ? `?limit=${limit}` : ''}`),
   },
