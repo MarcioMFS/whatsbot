@@ -66,6 +66,11 @@ export function Kanban() {
   const [convs, setConvs] = useState<LiveConv[]>([])
   const [dragPhone, setDragPhone] = useState<string | null>(null)
   const [overCol, setOverCol] = useState<string | null>(null)
+  // filtros do quadro (client-side — leads já vêm inteiros no polling)
+  const [q, setQ] = useState('')
+  const [fTemp, setFTemp] = useState<string | null>(null)
+  const [fTag, setFTag] = useState<string | null>(null)
+  const [fDays, setFDays] = useState<number | null>(null)
 
   const load = useCallback(() => {
     if (!botId) return
@@ -84,8 +89,24 @@ export function Kanban() {
   }, [load])
 
   const activeByPhone = new Map(convs.map(c => [c.phoneNumber, c]))
+
+  // tags existentes (com contagem) — alimenta o filtro por tag
+  const tagCounts = new Map<string, number>()
+  for (const l of leads) for (const t of l.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1)
+
+  const needle = q.trim().toLowerCase()
+  const cutoff = fDays ? Date.now() - fDays * 86_400_000 : null
+  const visibleLeads = leads.filter(l => {
+    if (fTemp && l.leadTemperature !== fTemp) return false
+    if (fTag && !l.tags.includes(fTag)) return false
+    if (cutoff && new Date(l.lastSeenAt).getTime() < cutoff) return false
+    if (needle && !l.phoneNumber.toLowerCase().includes(needle) && !(l.name ?? '').toLowerCase().includes(needle)) return false
+    return true
+  })
+  const filtersActive = !!(needle || fTemp || fTag || fDays)
+
   const byCol = new Map<string, Lead[]>(COLUMNS.map(c => [c.key, []]))
-  for (const lead of leads) byCol.get(stageOf(lead, activeByPhone))!.push(lead)
+  for (const lead of visibleLeads) byCol.get(stageOf(lead, activeByPhone))!.push(lead)
 
   const onDrop = async (col: Column) => {
     setOverCol(null)
@@ -116,9 +137,62 @@ export function Kanban() {
               <Columns3 size={22} strokeWidth={1.7} /> Kanban
             </h1>
             <p className="text-sm" style={{ color: 'var(--muted)', marginTop: 2 }}>
-              {leads.length} leads — arraste um card pra mudar de estágio
+              {filtersActive ? `${visibleLeads.length} de ${leads.length} leads (filtro ativo)` : `${leads.length} leads — arraste um card pra mudar de estágio`}
             </p>
           </div>
+        </div>
+
+        {/* filtros: busca + temperatura + tag + período (last seen) */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <input
+            className="mk-input text-sm"
+            style={{ padding: '8px 14px', width: 220 }}
+            placeholder="Buscar nome ou número…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          {([[null, 'todas'], ...Object.entries(TEMP_LABELS)] as Array<[string | null, string]>).map(([key, label]) => {
+            const active = fTemp === key
+            const count = key === null ? leads.length : leads.filter(l => l.leadTemperature === key).length
+            return (
+              <button key={label} onClick={() => setFTemp(key)}
+                className="rounded-full text-xs font-medium transition-all"
+                style={active
+                  ? { background: 'var(--ink)', color: 'var(--paper)', padding: '7px 13px' }
+                  : { background: 'transparent', color: 'var(--ink-soft)', border: '1px solid var(--line)', padding: '6px 12px' }}>
+                {label} {count > 0 && <span style={{ opacity: 0.65 }}>{count}</span>}
+              </button>
+            )
+          })}
+          <select
+            className="mk-input text-xs"
+            style={{ padding: '8px 10px', maxWidth: 200 }}
+            value={fTag ?? ''}
+            onChange={e => setFTag(e.target.value || null)}
+          >
+            <option value="">todas as tags</option>
+            {[...tagCounts.entries()].sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+              <option key={t} value={t}>{t} ({n})</option>
+            ))}
+          </select>
+          <select
+            className="mk-input text-xs"
+            style={{ padding: '8px 10px' }}
+            value={fDays ?? ''}
+            onChange={e => setFDays(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">qualquer período</option>
+            <option value="1">últimas 24h</option>
+            <option value="3">últimos 3 dias</option>
+            <option value="7">últimos 7 dias</option>
+            <option value="30">últimos 30 dias</option>
+          </select>
+          {filtersActive && (
+            <button onClick={() => { setQ(''); setFTemp(null); setFTag(null); setFDays(null) }}
+              className="text-xs underline" style={{ color: 'var(--muted)' }}>
+              limpar
+            </button>
+          )}
         </div>
 
         {/* Quadro na altura da viewport: colunas rolam POR DENTRO (vertical) e o

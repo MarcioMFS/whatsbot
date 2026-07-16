@@ -82,6 +82,10 @@ export function Conversations() {
   const [flowNodes, setFlowNodes] = useState<Record<string, FlowNodeLite[]>>({})
   const [gotoSel, setGotoSel] = useState<string | null>(null)
   const [firing, setFiring] = useState(false)
+  // filtros da lista (client-side — os dados já chegam inteiros no polling)
+  const [q, setQ] = useState('')
+  const [fStatus, setFStatus] = useState<string | null>(null)
+  const [fNode, setFNode] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const lastLenRef = useRef(0)
 
@@ -128,6 +132,26 @@ export function Conversations() {
   const conv = convs.find(c => c.id === selected) ?? null
   const nodes = (conv?.flowId && flowNodes[conv.flowId]) || []
   const currentNode = nodes.find(nd => nd.id === conv?.currentNodeId) ?? null
+
+  // etapas presentes nas conversas carregadas (rótulo do flow + contagem) — alimenta o filtro
+  const nodeCounts = new Map<string, { label: string; count: number }>()
+  for (const c of convs) {
+    if (!c.currentNodeId) continue
+    const label = (c.flowId && flowNodes[c.flowId]?.find(nd => nd.id === c.currentNodeId)?.label) || c.currentNodeId
+    nodeCounts.set(c.currentNodeId, { label, count: (nodeCounts.get(c.currentNodeId)?.count ?? 0) + 1 })
+  }
+
+  const needle = q.trim().toLowerCase()
+  const visible = convs.filter(c => {
+    if (fStatus && c.status !== fStatus) return false
+    if (fNode && c.currentNodeId !== fNode) return false
+    if (needle) {
+      const last = c.history[c.history.length - 1]?.content ?? ''
+      if (!c.phoneNumber.toLowerCase().includes(needle) && !last.toLowerCase().includes(needle)) return false
+    }
+    return true
+  })
+  const filtersActive = !!(needle || fStatus || fNode)
 
   // troca de conversa → o seletor volta a seguir o nó atual dela
   useEffect(() => { setGotoSel(null) }, [selected])
@@ -205,7 +229,9 @@ export function Conversations() {
               <MessageCircle size={22} strokeWidth={1.7} /> Conversas
             </h1>
             <p className="text-sm" style={{ color: 'var(--muted)', marginTop: 2 }}>
-              {convs.filter(c => c.status !== 'ended').length} em andamento · {convs.filter(c => c.status === 'ended').length} encerradas
+              {filtersActive
+                ? `${visible.length} de ${convs.length} conversas (filtro ativo)`
+                : `${convs.filter(c => c.status !== 'ended').length} em andamento · ${convs.filter(c => c.status === 'ended').length} encerradas`}
             </p>
           </div>
           <span className="inline-flex items-center gap-2 text-xs" style={{ color: 'var(--muted)' }}>
@@ -214,17 +240,58 @@ export function Conversations() {
           </span>
         </div>
 
+        {/* filtros: busca + status + etapa do funil */}
+        <div className="flex flex-wrap items-center gap-2 mb-4">
+          <input
+            className="mk-input text-sm"
+            style={{ padding: '8px 14px', width: 230 }}
+            placeholder="Buscar número ou mensagem…"
+            value={q}
+            onChange={e => setQ(e.target.value)}
+          />
+          {([[null, 'todas'], ...Object.entries(STATUS).map(([k, v]) => [k, v.label] as [string, string])] as Array<[string | null, string]>).map(([key, label]) => {
+            const active = fStatus === key
+            const count = key === null ? convs.length : convs.filter(c => c.status === key).length
+            return (
+              <button key={label} onClick={() => setFStatus(key)}
+                className="rounded-full text-xs font-medium transition-all"
+                style={active
+                  ? { background: 'var(--ink)', color: 'var(--paper)', padding: '7px 13px' }
+                  : { background: 'transparent', color: 'var(--ink-soft)', border: '1px solid var(--line)', padding: '6px 12px' }}>
+                {label} {count > 0 && <span style={{ opacity: 0.65 }}>{count}</span>}
+              </button>
+            )
+          })}
+          <select
+            className="mk-input text-xs"
+            style={{ padding: '8px 10px', maxWidth: 240 }}
+            value={fNode ?? ''}
+            onChange={e => setFNode(e.target.value || null)}
+          >
+            <option value="">todas as etapas</option>
+            {[...nodeCounts.entries()].sort((a, b) => b[1].count - a[1].count).map(([id, v]) => (
+              <option key={id} value={id}>{v.label} ({v.count})</option>
+            ))}
+          </select>
+          {filtersActive && (
+            <button onClick={() => { setQ(''); setFStatus(null); setFNode(null) }}
+              className="text-xs underline" style={{ color: 'var(--muted)' }}>
+              limpar
+            </button>
+          )}
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* lista de conversas */}
           <div className="space-y-2 overflow-y-auto pr-0.5" style={{ maxHeight: '72vh' }}>
             {loading && <p className="text-sm" style={{ color: 'var(--muted)' }}>Carregando…</p>}
-            {!loading && convs.length === 0 && (
+            {!loading && visible.length === 0 && (
               <MkCard style={{ padding: '64px 0', textAlign: 'center', color: 'var(--muted)' }}>
                 <MessageCircle size={32} strokeWidth={1.3} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                <p className="text-sm">Nenhuma conversa ativa agora</p>
+                <p className="text-sm">{convs.length === 0 ? 'Nenhuma conversa ativa agora' : 'Nada com esses filtros'}</p>
               </MkCard>
             )}
-            {convs.map(c => {
+            {visible.map(c => {
               const last = c.history[c.history.length - 1]
               const isSel = selected === c.id
               return (
@@ -239,8 +306,13 @@ export function Conversations() {
                   <p className="text-xs mt-1.5 truncate" style={{ color: 'var(--ink-soft)' }}>
                     {last ? last.content : '—'}
                   </p>
-                  <div className="mt-2">
+                  <div className="mt-2 flex items-center gap-2">
                     <StatusDot status={c.status} />
+                    {c.currentNodeId && nodeCounts.get(c.currentNodeId) && (
+                      <span className="text-xs truncate" style={{ color: 'var(--muted)' }}>
+                        · {nodeCounts.get(c.currentNodeId)!.label}
+                      </span>
+                    )}
                   </div>
                 </MkCard>
               )
