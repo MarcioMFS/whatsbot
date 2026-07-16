@@ -119,7 +119,8 @@ def delay(id, x, y, seconds=3):
     return n(id, "delay", x, y, {"label": "Pausa", "seconds": seconds})
 
 # ── Copy v9 — roteiro problema-primeiro (Kely/Marcio 15/07) ───────────────────
-# Estrutura: dor → solução(capa) → prova → amostra real → âncora 47,90→27,90 → "quero resolver"
+# Estrutura: dor → solução(capa+materiais) → prova → amostra (vídeo+planos+atividades)
+# → âncora 47,90→19,90 → "quero resolver" → pix; objeção pós-pix → downsell 14,90
 # {{saudacao_nome}} = ", Maria" (1º nome do pushName do WhatsApp) ou vazio →
 # "Oi, Maria!" / "Oi!" — o motor garante que nunca sai vírgula órfã nem template cru.
 T1_VARIACOES = [
@@ -177,27 +178,30 @@ CAP_VIDEO = (
 T6_PRECO = (
     "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente "
     "fica disponível por R$ 47,90.\n\n"
-    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 27,90*, "
+    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 19,90*, "
     "com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada "
     "centavo. Risco zero pra você.\n\n"
     "Isso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema "
     "que te consome toda semana."
 )
 T7_FECHO = (
-    "Essa condição de *R$ 27,90* é válida só pra quem está nessa conversa comigo agora — "
+    "Essa condição de *R$ 19,90* é válida só pra quem está nessa conversa comigo agora — "
     "depois volta pro valor cheio.\n\n"
     "Você prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver "
     "isso ainda hoje?\n\n"
     "Me diz *quero resolver* que eu já libero seu acesso."
 )
 T_PIX_AFTER = (
-    "Fechado! 🎉 Vou te passar o Pix de *R$ 27,90* aqui embaixo — assim que pagar, me envia "
+    "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
 )
-T_OBJ = (
-    "Entendo perfeitamente, professora 💙 Sem pressa: seu acesso fica guardado aqui.\n\n"
-    "Quando ficar bom pra você, me avisa que eu te mando o Pix de novo — e a *garantia de "
-    "30 dias* continua valendo."
+# Downsell: objeção de preço/agenda pós-pix → oferta final R$ 14,90 imediata
+T_DOWNSELL = (
+    "Entendo perfeitamente, professora 💙 Então deixa eu fazer uma coisa que eu não faço "
+    "sempre: consigo baixar pra *R$ 14,90* agora, só nessa conversa — com a mesma *garantia "
+    "de 30 dias*.\n\n"
+    "Vou te mandar o Pix aqui embaixo. Quando pagar, me envia o *print do comprovante* que "
+    "eu libero seu acesso na hora ⤵️"
 )
 T_REJ = (
     "Hmm, não consegui confirmar esse comprovante 🤔\n\n"
@@ -223,9 +227,14 @@ RM_SOFT = (
 )
 RM_REOFFER = (
     "Que bom te ver por aqui de novo! 😊\n\n"
-    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 27,90* pelo acesso "
+    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 19,90* pelo acesso "
     "completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
 )
+
+# Legendas das imagens de produto (bloco solução + bloco amostra)
+CAP_MATERIAIS = "São mais de 1.000 materiais prontos e editáveis, tudo organizado 🤩"
+CAP_PLANOS = "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
+CAP_ATIVIDADES = "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
 
 # ── Graph v9 ──────────────────────────────────────────────────────────────────
 Y = [50 + i * 150 for i in range(30)]
@@ -255,29 +264,32 @@ nodes = [
     n("t1", "distributor", 100, Y[2], {"label": "Abertura problema (3 variações)", "variations": T1_VARIACOES}),
     capture("c_faixa", 100, Y[3], "Aguardar faixa", "faixa_etaria", timeout=20, extra=FAIXA_EXTRA),
 
-    # E2-E5 — dor → solução+capa → prova → convite da amostra
+    # E2-E5 — dor → solução (capa + materiais) → prova → convite da amostra
     text("t2", 100, Y[4], "Nomeando a dor", T2_DOR),
     text("t3", 100, Y[5], "Solução", T3_SOLUCAO),
     image("img_capa", 100, Y[6], "Capa do kit", IMG["capa"], caption=CAP_CAPA),
+    image("img_materiais", 250, Y[6], "Mockup 1.000 materiais", IMG["materiais"], caption=CAP_MATERIAIS),
     text("t4", 100, Y[7], "Prova social", T4_PROVA),
 ] + ([image("img_print1", 250, Y[7], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
     text("t5", 100, Y[8], "Convite amostra", T5_ASK),
     capture("c_amostra", 100, Y[9], "Aguardar sim amostra", "quer_amostra", timeout=20),
 
-    # E5 — amostra real em VÍDEO (substituiu as 3 imagens em 2026-07-16)
+    # E5 — amostra completa: VÍDEO + imagens de produto (planos BNCC + atividades)
     n("video_amostra", "image", 100, Y[10], {
         "label": "Amostra em vídeo", "mediaUrl": IMG["amostra_video"],
         "mediaType": "video", "caption": CAP_VIDEO}),
+    image("img_planos", 250, Y[10], "Plano de aula BNCC", IMG["planos"], caption=CAP_PLANOS),
+    image("img_atividades", 400, Y[10], "Atividades práticas", IMG["atividades"], caption=CAP_ATIVIDADES),
 
-    # E6-E7 — âncora 47,90→27,90 + fechamento "quero resolver"
-    text("t6", 100, Y[11], "Âncora 47,90→27,90", T6_PRECO),
+    # E6-E7 — âncora 47,90→19,90 + fechamento "quero resolver"
+    text("t6", 100, Y[11], "Âncora 47,90→19,90", T6_PRECO),
     text("t7", 100, Y[12], "Fechamento", T7_FECHO),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
 
-    # Pix 27,90 + comprovante (mesma espinha validada)
+    # Pix 19,90 + comprovante (mesma espinha validada)
     n("pix_main", "pix", 100, Y[14], {
-        "label": "Pix R$27,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
-        "amount": "27,90", "description": "Kit Aula Pronta Infantil — condição especial",
+        "label": "Pix R$19,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "19,90", "description": "Kit Aula Pronta Infantil — condição especial",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
     n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
@@ -289,7 +301,11 @@ nodes = [
                           "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",
                           "depois eu", "mês que vem", "mes que vem", "quando receber", "semana que vem"]},
             {"handle": "validate", "label": "Comprovante/resto", "isDefault": True}]}),
-    text("t_obj", 400, Y[17], "Acolhe objeção", T_OBJ),
+    text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
+    n("pix_down", "pix", 550, Y[17], {
+        "label": "Pix downsell R$14,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "amount": "14,90", "description": "Kit Aula Pronta Infantil — oferta final",
+        "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     n("v1", "ai_validate_receipt", 100, Y[18], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
     n("pc", "payment_confirmed", 250, Y[18], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),
     n("label_pago", "label", 400, Y[18], {"label": "Etiqueta Pago", "labelName": "Pago", "labelId": "4"}),
@@ -317,15 +333,15 @@ nodes = [
     capture("c_am_r", 400, Y[10], "RM amostra retorno", "rm_amostra", timeout=720),
     text("rm_s3", 400, Y[13], "RM suave fechamento", RM_SOFT),
     capture("c_f_r", 400, Y[14], "RM fechamento retorno", "rm_fechamento", timeout=720),
-    text("t_reoffer", 550, Y[14], "Reoferta 27,90", RM_REOFFER),
+    text("t_reoffer", 550, Y[14], "Reoferta 19,90", RM_REOFFER),
     text("rm_s4", 400, Y[16], "RM suave pós-pix", RM_SOFT),
     capture("c5_r", 550, Y[16], "RM pós-pix retorno", "rm_pospix", timeout=720),
 ]
 
 chain = [
-    "tag_entry", "t1", "c_faixa", "t2", "t3", "img_capa", "t4",
+    "tag_entry", "t1", "c_faixa", "t2", "t3", "img_capa", "img_materiais", "t4",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
-    "t5", "c_amostra", "video_amostra",
+    "t5", "c_amostra", "video_amostra", "img_planos", "img_atividades",
     "t6", "t7", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
@@ -361,9 +377,9 @@ edges += [
     e("c_am_r", "video_amostra"), e("c_am_r", "end", "timeout"),
     e("c_fecho", "rm_s3", "timeout"), e("rm_s3", "c_f_r"),
     e("c_f_r", "t_reoffer"), e("t_reoffer", "pix_main"), e("c_f_r", "end", "timeout"),
-    # pós-pix: triagem (objeção acolhe e segue aguardando; resto valida)
+    # pós-pix: triagem (objeção de preço/agenda → downsell 14,90 imediato; resto valida)
     e("c5", "classify_pos"),
-    e("classify_pos", "t_obj", "objection"), e("t_obj", "c5"),
+    e("classify_pos", "t_downsell", "objection"), e("t_downsell", "pix_down"), e("pix_down", "c5"),
     e("classify_pos", "v1", "validate"),
     e("c5", "rm_s4", "timeout"), e("rm_s4", "c5_r"),
     e("c5_r", "classify_pos"), e("c5_r", "end", "timeout"),
@@ -393,7 +409,7 @@ else:
 
 print(f"""
 Próximos passos:
-  1. Pix: equipenotadez@jim.com (valor único R$27,90, âncora R$47,90) — comprovante validado por IA.
+  1. Pix: equipenotadez@jim.com (R$19,90, âncora R$47,90, downsell R$14,90 na objeção) — comprovante validado por IA.
   2. Quando tiver prints REAIS de depoimento: suba 05..08-printN.jpg, HAS_PRINTS=True e rode de novo.
   3. Anúncio click-to-WhatsApp com texto pré-preenchido contendo: {KEYWORDS[0]!r}
      Ex.: "Oi! Quero saber mais sobre o Kit Aula Pronta 💙"

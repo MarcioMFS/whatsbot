@@ -157,6 +157,19 @@
    }
   },
   {
+   "id": "img_materiais",
+   "type": "image",
+   "position": {
+    "x": 250,
+    "y": 950
+   },
+   "data": {
+    "label": "Mockup 1.000 materiais",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/02-materiais.jpg",
+    "caption": "São mais de 1.000 materiais prontos e editáveis, tudo organizado 🤩"
+   }
+  },
+  {
    "id": "t4",
    "type": "text_message",
    "position": {
@@ -216,6 +229,32 @@
    }
   },
   {
+   "id": "img_planos",
+   "type": "image",
+   "position": {
+    "x": 250,
+    "y": 1550
+   },
+   "data": {
+    "label": "Plano de aula BNCC",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/03-planos-bncc.jpg",
+    "caption": "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
+   }
+  },
+  {
+   "id": "img_atividades",
+   "type": "image",
+   "position": {
+    "x": 400,
+    "y": 1550
+   },
+   "data": {
+    "label": "Atividades práticas",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/04-atividades.jpg",
+    "caption": "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
+   }
+  },
+  {
    "id": "t6",
    "type": "text_message",
    "position": {
@@ -223,8 +262,8 @@
     "y": 1700
    },
    "data": {
-    "label": "Âncora 47,90→27,90",
-    "message": "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente fica disponível por R$ 47,90.\n\nMas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 27,90*, com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada centavo. Risco zero pra você.\n\nIsso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema que te consome toda semana."
+    "label": "Âncora 47,90→19,90",
+    "message": "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente fica disponível por R$ 47,90.\n\nMas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 19,90*, com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada centavo. Risco zero pra você.\n\nIsso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema que te consome toda semana."
    }
   },
   {
@@ -236,7 +275,7 @@
    },
    "data": {
     "label": "Fechamento",
-    "message": "Essa condição de *R$ 27,90* é válida só pra quem está nessa conversa comigo agora — depois volta pro valor cheio.\n\nVocê prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver isso ainda hoje?\n\nMe diz *quero resolver* que eu já libero seu acesso."
+    "message": "Essa condição de *R$ 19,90* é válida só pra quem está nessa conversa comigo agora — depois volta pro valor cheio.\n\nVocê prefere continuar perdendo os domingos montando tudo do zero, ou prefere resolver isso ainda hoje?\n\nMe diz *quero resolver* que eu já libero seu acesso."
    }
   },
   {
@@ -270,10 +309,10 @@
     "y": 2150
    },
    "data": {
-    "label": "Pix R$27,90",
+    "label": "Pix R$19,90",
     "pixKey": "equipenotadez@jim.com",
     "recipientName": "Equipe Nota Dez",
-    "amount": "27,90",
+    "amount": "19,90",
     "description": "Kit Aula Pronta Infantil — condição especial",
     "expiresInMinutes": 120,
     "outputVariable": "paymentIntentId"
@@ -288,7 +327,7 @@
    },
    "data": {
     "label": "Pedir comprovante",
-    "message": "Fechado! 🎉 Vou te passar o Pix de *R$ 27,90* aqui embaixo — assim que pagar, me envia o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
+    "message": "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
    }
   },
   {
@@ -368,15 +407,32 @@
    }
   },
   {
-   "id": "t_obj",
+   "id": "t_downsell",
    "type": "text_message",
    "position": {
     "x": 400,
     "y": 2600
    },
    "data": {
-    "label": "Acolhe objeção",
-    "message": "Entendo perfeitamente, professora 💙 Sem pressa: seu acesso fica guardado aqui.\n\nQuando ficar bom pra você, me avisa que eu te mando o Pix de novo — e a *garantia de 30 dias* continua valendo."
+    "label": "Downsell 14,90",
+    "message": "Entendo perfeitamente, professora 💙 Então deixa eu fazer uma coisa que eu não faço sempre: consigo baixar pra *R$ 14,90* agora, só nessa conversa — com a mesma *garantia de 30 dias*.\n\nVou te mandar o Pix aqui embaixo. Quando pagar, me envia o *print do comprovante* que eu libero seu acesso na hora ⤵️"
+   }
+  },
+  {
+   "id": "pix_down",
+   "type": "pix",
+   "position": {
+    "x": 550,
+    "y": 2600
+   },
+   "data": {
+    "label": "Pix downsell R$14,90",
+    "pixKey": "equipenotadez@jim.com",
+    "recipientName": "Equipe Nota Dez",
+    "amount": "14,90",
+    "description": "Kit Aula Pronta Infantil — oferta final",
+    "expiresInMinutes": 120,
+    "outputVariable": "paymentIntentId"
    }
   },
   {
@@ -830,8 +886,8 @@
     "y": 2150
    },
    "data": {
-    "label": "Reoferta 27,90",
-    "message": "Que bom te ver por aqui de novo! 😊\n\nAinda consigo garantir pra você a condição que te mostrei: *R$ 27,90* pelo acesso completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
+    "label": "Reoferta 19,90",
+    "message": "Que bom te ver por aqui de novo! 😊\n\nAinda consigo garantir pra você a condição que te mostrei: *R$ 19,90* pelo acesso completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
    }
   },
   {
@@ -905,8 +961,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-img_capa-t4",
+   "id": "e-img_capa-img_materiais",
    "source": "img_capa",
+   "target": "img_materiais",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_materiais-t4",
+   "source": "img_materiais",
    "target": "t4",
    "sourceHandle": null,
    "targetHandle": null
@@ -933,8 +996,22 @@
    "targetHandle": null
   },
   {
-   "id": "e-video_amostra-t6",
+   "id": "e-video_amostra-img_planos",
    "source": "video_amostra",
+   "target": "img_planos",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_planos-img_atividades",
+   "source": "img_planos",
+   "target": "img_atividades",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_atividades-t6",
+   "source": "img_atividades",
    "target": "t6",
    "sourceHandle": null,
    "targetHandle": null
@@ -1122,15 +1199,22 @@
    "targetHandle": null
   },
   {
-   "id": "e-classify_pos-t_obj-objection",
+   "id": "e-classify_pos-t_downsell-objection",
    "source": "classify_pos",
-   "target": "t_obj",
+   "target": "t_downsell",
    "sourceHandle": "objection",
    "targetHandle": null
   },
   {
-   "id": "e-t_obj-c5",
-   "source": "t_obj",
+   "id": "e-t_downsell-pix_down",
+   "source": "t_downsell",
+   "target": "pix_down",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-pix_down-c5",
+   "source": "pix_down",
    "target": "c5",
    "sourceHandle": null,
    "targetHandle": null

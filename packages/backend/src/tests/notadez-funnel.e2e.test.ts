@@ -214,7 +214,7 @@ test('grafo: edges íntegras, captures com timeout, regex compila, sem CAIXA ALT
 
 // ─── 1. Caminho feliz completo (com as pegadinhas que já quebraram) ──────────
 
-test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLVER → pix 27,90 → comprovante → entrega', async () => {
+test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLVER → pix 19,90 → comprovante → entrega', async () => {
   const r = rig()
 
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'Olá! Posso ter mais informações sobre isso?')
@@ -234,14 +234,14 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   assert.equal(vids.length, 1, 'amostra em vídeo enviada')
   assert.ok(vids[0].mediaUrl.includes('amostra-video'), 'URL do vídeo de amostra')
   assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora R$47,90 presente')
-  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'condição 27,90 presente')
+  assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'condição 19,90 presente')
 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER')
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   const last = r.msgs.all[r.msgs.all.length - 1]
   assert.equal(last, 'equipenotadez@jim.com', 'chave pix isolada na última bolha (copiável)')
-  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'pix no valor 27,90')
+  assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
   r.msgs.clear()
@@ -386,7 +386,7 @@ test('goto adianta o funil: lead na faixa vai direto pro pix — chave na últim
   await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix isolada na última bolha')
-  assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'pix no valor 27,90')
+  assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
 })
 
 test('goto revive conversa em handoff: disparar um nó devolve pro bot naquele ponto', async () => {
@@ -421,4 +421,17 @@ test('pushName inutilizável ("👑 .") → saudação neutra, sem vírgula órf
   const open = r.msgs.all[0] ?? ''
   assert.ok(/^(Oi|Olá)! /.test(open), `saudação neutra esperada: "${open.slice(0, 40)}"`)
   assert.ok(!open.includes('{{'), 'template cru vazou pro cliente')
+})
+
+// ─── 10. Downsell: objeção de preço pós-pix → oferta final 14,90 imediata ─────
+
+test('objeção "tá caro" no pós-pix → downsell 14,90 com pix novo, volta a aguardar comprovante', async () => {
+  const r = rig()
+  await walkTo(r, 'c5')
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'tá caro, não tenho esse valor agora')
+  assert.ok(r.msgs.all.some(m => m.includes('14,90')), 'downsell 14,90 oferecido')
+  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix do downsell na última bolha')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
+  assert.ok(!r.msgs.all.some(m => m.includes('Pagamento confirmado')), 'objeção nunca confirma pagamento')
 })
