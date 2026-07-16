@@ -230,7 +230,9 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← case-insensitive
   assert.equal(convOf(r)?.currentNodeId, 'c_fecho', '"SIM" maiúsculo avança pra oferta')
-  assert.equal(r.msgs.media.length, 3, '3 páginas reais de amostra')
+  const vids = r.msgs.media.filter(m => m.mediaType === 'video')
+  assert.equal(vids.length, 1, 'amostra em vídeo enviada')
+  assert.ok(vids[0].mediaUrl.includes('amostra-video'), 'URL do vídeo de amostra')
   assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora R$47,90 presente')
   assert.ok(r.msgs.all.some(m => m.includes('27,90')), 'condição 27,90 presente')
 

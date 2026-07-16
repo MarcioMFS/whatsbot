@@ -177,7 +177,7 @@
    },
    "data": {
     "label": "Convite amostra",
-    "message": "Quer ver como fica na prática? Separei uma amostra real do que você recebe — atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* que eu te mostro 👇"
+    "message": "Quer ver como fica na prática? Gravei um vídeo mostrando a amostra real do que você recebe — atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* que eu te mando 👇"
    }
   },
   {
@@ -202,42 +202,17 @@
    }
   },
   {
-   "id": "img_am1",
+   "id": "video_amostra",
    "type": "image",
    "position": {
     "x": 100,
     "y": 1550
    },
    "data": {
-    "label": "Amostra labirinto",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-1-labirinto.jpg",
-    "caption": "Página real do acervo — atividade lúdica de labirinto 🌟"
-   }
-  },
-  {
-   "id": "img_am2",
-   "type": "image",
-   "position": {
-    "x": 250,
-    "y": 1550
-   },
-   "data": {
-    "label": "Amostra traçar",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-2-tracar.jpg",
-    "caption": "Página real — traçar e escrever, pronta pra imprimir ✏️"
-   }
-  },
-  {
-   "id": "img_am3",
-   "type": "image",
-   "position": {
-    "x": 400,
-    "y": 1550
-   },
-   "data": {
-    "label": "Amostra rotina",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-3-rotina.jpg",
-    "caption": "Modelo de rotina diária pronto 🕐\n\nRepara: não é modelo genérico. É material pronto pra você só personalizar com o nome da turma e usar."
+    "label": "Amostra em vídeo",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-video.mp4",
+    "mediaType": "video",
+    "caption": "Olha na prática 🎥 Páginas reais do acervo — atividade lúdica, traçado e modelo de rotina, tudo pronto pra você só personalizar com o nome da turma e imprimir."
    }
   },
   {
@@ -951,29 +926,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-c_amostra-img_am1",
+   "id": "e-c_amostra-video_amostra",
    "source": "c_amostra",
-   "target": "img_am1",
+   "target": "video_amostra",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_am1-img_am2",
-   "source": "img_am1",
-   "target": "img_am2",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-img_am2-img_am3",
-   "source": "img_am2",
-   "target": "img_am3",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-img_am3-t6",
-   "source": "img_am3",
+   "id": "e-video_amostra-t6",
+   "source": "video_amostra",
    "target": "t6",
    "sourceHandle": null,
    "targetHandle": null
@@ -1105,9 +1066,9 @@
    "targetHandle": null
   },
   {
-   "id": "e-c_am_r-img_am1",
+   "id": "e-c_am_r-video_amostra",
    "source": "c_am_r",
-   "target": "img_am1",
+   "target": "video_amostra",
    "sourceHandle": null,
    "targetHandle": null
   },

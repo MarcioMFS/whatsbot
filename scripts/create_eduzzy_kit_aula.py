@@ -71,9 +71,11 @@ IMG = {
     "print2":    f"{MEDIA_BASE}/06-print2.jpg",  # TODO print real
     "print3":    f"{MEDIA_BASE}/07-print3.jpg",  # TODO print real
     "print4":    f"{MEDIA_BASE}/08-print4.jpg",  # TODO print real
-    "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit
+    "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit (legado, fora da corrente)
     "amostra2":  f"{MEDIA_BASE}/amostra-2-tracar.jpg",
     "amostra3":  f"{MEDIA_BASE}/amostra-3-rotina.jpg",
+    # vídeo de amostra real (720p ~9MB, h264+aac; original em /root/work/.claude-uploads/)
+    "amostra_video": f"{MEDIA_BASE}/amostra-video.mp4",
     "garantia":  f"{MEDIA_BASE}/09-garantia.jpg",
     "cupom":     f"{MEDIA_BASE}/10-cupom.jpg",
 }
@@ -164,15 +166,13 @@ T4_PROVA = (
      "semana com planejamento usando esse acervo.")
 )
 T5_ASK = (
-    "Quer ver como fica na prática? Separei uma amostra real do que você recebe — "
-    "atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* que eu te mostro 👇"
+    "Quer ver como fica na prática? Gravei um vídeo mostrando a amostra real do que você "
+    "recebe — atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* "
+    "que eu te mando 👇"
 )
-CAP_AM1 = "Página real do acervo — atividade lúdica de labirinto 🌟"
-CAP_AM2 = "Página real — traçar e escrever, pronta pra imprimir ✏️"
-CAP_AM3 = (
-    "Modelo de rotina diária pronto 🕐\n\n"
-    "Repara: não é modelo genérico. É material pronto pra você só personalizar com o nome "
-    "da turma e usar."
+CAP_VIDEO = (
+    "Olha na prática 🎥 Páginas reais do acervo — atividade lúdica, traçado e modelo de "
+    "rotina, tudo pronto pra você só personalizar com o nome da turma e imprimir."
 )
 T6_PRECO = (
     "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente "
@@ -264,10 +264,10 @@ nodes = [
     text("t5", 100, Y[8], "Convite amostra", T5_ASK),
     capture("c_amostra", 100, Y[9], "Aguardar sim amostra", "quer_amostra", timeout=20),
 
-    # E5 — amostra real (3 páginas do kit)
-    image("img_am1", 100, Y[10], "Amostra labirinto", IMG["amostra1"], caption=CAP_AM1),
-    image("img_am2", 250, Y[10], "Amostra traçar", IMG["amostra2"], caption=CAP_AM2),
-    image("img_am3", 400, Y[10], "Amostra rotina", IMG["amostra3"], caption=CAP_AM3),
+    # E5 — amostra real em VÍDEO (substituiu as 3 imagens em 2026-07-16)
+    n("video_amostra", "image", 100, Y[10], {
+        "label": "Amostra em vídeo", "mediaUrl": IMG["amostra_video"],
+        "mediaType": "video", "caption": CAP_VIDEO}),
 
     # E6-E7 — âncora 47,90→27,90 + fechamento "quero resolver"
     text("t6", 100, Y[11], "Âncora 47,90→27,90", T6_PRECO),
@@ -325,7 +325,7 @@ nodes = [
 chain = [
     "tag_entry", "t1", "c_faixa", "t2", "t3", "img_capa", "t4",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
-    "t5", "c_amostra", "img_am1", "img_am2", "img_am3",
+    "t5", "c_amostra", "video_amostra",
     "t6", "t7", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
@@ -358,7 +358,7 @@ edges += [
     e("c_faixa", "rm_s1", "timeout"), e("rm_s1", "c_faixa_r"),
     e("c_faixa_r", "t2"), e("c_faixa_r", "end", "timeout"),
     e("c_amostra", "rm_s2", "timeout"), e("rm_s2", "c_am_r"),
-    e("c_am_r", "img_am1"), e("c_am_r", "end", "timeout"),
+    e("c_am_r", "video_amostra"), e("c_am_r", "end", "timeout"),
     e("c_fecho", "rm_s3", "timeout"), e("rm_s3", "c_f_r"),
     e("c_f_r", "t_reoffer"), e("t_reoffer", "pix_main"), e("c_f_r", "end", "timeout"),
     # pós-pix: triagem (objeção acolhe e segue aguardando; resto valida)
