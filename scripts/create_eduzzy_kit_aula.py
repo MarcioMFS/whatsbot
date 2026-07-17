@@ -188,6 +188,31 @@ T_PIX_AFTER = (
     "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
 )
+# IA de dúvidas pós-pix: pergunta que não é objeção/ack/pagamento cai num FAQ
+# TRAVADO da Juliana (única fonte da verdade; nunca preço, nunca "confirmado";
+# fora do FAQ → chama a equipe). Erro de IA → cai no aguardo padrão (t_ack).
+FAQ_PROMPT = (
+    "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de "
+    "educação infantil que acabou de receber o Pix do Kit Aula Pronta e fez uma pergunta.\n\n"
+    "FATOS (única fonte da verdade — não invente NADA além disso):\n"
+    "- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à "
+    "BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de "
+    "rotina, relatórios e pareceres.\n"
+    "- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n"
+    "- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n"
+    "- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e "
+    "cola' — o valor já vai preenchido.\n"
+    "- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o "
+    "comprovante for confirmado.\n"
+    "- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\n"
+    "REGRAS OBRIGATÓRIAS:\n"
+    "- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n"
+    "- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n"
+    "- NUNCA diga que o pagamento foi confirmado ou recebido.\n"
+    "- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n"
+    "- Feche sempre lembrando com carinho: quando pagar, é só mandar o print do comprovante aqui."
+)
+
 # Confirmação neutra pós-pix ("ok", "vou pagar") → aguardo simpático, NUNCA o
 # validador de comprovante (bug real 2026-07-17: "Ok" levou rejeição de print inexistente)
 T_ACK = (
@@ -299,7 +324,13 @@ nodes = [
                           "combinado", "perfeito", "vou pagar", "vou fazer", "ja vou", "vou sim",
                           "um momento", "um minuto", "so um momento", "aguarda", "ja mando",
                           "ja envio", "obrigada", "obrigado", "valeu", "👍", "🙏"]},
-            {"handle": "validate", "label": "Comprovante/resto", "isDefault": True}]}),
+            {"handle": "validate", "label": "Pagou/comprovante",
+             "patterns": ["paguei", "ja paguei", "fiz o pix", "pix feito", "ja fiz", "enviei",
+                          "mandei", "comprovante", "print", "transferi"]},
+            {"handle": "question", "label": "Dúvida → IA FAQ", "isDefault": True}]}),
+    n("ai_faq", "ai_response", 700, Y[18], {
+        "label": "IA: dúvidas pós-pix (FAQ travado)", "systemPrompt": FAQ_PROMPT,
+        "useHistory": True, "temperature": 0.4, "maxTokens": 220}),
     text("t_ack", 250, Y[19], "Aguardo do comprovante", T_ACK),
     text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
     n("pix_down", "pix", 550, Y[17], {
@@ -388,6 +419,9 @@ edges += [
     e("classify_pos", "t_downsell", "objection"), e("t_downsell", "pix_down"), e("pix_down", "c5"),
     e("classify_pos", "t_ack", "ack"), e("t_ack", "c5"),
     e("classify_pos", "v1", "validate"),
+    # dúvida → IA FAQ → volta a esperar o comprovante; IA fora do ar → aguardo padrão
+    e("classify_pos", "ai_faq", "question"),
+    e("ai_faq", "c5", "success"), e("ai_faq", "t_ack", "error"),
     # retorno do RM passa pelo desvio de print (cond_receipt) — comprovante nunca cai na triagem
     e("c5", "rm_s4", "timeout"), e("rm_s4", "c5_r"),
     e("c5_r", "cond_receipt"), e("c5_r", "rm_last", "timeout"),

@@ -439,10 +439,41 @@
      },
      {
       "handle": "validate",
-      "label": "Comprovante/resto",
+      "label": "Pagou/comprovante",
+      "patterns": [
+       "paguei",
+       "ja paguei",
+       "fiz o pix",
+       "pix feito",
+       "ja fiz",
+       "enviei",
+       "mandei",
+       "comprovante",
+       "print",
+       "transferi"
+      ]
+     },
+     {
+      "handle": "question",
+      "label": "Dúvida → IA FAQ",
       "isDefault": true
      }
     ]
+   }
+  },
+  {
+   "id": "ai_faq",
+   "type": "ai_response",
+   "position": {
+    "x": 700,
+    "y": 2750
+   },
+   "data": {
+    "label": "IA: dúvidas pós-pix (FAQ travado)",
+    "systemPrompt": "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de educação infantil que acabou de receber o Pix do Kit Aula Pronta e fez uma pergunta.\n\nFATOS (única fonte da verdade — não invente NADA além disso):\n- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de rotina, relatórios e pareceres.\n- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e cola' — o valor já vai preenchido.\n- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o comprovante for confirmado.\n- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\nREGRAS OBRIGATÓRIAS:\n- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n- NUNCA diga que o pagamento foi confirmado ou recebido.\n- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n- Feche sempre lembrando com carinho: quando pagar, é só mandar o print do comprovante aqui.",
+    "useHistory": true,
+    "temperature": 0.4,
+    "maxTokens": 220
    }
   },
   {
@@ -1318,6 +1349,27 @@
    "source": "classify_pos",
    "target": "v1",
    "sourceHandle": "validate",
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_pos-ai_faq-question",
+   "source": "classify_pos",
+   "target": "ai_faq",
+   "sourceHandle": "question",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ai_faq-c5-success",
+   "source": "ai_faq",
+   "target": "c5",
+   "sourceHandle": "success",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ai_faq-t_ack-error",
+   "source": "ai_faq",
+   "target": "t_ack",
+   "sourceHandle": "error",
    "targetHandle": null
   },
   {

@@ -478,3 +478,25 @@ test('buildPixBrCode gera payload EMV byte a byte igual ao validado no banco', (
   // acento no nome não pode divergir length/CRC — sai ASCII
   assert.ok(!buildPixBrCode({ key: 'x@y.com', merchantName: 'José São João', amountCentavos: 100 }).includes('é'))
 })
+
+// ─── 13. IA FAQ pós-pix: pergunta → resposta travada; jamais confirma nem valida ─
+
+test('pergunta pós-pix ("como recebo o material?") → IA responde e volta a esperar comprovante', async () => {
+  const r = rig()
+  await walkTo(r, 'c5')
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'como recebo o material?')
+  assert.ok(r.msgs.all.includes('stub'), 'resposta da IA enviada (stub do rig)')
+  assert.ok(!r.msgs.all.some(m => m.includes('Pagamento confirmado')), 'IA jamais confirma pagamento')
+  assert.ok(!r.msgs.all.some(m => m.includes('não consegui confirmar')), 'pergunta não cai no validador de comprovante')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
+})
+
+test('"já paguei" continua indo pro validador (patterns explícitos), não pra IA', async () => {
+  const r = rig()
+  await walkTo(r, 'c5')
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'já paguei')
+  assert.ok(!r.msgs.all.includes('stub'), 'não passou pela IA')
+  assert.ok(r.msgs.all.some(m => m.includes('não consegui confirmar')), 'validador pede o print')
+})
