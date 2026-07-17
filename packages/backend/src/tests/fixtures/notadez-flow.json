@@ -345,7 +345,7 @@
    "data": {
     "label": "Aguardar comprovante",
     "variableName": "pos_checkout",
-    "timeoutMinutes": 180,
+    "timeoutMinutes": 40,
     "timeoutBehavior": "suspend",
     "suspendedReason": "eduzzy_pos_checkout",
     "recoveryHints": [
@@ -829,14 +829,15 @@
   },
   {
    "id": "rm_s1",
-   "type": "text_message",
+   "type": "image",
    "position": {
     "x": 400,
     "y": 500
    },
    "data": {
-    "label": "RM suave faixa",
-    "message": "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o planejamento dessa semana? 😊\n\nSe ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito mais simples que eu te falei."
+    "label": "RM voz: faixa",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-rm-geral.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -862,14 +863,15 @@
   },
   {
    "id": "rm_s2",
-   "type": "text_message",
+   "type": "image",
    "position": {
     "x": 400,
     "y": 1400
    },
    "data": {
-    "label": "RM suave amostra",
-    "message": "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o planejamento dessa semana? 😊\n\nSe ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito mais simples que eu te falei."
+    "label": "RM voz: amostra",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-rm-geral.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -895,14 +897,15 @@
   },
   {
    "id": "rm_s3",
-   "type": "text_message",
+   "type": "image",
    "position": {
     "x": 400,
     "y": 2000
    },
    "data": {
-    "label": "RM suave fechamento",
-    "message": "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o planejamento dessa semana? 😊\n\nSe ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito mais simples que eu te falei."
+    "label": "RM voz: fechamento",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-rm-fecho.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -928,14 +931,15 @@
   },
   {
    "id": "rm_s4",
-   "type": "text_message",
+   "type": "image",
    "position": {
     "x": 400,
     "y": 2450
    },
    "data": {
-    "label": "RM suave pós-pix",
-    "message": "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o planejamento dessa semana? 😊\n\nSe ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito mais simples que eu te falei."
+    "label": "RM voz: pós-pix",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-rm-pix.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -951,6 +955,40 @@
     "timeoutMinutes": 720,
     "timeoutBehavior": "suspend",
     "suspendedReason": "eduzzy_rm_pospix",
+    "recoveryHints": [
+     "sim",
+     "quero",
+     "kit",
+     "professora"
+    ]
+   }
+  },
+  {
+   "id": "rm_last",
+   "type": "image",
+   "position": {
+    "x": 700,
+    "y": 2450
+   },
+   "data": {
+    "label": "RM voz: despedida",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-rm-last.ogg",
+    "mediaType": "audio"
+   }
+  },
+  {
+   "id": "c5_r2",
+   "type": "capture",
+   "position": {
+    "x": 850,
+    "y": 2450
+   },
+   "data": {
+    "label": "RM despedida retorno",
+    "variableName": "rm_despedida",
+    "timeoutMinutes": 720,
+    "timeoutBehavior": "suspend",
+    "suspendedReason": "eduzzy_rm_despedida",
     "recoveryHints": [
      "sim",
      "quero",
@@ -1291,15 +1329,36 @@
    "targetHandle": null
   },
   {
-   "id": "e-c5_r-classify_pos",
+   "id": "e-c5_r-cond_receipt",
    "source": "c5_r",
-   "target": "classify_pos",
+   "target": "cond_receipt",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-c5_r-end-timeout",
+   "id": "e-c5_r-rm_last-timeout",
    "source": "c5_r",
+   "target": "rm_last",
+   "sourceHandle": "timeout",
+   "targetHandle": null
+  },
+  {
+   "id": "e-rm_last-c5_r2",
+   "source": "rm_last",
+   "target": "c5_r2",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5_r2-cond_receipt",
+   "source": "c5_r2",
+   "target": "cond_receipt",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c5_r2-end-timeout",
+   "source": "c5_r2",
    "target": "end",
    "sourceHandle": "timeout",
    "targetHandle": null

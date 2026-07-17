@@ -88,6 +88,11 @@ AUDIO = {
     "dor":      f"{MEDIA_BASE}/audio-dor.ogg",      # substitui o texto da dor (t2 vira eco curto)
     "material": f"{MEDIA_BASE}/audio-material.ogg", # explica o acervo (após capa+mockup, antes da prova)
     "fecho":    f"{MEDIA_BASE}/audio-fecho.ogg",    # substitui o fechamento (CTA fica em texto)
+    # remarketing por voz (8-15s cada)
+    "rm_pix":   f"{MEDIA_BASE}/audio-rm-pix.ogg",   # pós-pix 40min: "fiquei te esperando"
+    "rm_fecho": f"{MEDIA_BASE}/audio-rm-fecho.ogg", # fechamento: "sumiu na melhor parte"
+    "rm_geral": f"{MEDIA_BASE}/audio-rm-geral.ogg", # faixa/amostra: "ainda tô te esperando"
+    "rm_last":  f"{MEDIA_BASE}/audio-rm-last.ogg",  # despedida 12h do pós-pix
 }
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -213,13 +218,8 @@ T_DELIVERED = (
     "Qualquer dúvida, me chama. Boas aulas — e bons domingos! 💙"
 )
 
-# Remarketing suave (problema-primeiro, sem cara de carrinho abandonado)
-RM_SOFT = (
-    "Oi, professora! Passando rapidinho só pra saber: você conseguiu organizar o "
-    "planejamento dessa semana? 😊\n\n"
-    "Se ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito "
-    "mais simples que eu te falei."
-)
+# Remarketing por VOZ (2026-07-17): 1 voice note curto por toque, sem texto junto —
+# presença humana ("fiquei te esperando"), nunca cobrança. Roteiros: memória do projeto.
 # Reoferta do remarketing do fechamento = ÁUDIO do fechamento (urgência 19,90 falada)
 # → volta a esperar o "quero resolver" no c_fecho.
 
@@ -280,7 +280,8 @@ nodes = [
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
     n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
-    capture("c5", 100, Y[17], "Aguardar comprovante", "pos_checkout", timeout=180),
+    # 40min (era 180): recuperação de pix se faz com o banco ainda aberto na mão
+    capture("c5", 100, Y[17], "Aguardar comprovante", "pos_checkout", timeout=40),
     # Print (imagem) fura a triagem e vai direto pro validador — legenda "ok" num
     # comprovante jamais pode cair no ack. Mesmo padrão do cond_img da entrada.
     n("cond_receipt", "condition", 250, Y[16], {
@@ -324,14 +325,16 @@ nodes = [
     text("t_delivered", 1300, 50 + 17 * 120, "Entrega concluída", T_DELIVERED),
 
     # ── Remarketing suave (problema-primeiro, 3h; reoferta só no fechamento) ──
-    text("rm_s1", 400, Y[3], "RM suave faixa", RM_SOFT),
+    n("rm_s1", "image", 400, Y[3], {"label": "RM voz: faixa", "mediaUrl": AUDIO["rm_geral"], "mediaType": "audio"}),
     capture("c_faixa_r", 400, Y[4], "RM faixa retorno", "rm_faixa", timeout=720),
-    text("rm_s2", 400, Y[9], "RM suave amostra", RM_SOFT),
+    n("rm_s2", "image", 400, Y[9], {"label": "RM voz: amostra", "mediaUrl": AUDIO["rm_geral"], "mediaType": "audio"}),
     capture("c_am_r", 400, Y[10], "RM amostra retorno", "rm_amostra", timeout=720),
-    text("rm_s3", 400, Y[13], "RM suave fechamento", RM_SOFT),
+    n("rm_s3", "image", 400, Y[13], {"label": "RM voz: fechamento", "mediaUrl": AUDIO["rm_fecho"], "mediaType": "audio"}),
     capture("c_f_r", 400, Y[14], "RM fechamento retorno", "rm_fechamento", timeout=720),
-    text("rm_s4", 400, Y[16], "RM suave pós-pix", RM_SOFT),
+    n("rm_s4", "image", 400, Y[16], {"label": "RM voz: pós-pix", "mediaUrl": AUDIO["rm_pix"], "mediaType": "audio"}),
     capture("c5_r", 550, Y[16], "RM pós-pix retorno", "rm_pospix", timeout=720),
+    n("rm_last", "image", 700, Y[16], {"label": "RM voz: despedida", "mediaUrl": AUDIO["rm_last"], "mediaType": "audio"}),
+    capture("c5_r2", 850, Y[16], "RM despedida retorno", "rm_despedida", timeout=720),
 ]
 
 chain = [
@@ -381,8 +384,11 @@ edges += [
     e("classify_pos", "t_downsell", "objection"), e("t_downsell", "pix_down"), e("pix_down", "c5"),
     e("classify_pos", "t_ack", "ack"), e("t_ack", "c5"),
     e("classify_pos", "v1", "validate"),
+    # retorno do RM passa pelo desvio de print (cond_receipt) — comprovante nunca cai na triagem
     e("c5", "rm_s4", "timeout"), e("rm_s4", "c5_r"),
-    e("c5_r", "classify_pos"), e("c5_r", "end", "timeout"),
+    e("c5_r", "cond_receipt"), e("c5_r", "rm_last", "timeout"),
+    e("rm_last", "c5_r2"),
+    e("c5_r2", "cond_receipt"), e("c5_r2", "end", "timeout"),
     # comprovante
     e("v1", "pc", "approved"), e("v1", "t_rej", "rejected"),
     e("t_rej", "c6"), e("c6", "v2"), e("c6", "end", "timeout"),
