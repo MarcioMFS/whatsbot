@@ -273,10 +273,12 @@ nodes = [
         "label": "Áudio: fechamento (reoferta rm)", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
 
-    # Pix 19,90 + comprovante (mesma espinha validada)
+    # Pix 19,90 copia-e-cola (BR Code com valor embutido) + comprovante
     n("pix_main", "pix", 100, Y[14], {
-        "label": "Pix R$19,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "label": "Pix R$19,90 (copia e cola)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
         "amount": "19,90", "description": "Kit Aula Pronta Infantil — condição especial",
+        "brCode": True, "merchantCity": "RECIFE",
+        "trustLine": "Garantia incondicional de 30 dias — se não servir pra sua rotina, devolvemos cada centavo 💙",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
     n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
@@ -301,8 +303,10 @@ nodes = [
     text("t_ack", 250, Y[19], "Aguardo do comprovante", T_ACK),
     text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
     n("pix_down", "pix", 550, Y[17], {
-        "label": "Pix downsell R$14,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "label": "Pix downsell R$14,90 (copia e cola)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
         "amount": "14,90", "description": "Kit Aula Pronta Infantil — oferta final",
+        "brCode": True, "merchantCity": "RECIFE",
+        "trustLine": "Garantia incondicional de 30 dias — se não servir, devolvemos cada centavo 💙",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     n("v1", "ai_validate_receipt", 100, Y[18], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),
     n("pc", "payment_confirmed", 250, Y[18], {"label": "Pagto confirmado", "confirmationMessage": T_CONFIRMED, "postPurchaseMessage": T_POST}),

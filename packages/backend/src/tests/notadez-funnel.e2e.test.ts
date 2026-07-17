@@ -26,6 +26,7 @@ import {
   type ConversationEvent, type PaymentIntentRepository, type FlowNode,
 } from '@whatsbot/core'
 import { FlowExecutionService } from '../services/FlowExecutionService.js'
+import { buildPixBrCode } from '../services/pixBrCode.js'
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 const FIXTURE = JSON.parse(readFileSync(join(__dir, 'fixtures/notadez-flow.json'), 'utf8'))
@@ -249,7 +250,8 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER')
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   const last = r.msgs.all[r.msgs.all.length - 1]
-  assert.equal(last, 'equipenotadez@jim.com', 'chave pix isolada na última bolha (copiável)')
+  assert.ok(last.startsWith('000201') && last.includes('equipenotadez@jim.com'), 'BR Code copia-e-cola isolado na última bolha')
+  assert.ok(last.includes('540519.90'), 'valor 19,90 embutido no código')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
@@ -316,7 +318,7 @@ test('RAJADA no fechamento: 2 msgs seguidas NÃO escalam nem repetem o aparte; f
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'quero resolver sim')
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'resposta válida avança pro pix')
-  assert.ok(r.msgs.all.includes('equipenotadez@jim.com'), 'pix enviado')
+  assert.ok(r.msgs.all.some(m => m.includes('equipenotadez@jim.com')), 'pix enviado (BR Code contém a chave)')
 })
 
 // ─── 4. Objeção de preço → downsell imediato ─────────────────────────────────
@@ -394,7 +396,7 @@ test('goto adianta o funil: lead na faixa vai direto pro pix — chave na últim
   conv.moveToNode('t_pix_after')
   await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
   assert.equal(convOf(r)?.currentNodeId, 'c5')
-  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix isolada na última bolha')
+  assert.ok(r.msgs.all[r.msgs.all.length - 1].startsWith('000201'), 'BR Code copia-e-cola na última bolha')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
 })
 
@@ -440,7 +442,8 @@ test('objeção "tá caro" no pós-pix → downsell 14,90 com pix novo, volta a 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'tá caro, não tenho esse valor agora')
   assert.ok(r.msgs.all.some(m => m.includes('14,90')), 'downsell 14,90 oferecido')
-  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix do downsell na última bolha')
+  const lastDown = r.msgs.all[r.msgs.all.length - 1]
+  assert.ok(lastDown.startsWith('000201') && lastDown.includes('540514.90'), 'BR Code do downsell com 14,90 embutido')
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
   assert.ok(!r.msgs.all.some(m => m.includes('Pagamento confirmado')), 'objeção nunca confirma pagamento')
 })
@@ -459,4 +462,19 @@ test('"Ok" pós-pix → aguardo simpático sem rejeição; print depois valida e
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, '[image]', 'RECEIPT_OK')
   assert.equal(r.msgs.media.filter(m => m.mediaType === 'document').length, 16, 'print depois do Ok entrega os 16 PDFs')
+})
+
+// ─── 12. BR Code Pix — golden: payloads VALIDADOS em app de banco real (17/07) ─
+
+test('buildPixBrCode gera payload EMV byte a byte igual ao validado no banco', () => {
+  assert.equal(
+    buildPixBrCode({ key: 'equipenotadez@jim.com', merchantName: 'Equipe Nota Dez', merchantCity: 'RECIFE', amountCentavos: 1990 }),
+    '00020126430014br.gov.bcb.pix0121equipenotadez@jim.com520400005303986540519.905802BR5915Equipe Nota Dez6006RECIFE62070503***6304A559',
+  )
+  assert.equal(
+    buildPixBrCode({ key: 'equipenotadez@jim.com', merchantName: 'Equipe Nota Dez', merchantCity: 'RECIFE', amountCentavos: 1 }),
+    '00020126430014br.gov.bcb.pix0121equipenotadez@jim.com52040000530398654040.015802BR5915Equipe Nota Dez6006RECIFE62070503***6304CECC',
+  )
+  // acento no nome não pode divergir length/CRC — sai ASCII
+  assert.ok(!buildPixBrCode({ key: 'x@y.com', merchantName: 'José São João', amountCentavos: 100 }).includes('é'))
 })

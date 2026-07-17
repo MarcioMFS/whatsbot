@@ -300,11 +300,14 @@
     "y": 2150
    },
    "data": {
-    "label": "Pix R$19,90",
+    "label": "Pix R$19,90 (copia e cola)",
     "pixKey": "equipenotadez@jim.com",
     "recipientName": "Equipe Nota Dez",
     "amount": "19,90",
     "description": "Kit Aula Pronta Infantil — condição especial",
+    "brCode": true,
+    "merchantCity": "RECIFE",
+    "trustLine": "Garantia incondicional de 30 dias — se não servir pra sua rotina, devolvemos cada centavo 💙",
     "expiresInMinutes": 120,
     "outputVariable": "paymentIntentId"
    }
@@ -474,11 +477,14 @@
     "y": 2600
    },
    "data": {
-    "label": "Pix downsell R$14,90",
+    "label": "Pix downsell R$14,90 (copia e cola)",
     "pixKey": "equipenotadez@jim.com",
     "recipientName": "Equipe Nota Dez",
     "amount": "14,90",
     "description": "Kit Aula Pronta Infantil — oferta final",
+    "brCode": true,
+    "merchantCity": "RECIFE",
+    "trustLine": "Garantia incondicional de 30 dias — se não servir, devolvemos cada centavo 💙",
     "expiresInMinutes": 120,
     "outputVariable": "paymentIntentId"
    }

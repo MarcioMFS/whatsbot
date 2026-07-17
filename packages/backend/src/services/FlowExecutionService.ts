@@ -50,6 +50,7 @@ import {
   type CartItem,
 } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
+import { buildPixBrCode } from './pixBrCode.js'
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
 import { EscapeHatchService, type EscapeRoute } from './EscapeHatchService.js'
@@ -1178,15 +1179,35 @@ export class FlowExecutionService {
           }
         }
 
-        const lines = [`💳 *Chave Pix para pagamento*`]
-        if (displayAmount) lines.push(``, `Valor: *R$ ${displayAmount}*`)
-        if (desc) lines.push(`Descrição: ${desc}`)
-        if (receiverName) lines.push(`Favorecido: ${receiverName}`)
-        lines.push(``, `_Copie a chave abaixo e pague pelo seu banco._`)
+        // brCode: "copia e cola" com valor embutido — a professora cola e o banco já
+        // abre com valor+recebedor preenchidos (mata a fricção de digitar). Gated por
+        // nó (flag no data) pra não mudar bots que vendem com a chave crua.
+        const extra = data as { brCode?: boolean; merchantCity?: string; trustLine?: string }
+        const brCode = extra.brCode && receiverKey && centavos
+          ? buildPixBrCode({
+              key: receiverKey,
+              merchantName: receiverName || 'Recebedor',
+              merchantCity: extra.merchantCity,
+              amountCentavos: centavos,
+            })
+          : null
+
+        const lines = brCode
+          ? [`💳 *Pix de R$ ${displayAmount}*`]
+          : [`💳 *Chave Pix para pagamento*`]
+        if (!brCode && displayAmount) lines.push(``, `Valor: *R$ ${displayAmount}*`)
+        if (desc) lines.push(brCode ? desc : `Descrição: ${desc}`)
+        if (!brCode && receiverName) lines.push(`Favorecido: ${receiverName}`)
+        if (extra.trustLine) lines.push(``, extra.trustLine)
+        lines.push(``, brCode
+          ? `_Copia o código abaixo e cola no app do seu banco em *Pix → copia e cola* — o valor já vai preenchido._`
+          : `_Copie a chave abaixo e pague pelo seu banco._`)
         const pixMsg = lines.join('\n')
+        const copyable = brCode ?? receiverKey
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: pixMsg })
-        await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: receiverKey })
+        await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: copyable })
         conversation.addAssistantMessage(pixMsg)  // #fix history-drift: a IA precisa saber que o PIX já foi enviado
+        conversation.addAssistantMessage(copyable) // código/chave visível no painel também
         const nexts = flow.getNextNodes(node.id)
         return nexts[0]?.id
       }
