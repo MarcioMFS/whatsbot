@@ -43,6 +43,20 @@ export class EvolutionAPIAdapter implements MessagingPort {
     return res.json() as Promise<T>
   }
 
+  // O evolution-go "normaliza" celular BR de 13 dígitos REMOVENDO o nono dígito —
+  // quebra contas novas cujo JID canônico TEM o 9 (lead real perdeu 5 respostas do
+  // funil, 2026-07-17). JID explícito pula a heurística do gateway; quem já vem com
+  // '@' passa intacto. O fallback (abaixo) cobre contas antigas com canônico sem 9.
+  private waNumber(phoneNumber: string): string {
+    if (phoneNumber.includes('@')) return phoneNumber
+    const digits = phoneNumber.replace(/\D/g, '')
+    return digits.startsWith('55') && digits.length === 13 ? `${digits}@s.whatsapp.net` : phoneNumber
+  }
+
+  private isNotRegistered(err: unknown): boolean {
+    return err instanceof Error && err.message.includes('is not registered on WhatsApp')
+  }
+
   private async _resolveInstanceId(instanceName: string): Promise<string> {
     const data = await this.request<{ data: EvoGoInstance[] }>('/instance/all')
     const instance = data.data.find((i) => i.name === instanceName)
@@ -51,42 +65,49 @@ export class EvolutionAPIAdapter implements MessagingPort {
   }
 
   async sendMessage(msg: OutgoingMessage): Promise<void> {
-    const number = msg.phoneNumber.includes('@')
-      ? msg.phoneNumber.split('@')[0]
-      : msg.phoneNumber
-
-    await this.request(
-      '/send/text',
-      { method: 'POST', body: JSON.stringify({ number, text: msg.message }) },
-      msg.instanceName,
-    )
+    const number = this.waNumber(msg.phoneNumber)
+    try {
+      await this.request(
+        '/send/text',
+        { method: 'POST', body: JSON.stringify({ number, text: msg.message }) },
+        msg.instanceName,
+      )
+    } catch (err) {
+      // conta antiga (canônico sem o 9): re-tenta com o número cru — o gateway aplica a heurística dele
+      if (number !== msg.phoneNumber && this.isNotRegistered(err)) {
+        await this.request(
+          '/send/text',
+          { method: 'POST', body: JSON.stringify({ number: msg.phoneNumber, text: msg.message }) },
+          msg.instanceName,
+        )
+        return
+      }
+      throw err
+    }
   }
 
   async sendMedia(msg: OutgoingMedia): Promise<void> {
-    const number = msg.phoneNumber.includes('@')
-      ? msg.phoneNumber.split('@')[0]
-      : msg.phoneNumber
-
-    await this.request(
-      '/send/media',
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          number,
-          type: msg.mediaType ?? 'image',
-          url: msg.mediaUrl,
-          ...(msg.caption ? { caption: msg.caption } : {}),
-          ...(msg.filename ? { filename: msg.filename } : {}),
-        }),
-      },
-      msg.instanceName,
-    )
+    const body = (n: string) => JSON.stringify({
+      number: n,
+      type: msg.mediaType ?? 'image',
+      url: msg.mediaUrl,
+      ...(msg.caption ? { caption: msg.caption } : {}),
+      ...(msg.filename ? { filename: msg.filename } : {}),
+    })
+    const number = this.waNumber(msg.phoneNumber)
+    try {
+      await this.request('/send/media', { method: 'POST', body: body(number) }, msg.instanceName)
+    } catch (err) {
+      if (number !== msg.phoneNumber && this.isNotRegistered(err)) {
+        await this.request('/send/media', { method: 'POST', body: body(msg.phoneNumber) }, msg.instanceName)
+        return
+      }
+      throw err
+    }
   }
 
   async sendPresence(msg: OutgoingPresence): Promise<void> {
-    const number = msg.phoneNumber.includes('@')
-      ? msg.phoneNumber.split('@')[0]
-      : msg.phoneNumber
+    const number = this.waNumber(msg.phoneNumber)
 
     await this.request(
       '/message/presence',
