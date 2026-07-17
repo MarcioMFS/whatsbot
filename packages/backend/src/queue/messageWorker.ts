@@ -180,7 +180,7 @@ export function startMessageWorker(
           const isLastAttempt = job.attemptsMade >= ((job.opts.attempts ?? 1) - 1)
           await agentRuntime.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { isLastAttempt })
         } else {
-          await flowExecService.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64, pushName })
+          await flowExecService.handleIncomingMessage(bot, phoneNumber, effectiveMessage, imageBase64, { msgId, hasImage: hasImage ?? !!imageBase64, hasAudio, pushName })
         }
       } finally {
         await redis.del(lockKey)

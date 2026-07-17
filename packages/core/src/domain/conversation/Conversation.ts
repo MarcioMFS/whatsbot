@@ -1,5 +1,13 @@
 import { randomUUID } from 'crypto'
 
+// Mídia anexada a uma mensagem do histórico — o painel de Conversas renderiza
+// player/thumbnail a partir daqui. url ausente = mídia inbound (não guardamos base64).
+export interface MessageMedia {
+  type: 'image' | 'video' | 'audio' | 'document'
+  url?: string
+  filename?: string
+}
+
 export interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -7,6 +15,7 @@ export interface Message {
   msgId?: string       // WhatsApp message ID (inbound only)
   sender?: string      // phone number of the sender (inbound only)
   direction?: 'inbound' | 'outbound'
+  media?: MessageMedia
 }
 
 export type ConversationStatus = 'active' | 'waiting' | 'suspended' | 'ended' | 'handoff'
@@ -88,13 +97,13 @@ export class Conversation {
     })
   }
 
-  addUserMessage(content: string, meta?: { msgId?: string; sender?: string }): void {
+  addUserMessage(content: string, meta?: { msgId?: string; sender?: string; media?: MessageMedia }): void {
     this.props.history.push({ role: 'user', content, timestamp: new Date(), direction: 'inbound', ...meta })
     this.props.updatedAt = new Date()
   }
 
-  addAssistantMessage(content: string): void {
-    this.props.history.push({ role: 'assistant', content, timestamp: new Date(), direction: 'outbound' })
+  addAssistantMessage(content: string, media?: MessageMedia): void {
+    this.props.history.push({ role: 'assistant', content, timestamp: new Date(), direction: 'outbound', ...(media ? { media } : {}) })
     this.props.updatedAt = new Date()
   }
 

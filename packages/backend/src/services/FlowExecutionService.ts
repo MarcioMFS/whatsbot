@@ -263,7 +263,7 @@ export class FlowExecutionService {
     phoneNumber: string,
     message: string,
     imageBase64?: string,
-    inbound?: { msgId?: string; hasImage?: boolean; pushName?: string },
+    inbound?: { msgId?: string; hasImage?: boolean; hasAudio?: boolean; pushName?: string },
   ): Promise<void> {
     // Sem flow ativo ainda pode haver funil por keyword (bot runtime='agent') —
     // o guard de flow inexistente acontece adiante, quando o flowId é resolvido.
@@ -657,7 +657,11 @@ export class FlowExecutionService {
       }
     }
 
-    conversation.addUserMessage(message, { msgId, sender: phoneNumber })
+    conversation.addUserMessage(message, {
+      msgId, sender: phoneNumber,
+      // marca a mídia recebida (comprovante/print aparece como 📷 no painel)
+      ...(hasImage ? { media: { type: 'image' as const } } : inbound?.hasAudio ? { media: { type: 'audio' as const } } : {}),
+    })
     if (imageBase64) conversation.setVariable('__imageBase64', imageBase64)
 
     // Webapp selection arriving during a waiting capture — bypass the capture and re-route through classify_intent
@@ -1021,7 +1025,9 @@ export class FlowExecutionService {
               caption,
               filename: data.filename,
             })
-            if (caption) conversation.addAssistantMessage(caption)
+            // registra a MÍDIA no histórico (painel renderiza player/thumbnail) — antes
+            // só a legenda entrava e voice note/imagem sem caption ficavam invisíveis
+            conversation.addAssistantMessage(caption ?? '', { type: mediaType, url: data.mediaUrl, filename: data.filename })
           } else if (caption) {
             await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: caption })
             conversation.addAssistantMessage(caption)

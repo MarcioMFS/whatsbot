@@ -5,10 +5,26 @@ import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
 
+interface MsgMedia {
+  type: 'image' | 'video' | 'audio' | 'document'
+  url?: string
+  filename?: string
+}
 interface Msg {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  media?: MsgMedia
+}
+
+// Prévia da última mensagem na lista (ícone por tipo de mídia)
+const MEDIA_ICON: Record<MsgMedia['type'], string> = { image: '📷', video: '🎥', audio: '🎙️', document: '📄' }
+const MEDIA_NAME: Record<MsgMedia['type'], string> = { image: 'Imagem', video: 'Vídeo', audio: 'Áudio', document: 'Documento' }
+function msgPreview(m?: Msg): string {
+  if (!m) return '—'
+  const text = m.content && m.content !== '[image]' ? m.content : ''
+  if (m.media) return `${MEDIA_ICON[m.media.type]} ${text || m.media.filename || MEDIA_NAME[m.media.type]}`
+  return text || '—'
 }
 interface Conv {
   id: string
@@ -304,7 +320,7 @@ export function Conversations() {
                     </span>
                   </div>
                   <p className="text-xs mt-1.5 truncate" style={{ color: 'var(--ink-soft)' }}>
-                    {last ? last.content : '—'}
+                    {msgPreview(last)}
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <StatusDot status={c.status} />
@@ -392,13 +408,33 @@ export function Conversations() {
                   <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3" style={{ background: 'var(--paper)' }}>
                     {conv.history.map((m, i) => {
                       const bot = m.role === 'assistant'
+                      const text = m.content && !(m.media && m.content === '[image]') ? m.content : ''
                       return (
                         <div key={i} className={`flex flex-col ${bot ? 'items-end' : 'items-start'}`}>
-                          <div className="max-w-[76%] text-sm whitespace-pre-wrap"
+                          <div className="max-w-[76%] text-sm"
                             style={bot
                               ? { background: 'var(--ink)', color: 'var(--paper)', padding: '9px 14px', borderRadius: '14px 14px 4px 14px', boxShadow: '0 2px 8px rgba(10,10,10,.08)' }
-                              : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}
-                            dangerouslySetInnerHTML={{ __html: waHtml(m.content) }} />
+                              : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}>
+                            {m.media?.type === 'image' && (m.media.url
+                              ? <a href={m.media.url} target="_blank" rel="noreferrer">
+                                  <img src={m.media.url} alt="" style={{ maxWidth: 220, borderRadius: 10, display: 'block', marginBottom: text ? 8 : 0 }} />
+                                </a>
+                              : <span style={{ opacity: 0.9 }}>📷 Imagem recebida{text ? '' : ' (abrir no WhatsApp)'}</span>)}
+                            {m.media?.type === 'video' && m.media.url && (
+                              <video src={m.media.url} controls preload="metadata"
+                                style={{ maxWidth: 220, borderRadius: 10, display: 'block', marginBottom: text ? 8 : 0 }} />
+                            )}
+                            {m.media?.type === 'audio' && (m.media.url
+                              ? <audio src={m.media.url} controls preload="metadata" style={{ width: 240, display: 'block' }} />
+                              : <span style={{ opacity: 0.9 }}>🎙️ Áudio recebido</span>)}
+                            {m.media?.type === 'document' && (
+                              m.media.url
+                                ? <a href={m.media.url} target="_blank" rel="noreferrer"
+                                    style={{ color: 'inherit', textDecoration: 'underline' }}>📄 {m.media.filename ?? 'documento'}</a>
+                                : <span>📄 {m.media.filename ?? 'documento'}</span>
+                            )}
+                            {text && <div className="whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: waHtml(text) }} />}
+                          </div>
                           <span className="text-[10px] mt-1 px-1" style={{ color: 'var(--muted)' }}>{fmtTime(m.timestamp)}</span>
                         </div>
                       )
