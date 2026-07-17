@@ -72,7 +72,7 @@ IMG = {
     "print3":    f"{MEDIA_BASE}/07-print3.jpg",  # TODO print real
     "print4":    f"{MEDIA_BASE}/08-print4.jpg",  # TODO print real
     "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit (pdftoppm dos PDFs 05/10/11)
-    "amostra2":  f"{MEDIA_BASE}/amostra-2-tracar.jpg",
+    "amostra2":  f"{MEDIA_BASE}/amostra-2-plano-aula.jpg",  # grid do plano de aula completo (trocou a traçar em 2026-07-17)
     "amostra3":  f"{MEDIA_BASE}/amostra-3-rotina.jpg",
     # vídeo de amostra real (720p ~9MB, h264+aac; original em /root/work/.claude-uploads/)
     "amostra_video": f"{MEDIA_BASE}/amostra-video.mp4",
@@ -167,7 +167,10 @@ CAP_CAPA = (
 )
 CAP_VIDEO = "Olha na prática 🎥 Páginas reais do acervo — tudo editável, é só personalizar e imprimir."
 CAP_AM1 = "Página real do acervo — atividade lúdica de labirinto 🌟"
-CAP_AM2 = "Página real — traçar e escrever, pronta pra imprimir ✏️"
+CAP_AM2 = (
+    "Plano de aula completo 📋 Identificação, objetivos, campos da BNCC, rotina, "
+    "avaliação, planejamento semanal e mensal... tudo prontinho pra preencher."
+)
 CAP_AM3 = "Modelo de rotina diária pronto 🕐 É só personalizar com o nome da turma e usar."
 # Âncora + garantia + CTA numa bolha só (o detalhe do acervo já veio no áudio do material)
 T6_PRECO = (
@@ -261,7 +264,7 @@ nodes = [
         "label": "Amostra em vídeo", "mediaUrl": IMG["amostra_video"],
         "mediaType": "video", "caption": CAP_VIDEO}),
     image("img_am1", 250, Y[10], "Amostra real: labirinto", IMG["amostra1"], caption=CAP_AM1),
-    image("img_am2", 400, Y[10], "Amostra real: traçar", IMG["amostra2"], caption=CAP_AM2),
+    image("img_am2", 400, Y[10], "Amostra real: plano de aula", IMG["amostra2"], caption=CAP_AM2),
     image("img_am3", 550, Y[10], "Amostra real: rotina", IMG["amostra3"], caption=CAP_AM3),
     n("audio_material", "image", 700, Y[10], {
         "label": "Áudio: explicando o material", "mediaUrl": AUDIO["material"], "mediaType": "audio"}),
