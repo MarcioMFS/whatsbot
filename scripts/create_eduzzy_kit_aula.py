@@ -196,6 +196,13 @@ T_PIX_AFTER = (
     "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
 )
+# Confirmação neutra pós-pix ("ok", "vou pagar") → aguardo simpático, NUNCA o
+# validador de comprovante (bug real 2026-07-17: "Ok" levou rejeição de print inexistente)
+T_ACK = (
+    "Perfeito, professora! 😊 Fico no aguardo do seu comprovante por aqui — assim que "
+    "chegar, eu já libero seu acesso."
+)
+
 # Downsell: objeção de preço/agenda pós-pix → oferta final R$ 14,90 imediata
 T_DOWNSELL = (
     "Entendo perfeitamente, professora 💙 Então deixa eu fazer uma coisa que eu não faço "
@@ -301,13 +308,23 @@ nodes = [
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
     n("tag_checkout", "tag_lead", 100, Y[16], {"label": "Tag chegou no pix", "add": ["eduzzy-checkout"]}),
     capture("c5", 100, Y[17], "Aguardar comprovante", "pos_checkout", timeout=180),
+    # Print (imagem) fura a triagem e vai direto pro validador — legenda "ok" num
+    # comprovante jamais pode cair no ack. Mesmo padrão do cond_img da entrada.
+    n("cond_receipt", "condition", 250, Y[16], {
+        "label": "Veio print?", "variable": "__imageBase64", "operator": "regex", "value": ".+"}),
     n("classify_pos", "classify_intent", 250, Y[17], {
         "label": "Triagem pós-pix", "intents": [
             {"handle": "objection", "label": "Objeção/agenda",
              "patterns": ["não tenho", "nao tenho", "tá caro", "ta caro", "muito caro", "sem dinheiro",
                           "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",
                           "depois eu", "mês que vem", "mes que vem", "quando receber", "semana que vem"]},
+            {"handle": "ack", "label": "Confirmação neutra (vou pagar)",
+             "patterns": ["ok", "okay", "ta bom", "ta certo", "ta ok", "blz", "beleza", "certo",
+                          "combinado", "perfeito", "vou pagar", "vou fazer", "ja vou", "vou sim",
+                          "um momento", "um minuto", "so um momento", "aguarda", "ja mando",
+                          "ja envio", "obrigada", "obrigado", "valeu", "👍", "🙏"]},
             {"handle": "validate", "label": "Comprovante/resto", "isDefault": True}]}),
+    text("t_ack", 250, Y[19], "Aguardo do comprovante", T_ACK),
     text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
     n("pix_down", "pix", 550, Y[17], {
         "label": "Pix downsell R$14,90", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
@@ -384,9 +401,12 @@ edges += [
     e("c_am_r", "video_amostra"), e("c_am_r", "end", "timeout"),
     e("c_fecho", "rm_s3", "timeout"), e("rm_s3", "c_f_r"),
     e("c_f_r", "t_reoffer"), e("t_reoffer", "pix_main"), e("c_f_r", "end", "timeout"),
-    # pós-pix: triagem (objeção de preço/agenda → downsell 14,90 imediato; resto valida)
-    e("c5", "classify_pos"),
+    # pós-pix: print vai direto pro validador; texto passa na triagem
+    # (objeção → downsell 14,90; "ok, vou pagar" → aguardo; resto valida)
+    e("c5", "cond_receipt"),
+    e("cond_receipt", "v1", "true"), e("cond_receipt", "classify_pos", "false"),
     e("classify_pos", "t_downsell", "objection"), e("t_downsell", "pix_down"), e("pix_down", "c5"),
+    e("classify_pos", "t_ack", "ack"), e("t_ack", "c5"),
     e("classify_pos", "v1", "validate"),
     e("c5", "rm_s4", "timeout"), e("rm_s4", "c5_r"),
     e("c5_r", "classify_pos"), e("c5_r", "end", "timeout"),

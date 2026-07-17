@@ -438,3 +438,19 @@ test('objeção "tá caro" no pós-pix → downsell 14,90 com pix novo, volta a 
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
   assert.ok(!r.msgs.all.some(m => m.includes('Pagamento confirmado')), 'objeção nunca confirma pagamento')
 })
+
+// ─── 11. "Ok" pós-pix é aguardo, não comprovante (bug real 2026-07-17) ────────
+
+test('"Ok" pós-pix → aguardo simpático sem rejeição; print depois valida e entrega normal', async () => {
+  const r = rig()
+  await walkTo(r, 'c5')
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Ok')
+  assert.ok(r.msgs.all.some(m => m.includes('aguardo do seu comprovante')), 'resposta de aguardo')
+  assert.ok(!r.msgs.all.some(m => m.includes('não consegui confirmar')), 'não rejeita comprovante que não existe')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue esperando o print no c5')
+
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, '[image]', 'RECEIPT_OK')
+  assert.equal(r.msgs.media.filter(m => m.mediaType === 'document').length, 16, 'print depois do Ok entrega os 16 PDFs')
+})

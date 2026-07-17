@@ -405,6 +405,20 @@
    }
   },
   {
+   "id": "cond_receipt",
+   "type": "condition",
+   "position": {
+    "x": 250,
+    "y": 2450
+   },
+   "data": {
+    "label": "Veio print?",
+    "variable": "__imageBase64",
+    "operator": "regex",
+    "value": ".+"
+   }
+  },
+  {
    "id": "classify_pos",
    "type": "classify_intent",
    "position": {
@@ -438,11 +452,54 @@
       ]
      },
      {
+      "handle": "ack",
+      "label": "Confirmação neutra (vou pagar)",
+      "patterns": [
+       "ok",
+       "okay",
+       "ta bom",
+       "ta certo",
+       "ta ok",
+       "blz",
+       "beleza",
+       "certo",
+       "combinado",
+       "perfeito",
+       "vou pagar",
+       "vou fazer",
+       "ja vou",
+       "vou sim",
+       "um momento",
+       "um minuto",
+       "so um momento",
+       "aguarda",
+       "ja mando",
+       "ja envio",
+       "obrigada",
+       "obrigado",
+       "valeu",
+       "👍",
+       "🙏"
+      ]
+     },
+     {
       "handle": "validate",
       "label": "Comprovante/resto",
       "isDefault": true
      }
     ]
+   }
+  },
+  {
+   "id": "t_ack",
+   "type": "text_message",
+   "position": {
+    "x": 250,
+    "y": 2900
+   },
+   "data": {
+    "label": "Aguardo do comprovante",
+    "message": "Perfeito, professora! 😊 Fico no aguardo do seu comprovante por aqui — assim que chegar, eu já libero seu acesso."
    }
   },
   {
@@ -1252,10 +1309,24 @@
    "targetHandle": null
   },
   {
-   "id": "e-c5-classify_pos",
+   "id": "e-c5-cond_receipt",
    "source": "c5",
-   "target": "classify_pos",
+   "target": "cond_receipt",
    "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_receipt-v1-true",
+   "source": "cond_receipt",
+   "target": "v1",
+   "sourceHandle": "true",
+   "targetHandle": null
+  },
+  {
+   "id": "e-cond_receipt-classify_pos-false",
+   "source": "cond_receipt",
+   "target": "classify_pos",
+   "sourceHandle": "false",
    "targetHandle": null
   },
   {
@@ -1275,6 +1346,20 @@
   {
    "id": "e-pix_down-c5",
    "source": "pix_down",
+   "target": "c5",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_pos-t_ack-ack",
+   "source": "classify_pos",
+   "target": "t_ack",
+   "sourceHandle": "ack",
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_ack-c5",
+   "source": "t_ack",
    "target": "c5",
    "sourceHandle": null,
    "targetHandle": null
