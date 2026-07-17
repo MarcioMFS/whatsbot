@@ -158,40 +158,21 @@ T1_VARIACOES = [
 ]
 # A dor agora é o ÁUDIO da Juliana (AUDIO["dor"]); o texto vira só o eco da faixa.
 T2_ECO = "Perfeito, {{faixa_etaria}} então! 👇"
-T3_SOLUCAO = (
-    "Existe uma forma de virar esse jogo: em vez de criar cada material do zero, você acessa "
-    "um acervo pronto — organizado por faixa etária e por campo de experiência da BNCC — e "
-    "só adapta pra sua turma.\n\n"
-    "Isso aqui é o que fica disponível pra você 👇"
+# v12 ENXUTO: os áudios carregam a narrativa (1 por rajada); prova social e
+# convite viram LEGENDA da capa — some o paredão de texto entre a dor e a amostra.
+CAP_CAPA = (
+    "Esse é o acervo completo: mais de 13 mil professoras já usam pra não perder "
+    "o fim de semana com planejamento.\n\n"
+    "Quer ver por dentro? Me responde *sim* que eu te mostro 👇"
 )
-CAP_CAPA = "Reduz o tempo de planejamento de horas pra minutos."
-T4_PROVA = (
-    ("E não sou só eu que falo isso. Quem já resolveu esse problema com o material conta como foi 👇"
-     if HAS_PRINTS else
-     "E não sou só eu que falo isso: mais de 13 mil professoras já pararam de perder o fim de "
-     "semana com planejamento usando esse acervo.")
-)
-T5_ASK = (
-    "Quer ver como fica na prática? Gravei um vídeo mostrando a amostra real do que você "
-    "recebe — atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* "
-    "que eu te mando 👇"
-)
-CAP_VIDEO = (
-    "Olha na prática 🎥 Páginas reais do acervo — atividade lúdica, traçado e modelo de "
-    "rotina, tudo pronto pra você só personalizar com o nome da turma e imprimir."
-)
+CAP_VIDEO = "Olha na prática 🎥 Páginas reais do acervo — tudo editável, é só personalizar e imprimir."
+# Âncora + garantia + CTA numa bolha só (o detalhe do acervo já veio no áudio do material)
 T6_PRECO = (
-    "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente "
-    "fica disponível por R$ 47,90.\n\n"
-    "Mas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 19,90*, "
-    "com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada "
-    "centavo. Risco zero pra você.\n\n"
-    "Isso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema "
-    "que te consome toda semana."
+    "Esse acesso completo normalmente sai por R$ 47,90.\n\n"
+    "Hoje, só nessa conversa: *R$ 19,90*, com *garantia incondicional de 30 dias* — "
+    "se não servir pra sua rotina, devolvemos cada centavo.\n\n"
+    "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
 )
-# O fechamento agora é o ÁUDIO (AUDIO["fecho"]); o CTA fica em texto — é ele que
-# a professora copia/responde e o validationRegex do c_fecho valida.
-T7_CTA = "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
 T_PIX_AFTER = (
     "Fechado! 🎉 Vou te passar o Pix de *R$ 19,90* aqui embaixo — assim que pagar, me envia "
     "o *print do comprovante* nesta conversa que eu já libero seu acesso 🥰"
@@ -233,16 +214,8 @@ RM_SOFT = (
     "Se ainda tiver enrolado com isso, é só me avisar que eu te mostro de novo o jeito "
     "mais simples que eu te falei."
 )
-RM_REOFFER = (
-    "Que bom te ver por aqui de novo! 😊\n\n"
-    "Ainda consigo garantir pra você a condição que te mostrei: *R$ 19,90* pelo acesso "
-    "completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
-)
-
-# Legendas das imagens de produto (bloco solução + bloco amostra)
-CAP_MATERIAIS = "São mais de 1.000 materiais prontos e editáveis, tudo organizado 🤩"
-CAP_PLANOS = "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
-CAP_ATIVIDADES = "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
+# Reoferta do remarketing do fechamento = ÁUDIO do fechamento (urgência 19,90 falada)
+# → volta a esperar o "quero resolver" no c_fecho.
 
 # ── Graph v9 ──────────────────────────────────────────────────────────────────
 Y = [50 + i * 150 for i in range(30)]
@@ -272,32 +245,23 @@ nodes = [
     n("t1", "distributor", 100, Y[2], {"label": "Abertura problema (3 variações)", "variations": T1_VARIACOES}),
     capture("c_faixa", 100, Y[3], "Aguardar faixa", "faixa_etaria", timeout=20, extra=FAIXA_EXTRA),
 
-    # E2-E5 — eco + ÁUDIO da dor → solução (capa + materiais) → prova → convite da amostra
+    # E2-E3 — eco + ÁUDIO da dor → capa (legenda = prova + convite *sim*)
     text("t2", 100, Y[4], "Eco da faixa", T2_ECO),
     n("audio_dor", "image", 250, Y[4], {
         "label": "Áudio: a dor", "mediaUrl": AUDIO["dor"], "mediaType": "audio"}),
-    text("t3", 100, Y[5], "Solução", T3_SOLUCAO),
-    image("img_capa", 100, Y[6], "Capa do kit", IMG["capa"], caption=CAP_CAPA),
-    image("img_materiais", 250, Y[6], "Mockup 1.000 materiais", IMG["materiais"], caption=CAP_MATERIAIS),
-    n("audio_material", "image", 400, Y[6], {
-        "label": "Áudio: explicando o material", "mediaUrl": AUDIO["material"], "mediaType": "audio"}),
-    text("t4", 100, Y[7], "Prova social", T4_PROVA),
-] + ([image("img_print1", 250, Y[7], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
-    text("t5", 100, Y[8], "Convite amostra", T5_ASK),
+    image("img_capa", 100, Y[5], "Capa (prova + convite)", IMG["capa"], caption=CAP_CAPA),
+] + ([image("img_print1", 250, Y[5], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
     capture("c_amostra", 100, Y[9], "Aguardar sim amostra", "quer_amostra", timeout=20),
 
-    # E5 — amostra completa: VÍDEO + imagens de produto (planos BNCC + atividades)
+    # E4 — amostra: VÍDEO + ÁUDIO explicando o material + âncora com CTA fundido
     n("video_amostra", "image", 100, Y[10], {
         "label": "Amostra em vídeo", "mediaUrl": IMG["amostra_video"],
         "mediaType": "video", "caption": CAP_VIDEO}),
-    image("img_planos", 250, Y[10], "Plano de aula BNCC", IMG["planos"], caption=CAP_PLANOS),
-    image("img_atividades", 400, Y[10], "Atividades práticas", IMG["atividades"], caption=CAP_ATIVIDADES),
-
-    # E6-E7 — âncora 47,90→19,90 + ÁUDIO do fechamento + CTA escrito
-    text("t6", 100, Y[11], "Âncora 47,90→19,90", T6_PRECO),
-    n("audio_fecho", "image", 100, Y[12], {
-        "label": "Áudio: fechamento 19,90", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
-    text("t7_cta", 250, Y[12], "CTA quero resolver", T7_CTA),
+    n("audio_material", "image", 250, Y[10], {
+        "label": "Áudio: explicando o material", "mediaUrl": AUDIO["material"], "mediaType": "audio"}),
+    text("t6", 100, Y[11], "Âncora 47,90→19,90 + CTA", T6_PRECO),
+    n("audio_fecho", "image", 400, Y[14], {
+        "label": "Áudio: fechamento (reoferta rm)", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
 
     # Pix 19,90 + comprovante (mesma espinha validada)
@@ -357,16 +321,15 @@ nodes = [
     capture("c_am_r", 400, Y[10], "RM amostra retorno", "rm_amostra", timeout=720),
     text("rm_s3", 400, Y[13], "RM suave fechamento", RM_SOFT),
     capture("c_f_r", 400, Y[14], "RM fechamento retorno", "rm_fechamento", timeout=720),
-    text("t_reoffer", 550, Y[14], "Reoferta 19,90", RM_REOFFER),
     text("rm_s4", 400, Y[16], "RM suave pós-pix", RM_SOFT),
     capture("c5_r", 550, Y[16], "RM pós-pix retorno", "rm_pospix", timeout=720),
 ]
 
 chain = [
-    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "t3", "img_capa", "img_materiais", "audio_material", "t4",
+    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "img_capa",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
-    "t5", "c_amostra", "video_amostra", "img_planos", "img_atividades",
-    "t6", "audio_fecho", "t7_cta", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
+    "c_amostra", "video_amostra", "audio_material",
+    "t6", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
 if not INCLUDE_IMAGES:
@@ -399,8 +362,9 @@ edges += [
     e("c_faixa_r", "t2"), e("c_faixa_r", "end", "timeout"),
     e("c_amostra", "rm_s2", "timeout"), e("rm_s2", "c_am_r"),
     e("c_am_r", "video_amostra"), e("c_am_r", "end", "timeout"),
+    # reoferta do fechamento = áudio de urgência 19,90 → volta a esperar o "quero resolver"
     e("c_fecho", "rm_s3", "timeout"), e("rm_s3", "c_f_r"),
-    e("c_f_r", "t_reoffer"), e("t_reoffer", "pix_main"), e("c_f_r", "end", "timeout"),
+    e("c_f_r", "audio_fecho"), e("audio_fecho", "c_fecho"), e("c_f_r", "end", "timeout"),
     # pós-pix: print vai direto pro validador; texto passa na triagem
     # (objeção → downsell 14,90; "ok, vou pagar" → aguardo; resto valida)
     e("c5", "cond_receipt"),

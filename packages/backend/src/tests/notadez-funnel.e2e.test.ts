@@ -225,8 +225,9 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   await r.svc.handleIncomingMessage(r.bot, PHONE, '1')    // ← menu
   assert.equal(convOf(r)?.currentNodeId, 'c_amostra')
   assert.ok(r.msgs.all.some(m => m.includes('2 a 3 anos')), 'menu "1" vira rótulo "2 a 3 anos"')
-  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 2, 'voice notes da dor e do material enviados')
-  assert.ok(r.msgs.media.some(m => (m.mediaType ?? 'image') === 'image'), 'capa do kit enviada na etapa da solução')
+  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note da dor enviado')
+  assert.ok(r.msgs.media.some(m => (m.mediaType ?? 'image') === 'image'), 'capa (prova+convite) enviada')
+  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 3, `rajada pós-faixa enxuta (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 3)`)
 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← case-insensitive
@@ -234,8 +235,9 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   const vids = r.msgs.media.filter(m => m.mediaType === 'video')
   assert.equal(vids.length, 1, 'amostra em vídeo enviada')
   assert.ok(vids[0].mediaUrl.includes('amostra-video'), 'URL do vídeo de amostra')
-  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note do fechamento enviado')
-  assert.ok(r.msgs.all.some(m => m.includes('quero resolver')), 'CTA escrito acompanha o áudio do fechamento')
+  assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note do material enviado')
+  assert.ok(r.msgs.all.some(m => m.includes('quero resolver')), 'CTA escrito na âncora')
+  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 3, `rajada da amostra enxuta (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 3)`)
   assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora R$47,90 presente')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'condição 19,90 presente')
 
@@ -399,7 +401,7 @@ test('goto revive conversa em handoff: disparar um nó devolve pro bot naquele p
   conv.handoff()
   await r.convs.save(conv)
   r.msgs.clear()
-  conv.moveToNode('t7_cta')
+  conv.moveToNode('t6')
   await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
   assert.equal(convOf(r)?.status, 'waiting', 'sai do handoff e volta a esperar o lead')
   assert.equal(convOf(r)?.currentNodeId, 'c_fecho')

@@ -145,78 +145,16 @@
    }
   },
   {
-   "id": "t3",
-   "type": "text_message",
+   "id": "img_capa",
+   "type": "image",
    "position": {
     "x": 100,
     "y": 800
    },
    "data": {
-    "label": "Solução",
-    "message": "Existe uma forma de virar esse jogo: em vez de criar cada material do zero, você acessa um acervo pronto — organizado por faixa etária e por campo de experiência da BNCC — e só adapta pra sua turma.\n\nIsso aqui é o que fica disponível pra você 👇"
-   }
-  },
-  {
-   "id": "img_capa",
-   "type": "image",
-   "position": {
-    "x": 100,
-    "y": 950
-   },
-   "data": {
-    "label": "Capa do kit",
+    "label": "Capa (prova + convite)",
     "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/00-capa-kit.jpg",
-    "caption": "Reduz o tempo de planejamento de horas pra minutos."
-   }
-  },
-  {
-   "id": "img_materiais",
-   "type": "image",
-   "position": {
-    "x": 250,
-    "y": 950
-   },
-   "data": {
-    "label": "Mockup 1.000 materiais",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/02-materiais.jpg",
-    "caption": "São mais de 1.000 materiais prontos e editáveis, tudo organizado 🤩"
-   }
-  },
-  {
-   "id": "audio_material",
-   "type": "image",
-   "position": {
-    "x": 400,
-    "y": 950
-   },
-   "data": {
-    "label": "Áudio: explicando o material",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-material.ogg",
-    "mediaType": "audio"
-   }
-  },
-  {
-   "id": "t4",
-   "type": "text_message",
-   "position": {
-    "x": 100,
-    "y": 1100
-   },
-   "data": {
-    "label": "Prova social",
-    "message": "E não sou só eu que falo isso: mais de 13 mil professoras já pararam de perder o fim de semana com planejamento usando esse acervo."
-   }
-  },
-  {
-   "id": "t5",
-   "type": "text_message",
-   "position": {
-    "x": 100,
-    "y": 1250
-   },
-   "data": {
-    "label": "Convite amostra",
-    "message": "Quer ver como fica na prática? Gravei um vídeo mostrando a amostra real do que você recebe — atividade lúdica, traçado e modelo de rotina, tudo editável. Me responde *sim* que eu te mando 👇"
+    "caption": "Esse é o acervo completo: mais de 13 mil professoras já usam pra não perder o fim de semana com planejamento.\n\nQuer ver por dentro? Me responde *sim* que eu te mostro 👇"
    }
   },
   {
@@ -251,33 +189,20 @@
     "label": "Amostra em vídeo",
     "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-video.mp4",
     "mediaType": "video",
-    "caption": "Olha na prática 🎥 Páginas reais do acervo — atividade lúdica, traçado e modelo de rotina, tudo pronto pra você só personalizar com o nome da turma e imprimir."
+    "caption": "Olha na prática 🎥 Páginas reais do acervo — tudo editável, é só personalizar e imprimir."
    }
   },
   {
-   "id": "img_planos",
+   "id": "audio_material",
    "type": "image",
    "position": {
     "x": 250,
     "y": 1550
    },
    "data": {
-    "label": "Plano de aula BNCC",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/03-planos-bncc.jpg",
-    "caption": "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
-   }
-  },
-  {
-   "id": "img_atividades",
-   "type": "image",
-   "position": {
-    "x": 400,
-    "y": 1550
-   },
-   "data": {
-    "label": "Atividades práticas",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/04-atividades.jpg",
-    "caption": "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
+    "label": "Áudio: explicando o material",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-material.ogg",
+    "mediaType": "audio"
    }
   },
   {
@@ -288,33 +213,21 @@
     "y": 1700
    },
    "data": {
-    "label": "Âncora 47,90→19,90",
-    "message": "Esse acesso completo — planos, atividades, relatórios, rotinas e projetos — normalmente fica disponível por R$ 47,90.\n\nMas hoje, pra quem chegou até aqui na conversa, consigo liberar seu acesso por *R$ 19,90*, com *garantia incondicional de 30 dias*: se não servir pra sua rotina, devolvemos cada centavo. Risco zero pra você.\n\nIsso não é questão de \"vale a pena\" — é menos que o valor de um lanche, por um problema que te consome toda semana."
+    "label": "Âncora 47,90→19,90 + CTA",
+    "message": "Esse acesso completo normalmente sai por R$ 47,90.\n\nHoje, só nessa conversa: *R$ 19,90*, com *garantia incondicional de 30 dias* — se não servir pra sua rotina, devolvemos cada centavo.\n\nMe diz *quero resolver* que eu já libero seu acesso ⤵️"
    }
   },
   {
    "id": "audio_fecho",
    "type": "image",
    "position": {
-    "x": 100,
-    "y": 1850
+    "x": 400,
+    "y": 2150
    },
    "data": {
-    "label": "Áudio: fechamento 19,90",
+    "label": "Áudio: fechamento (reoferta rm)",
     "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/audio-fecho.ogg",
     "mediaType": "audio"
-   }
-  },
-  {
-   "id": "t7_cta",
-   "type": "text_message",
-   "position": {
-    "x": 250,
-    "y": 1850
-   },
-   "data": {
-    "label": "CTA quero resolver",
-    "message": "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
    }
   },
   {
@@ -975,18 +888,6 @@
    }
   },
   {
-   "id": "t_reoffer",
-   "type": "text_message",
-   "position": {
-    "x": 550,
-    "y": 2150
-   },
-   "data": {
-    "label": "Reoferta 19,90",
-    "message": "Que bom te ver por aqui de novo! 😊\n\nAinda consigo garantir pra você a condição que te mostrei: *R$ 19,90* pelo acesso completo, com garantia de 30 dias. Vou te mandar o Pix aqui embaixo 👇"
-   }
-  },
-  {
    "id": "rm_s4",
    "type": "text_message",
    "position": {
@@ -1050,50 +951,15 @@
    "targetHandle": null
   },
   {
-   "id": "e-audio_dor-t3",
+   "id": "e-audio_dor-img_capa",
    "source": "audio_dor",
-   "target": "t3",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-t3-img_capa",
-   "source": "t3",
    "target": "img_capa",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_capa-img_materiais",
+   "id": "e-img_capa-c_amostra",
    "source": "img_capa",
-   "target": "img_materiais",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-img_materiais-audio_material",
-   "source": "img_materiais",
-   "target": "audio_material",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-audio_material-t4",
-   "source": "audio_material",
-   "target": "t4",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-t4-t5",
-   "source": "t4",
-   "target": "t5",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-t5-c_amostra",
-   "source": "t5",
    "target": "c_amostra",
    "sourceHandle": null,
    "targetHandle": null
@@ -1106,43 +972,22 @@
    "targetHandle": null
   },
   {
-   "id": "e-video_amostra-img_planos",
+   "id": "e-video_amostra-audio_material",
    "source": "video_amostra",
-   "target": "img_planos",
+   "target": "audio_material",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_planos-img_atividades",
-   "source": "img_planos",
-   "target": "img_atividades",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-img_atividades-t6",
-   "source": "img_atividades",
+   "id": "e-audio_material-t6",
+   "source": "audio_material",
    "target": "t6",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-t6-audio_fecho",
+   "id": "e-t6-c_fecho",
    "source": "t6",
-   "target": "audio_fecho",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-audio_fecho-t7_cta",
-   "source": "audio_fecho",
-   "target": "t7_cta",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-t7_cta-c_fecho",
-   "source": "t7_cta",
    "target": "c_fecho",
    "sourceHandle": null,
    "targetHandle": null
@@ -1288,16 +1133,16 @@
    "targetHandle": null
   },
   {
-   "id": "e-c_f_r-t_reoffer",
+   "id": "e-c_f_r-audio_fecho",
    "source": "c_f_r",
-   "target": "t_reoffer",
+   "target": "audio_fecho",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-t_reoffer-pix_main",
-   "source": "t_reoffer",
-   "target": "pix_main",
+   "id": "e-audio_fecho-c_fecho",
+   "source": "audio_fecho",
+   "target": "c_fecho",
    "sourceHandle": null,
    "targetHandle": null
   },
