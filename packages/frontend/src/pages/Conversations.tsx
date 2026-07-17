@@ -4,6 +4,27 @@ import { MessageCircle, Clock, Send, Pause, Play, Gift, SkipForward } from 'luci
 import { MkLayout } from '../components/mkhub/MkLayout.tsx'
 import { Eyebrow, MkCard } from '../components/mkhub'
 import { api } from '../api/client.ts'
+import { useAuthStore } from '../stores/authStore.ts'
+
+// Mídia interna protegida (ex.: comprovante em /api/receipts/...): <img src> não
+// manda o JWT — busca com o token e renderiza como blob.
+function AuthImg({ url, style }: { url: string; style?: React.CSSProperties }) {
+  const [src, setSrc] = useState<string | null>(null)
+  useEffect(() => {
+    let obj: string | null = null
+    let alive = true
+    const token = useAuthStore.getState().token
+    fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => (r.ok ? r.blob() : null))
+      .then(b => {
+        if (b && alive) { obj = URL.createObjectURL(b); setSrc(obj) }
+      })
+      .catch(() => {})
+    return () => { alive = false; if (obj) URL.revokeObjectURL(obj) }
+  }, [url])
+  if (!src) return <span style={{ opacity: 0.6 }}>📎 carregando comprovante…</span>
+  return <a href={src} target="_blank" rel="noreferrer"><img src={src} alt="" style={style} /></a>
+}
 
 interface MsgMedia {
   type: 'image' | 'video' | 'audio' | 'document'
@@ -416,9 +437,11 @@ export function Conversations() {
                               ? { background: 'var(--ink)', color: 'var(--paper)', padding: '9px 14px', borderRadius: '14px 14px 4px 14px', boxShadow: '0 2px 8px rgba(10,10,10,.08)' }
                               : { background: 'var(--paper-2)', color: 'var(--ink)', border: '1px solid var(--line)', padding: '9px 14px', borderRadius: '14px 14px 14px 4px' }}>
                             {m.media?.type === 'image' && (m.media.url
-                              ? <a href={m.media.url} target="_blank" rel="noreferrer">
-                                  <img src={m.media.url} alt="" style={{ maxWidth: 220, borderRadius: 10, display: 'block', marginBottom: text ? 8 : 0 }} />
-                                </a>
+                              ? (m.media.url.startsWith('/api/')
+                                  ? <AuthImg url={m.media.url} style={{ maxWidth: 220, borderRadius: 10, display: 'block', marginBottom: text ? 8 : 0 }} />
+                                  : <a href={m.media.url} target="_blank" rel="noreferrer">
+                                      <img src={m.media.url} alt="" style={{ maxWidth: 220, borderRadius: 10, display: 'block', marginBottom: text ? 8 : 0 }} />
+                                    </a>)
                               : <span style={{ opacity: 0.9 }}>📷 Imagem recebida{text ? '' : ' (abrir no WhatsApp)'}</span>)}
                             {m.media?.type === 'video' && m.media.url && (
                               <video src={m.media.url} controls preload="metadata"

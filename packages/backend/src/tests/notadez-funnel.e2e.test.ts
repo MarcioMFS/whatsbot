@@ -256,9 +256,12 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
   r.msgs.clear()
+  const convRef = convOf(r)!   // ref antes: a conversa encerra (e sai do store) após a entrega
   await r.svc.handleIncomingMessage(r.bot, PHONE, '[image]', 'RECEIPT_OK')
   const lead = await r.leads.findByPhone(BOT_ID, PHONE)
   assert.ok(lead?.tags.includes('buyer'), 'comprador ganha tag buyer')
+  const receiptMsg = convRef.history.find(m => m.content.includes('Comprovante aprovado'))
+  assert.ok(receiptMsg?.media?.url?.startsWith('/api/receipts/'), 'comprovante salvo e anexado à conversa (vinculado ao pedido)')
   assert.equal(r.msgs.media.filter(m => m.mediaType === 'document').length, 16, 'entrega dos 16 PDFs')
   assert.ok(r.msgs.all.some(m => m.includes('bônus surpresa')), 'mensagem final da entrega')
 })

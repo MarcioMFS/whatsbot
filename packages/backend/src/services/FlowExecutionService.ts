@@ -51,6 +51,12 @@ import {
 } from '@whatsbot/core'
 import type { AIGenerationService } from './AIGenerationService.js'
 import { buildPixBrCode } from './pixBrCode.js'
+import { mkdirSync, writeFileSync } from 'fs'
+import { join as joinPath } from 'path'
+
+// Comprovantes aprovados: 1 arquivo por PaymentIntent (pedido) — nunca públicos,
+// servidos só pela rota autenticada /api/receipts/:botId/:intentId.
+export const RECEIPTS_DIR = process.env.RECEIPTS_DIR ?? joinPath(process.cwd(), '..', '..', 'receipts')
 import type { PaymentOrchestrator } from '../payment/PaymentOrchestrator.js'
 import type { CatalogSearchService } from './CatalogSearchService.js'
 import { EscapeHatchService, type EscapeRoute } from './EscapeHatchService.js'
@@ -1382,6 +1388,24 @@ export class FlowExecutionService {
 
         conversation.setVariable('__validation_reason', result.decision.reason)
         conversation.setVariable('__validation_approved', result.decision.approved ? 'true' : 'false')
+
+        // Comprovante APROVADO → persiste vinculado ao PaymentIntent (o pedido X) e
+        // anexa a bolha de aprovação com a imagem na conversa (auditoria + tela).
+        // Upsell/nova venda cria intent novo → arquivo novo; nada sobrescreve.
+        if (result.decision.approved) {
+          try {
+            const dir = joinPath(RECEIPTS_DIR, bot.id)
+            mkdirSync(dir, { recursive: true })
+            writeFileSync(joinPath(dir, `${paymentIntentId}.jpg`), Buffer.from(imageBase64, 'base64'))
+            conversation.addAssistantMessage(
+              `✅ Comprovante aprovado · pedido ${paymentIntentId.slice(0, 8)}`,
+              { type: 'image', url: `/api/receipts/${bot.id}/${paymentIntentId}`, filename: `comprovante-${paymentIntentId.slice(0, 8)}.jpg` },
+            )
+            this.emit(bot.id, conversation.id, conversation.phoneNumber, 'receipt_saved' as never, { paymentIntentId })
+          } catch (err) {
+            console.error('[ai_validate_receipt] falha ao salvar comprovante (validação segue):', (err as Error)?.message)
+          }
+        }
 
         await this.messaging.sendMessage({ instanceName: instance, instanceId, phoneNumber: phone, message: result.userMessage })
 

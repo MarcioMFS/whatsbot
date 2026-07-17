@@ -9,3 +9,4 @@ packages/*/dist/
 packages/frontend/public/media/eduzzy/kit/
 scripts/__pycache__/
 .watchdog-config.json
+receipts/

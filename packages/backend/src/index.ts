@@ -10,6 +10,7 @@ import { aiRoutes } from './routes/ai.js'
 import { botRoutes } from './routes/bots.js'
 import { flowRoutes } from './routes/flows.js'
 import { conversationRoutes } from './routes/conversations.js'
+import { receiptRoutes } from './routes/receipts.js'
 import { webhookRoutes } from './routes/webhooks.js'
 import { PostgreSQLBotRepository } from './adapters/PostgreSQLBotRepository.js'
 import { PostgreSQLFlowRepository } from './adapters/PostgreSQLFlowRepository.js'
@@ -188,6 +189,7 @@ await app.register(aiRoutes, { prefix: '/api/ai', aiService })
 await app.register(botRoutes, { prefix: '/api/bots', ...ctx })
 await app.register(flowRoutes, { prefix: '/api/flows', ...ctx, segmentGen })
 await app.register(conversationRoutes, { prefix: '/api/conversations', ...ctx })
+await app.register(receiptRoutes, { prefix: '/api/receipts', botRepo })
 await app.register(leadRoutes, { prefix: '/api/leads', ...ctx })
 await app.register(productRoutes, { prefix: '/api/products', productRepo, botRepo })
 await app.register(orderRoutes, { prefix: '/api/orders', orderRepo, botRepo })
