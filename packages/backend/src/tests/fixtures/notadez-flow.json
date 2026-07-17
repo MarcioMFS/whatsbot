@@ -152,22 +152,9 @@
     "y": 800
    },
    "data": {
-    "label": "Capa (prova social)",
+    "label": "Capa (prova + convite)",
     "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/00-capa-kit.jpg",
-    "caption": "Esse é o acervo completo: mais de 13 mil professoras já usam pra não perder o fim de semana com planejamento."
-   }
-  },
-  {
-   "id": "img_materiais",
-   "type": "image",
-   "position": {
-    "x": 250,
-    "y": 800
-   },
-   "data": {
-    "label": "Mockup 1.000 materiais (convite)",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/02-materiais.jpg",
-    "caption": "São mais de 1.000 materiais prontos e editáveis 🤩\n\nQuer ver por dentro? Me responde *sim* que eu te mostro 👇"
+    "caption": "Esse é o acervo completo: mais de 13 mil professoras já usam pra não perder o fim de semana com planejamento.\n\nQuer ver por dentro? Me responde *sim* que eu te mostro 👇"
    }
   },
   {
@@ -206,36 +193,49 @@
    }
   },
   {
-   "id": "img_planos",
+   "id": "img_am1",
    "type": "image",
    "position": {
     "x": 250,
     "y": 1550
    },
    "data": {
-    "label": "Plano de aula BNCC",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/03-planos-bncc.jpg",
-    "caption": "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
+    "label": "Amostra real: labirinto",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-1-labirinto.jpg",
+    "caption": "Página real do acervo — atividade lúdica de labirinto 🌟"
    }
   },
   {
-   "id": "img_atividades",
+   "id": "img_am2",
    "type": "image",
    "position": {
     "x": 400,
     "y": 1550
    },
    "data": {
-    "label": "Atividades práticas",
-    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/04-atividades.jpg",
-    "caption": "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
+    "label": "Amostra real: traçar",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-2-tracar.jpg",
+    "caption": "Página real — traçar e escrever, pronta pra imprimir ✏️"
+   }
+  },
+  {
+   "id": "img_am3",
+   "type": "image",
+   "position": {
+    "x": 550,
+    "y": 1550
+   },
+   "data": {
+    "label": "Amostra real: rotina",
+    "mediaUrl": "https://whatsbot.mfslabs.com.br/media/eduzzy/amostra-3-rotina.jpg",
+    "caption": "Modelo de rotina diária pronto 🕐 É só personalizar com o nome da turma e usar."
    }
   },
   {
    "id": "audio_material",
    "type": "image",
    "position": {
-    "x": 550,
+    "x": 700,
     "y": 1550
    },
    "data": {
@@ -997,15 +997,8 @@
    "targetHandle": null
   },
   {
-   "id": "e-img_capa-img_materiais",
+   "id": "e-img_capa-c_amostra",
    "source": "img_capa",
-   "target": "img_materiais",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
-   "id": "e-img_materiais-c_amostra",
-   "source": "img_materiais",
    "target": "c_amostra",
    "sourceHandle": null,
    "targetHandle": null
@@ -1018,22 +1011,29 @@
    "targetHandle": null
   },
   {
-   "id": "e-video_amostra-img_planos",
+   "id": "e-video_amostra-img_am1",
    "source": "video_amostra",
-   "target": "img_planos",
+   "target": "img_am1",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_planos-img_atividades",
-   "source": "img_planos",
-   "target": "img_atividades",
+   "id": "e-img_am1-img_am2",
+   "source": "img_am1",
+   "target": "img_am2",
    "sourceHandle": null,
    "targetHandle": null
   },
   {
-   "id": "e-img_atividades-audio_material",
-   "source": "img_atividades",
+   "id": "e-img_am2-img_am3",
+   "source": "img_am2",
+   "target": "img_am3",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-img_am3-audio_material",
+   "source": "img_am3",
    "target": "audio_material",
    "sourceHandle": null,
    "targetHandle": null

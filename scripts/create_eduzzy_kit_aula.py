@@ -71,7 +71,7 @@ IMG = {
     "print2":    f"{MEDIA_BASE}/06-print2.jpg",  # TODO print real
     "print3":    f"{MEDIA_BASE}/07-print3.jpg",  # TODO print real
     "print4":    f"{MEDIA_BASE}/08-print4.jpg",  # TODO print real
-    "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit (legado, fora da corrente)
+    "amostra1":  f"{MEDIA_BASE}/amostra-1-labirinto.jpg",   # páginas REAIS do kit (pdftoppm dos PDFs 05/10/11)
     "amostra2":  f"{MEDIA_BASE}/amostra-2-tracar.jpg",
     "amostra3":  f"{MEDIA_BASE}/amostra-3-rotina.jpg",
     # vídeo de amostra real (720p ~9MB, h264+aac; original em /root/work/.claude-uploads/)
@@ -158,19 +158,17 @@ T1_VARIACOES = [
 ]
 # A dor agora é o ÁUDIO da Juliana (AUDIO["dor"]); o texto vira só o eco da faixa.
 T2_ECO = "Perfeito, {{faixa_etaria}} então! 👇"
-# v12b: texto enxuto + AMOSTRA COMPLETA em mídia. Prova social e convite viram
-# legendas das imagens — o paredão de texto não volta.
+# v12c: texto enxuto + amostra completa com PÁGINAS REAIS do PDF (não arte de IA —
+# recomendação da autópsia e definição do Marcio/Kleber). Prova+convite na legenda da capa.
 CAP_CAPA = (
     "Esse é o acervo completo: mais de 13 mil professoras já usam pra não perder "
-    "o fim de semana com planejamento."
-)
-CAP_MATERIAIS = (
-    "São mais de 1.000 materiais prontos e editáveis 🤩\n\n"
+    "o fim de semana com planejamento.\n\n"
     "Quer ver por dentro? Me responde *sim* que eu te mostro 👇"
 )
 CAP_VIDEO = "Olha na prática 🎥 Páginas reais do acervo — tudo editável, é só personalizar e imprimir."
-CAP_PLANOS = "Planos de aula alinhados à BNCC, prontinhos pra preencher 📋"
-CAP_ATIVIDADES = "Atividades práticas: é só imprimir e aplicar com a turminha ✂️"
+CAP_AM1 = "Página real do acervo — atividade lúdica de labirinto 🌟"
+CAP_AM2 = "Página real — traçar e escrever, pronta pra imprimir ✏️"
+CAP_AM3 = "Modelo de rotina diária pronto 🕐 É só personalizar com o nome da turma e usar."
 # Âncora + garantia + CTA numa bolha só (o detalhe do acervo já veio no áudio do material)
 T6_PRECO = (
     "Esse acesso completo normalmente sai por R$ 47,90.\n\n"
@@ -254,18 +252,18 @@ nodes = [
     text("t2", 100, Y[4], "Eco da faixa", T2_ECO),
     n("audio_dor", "image", 250, Y[4], {
         "label": "Áudio: a dor", "mediaUrl": AUDIO["dor"], "mediaType": "audio"}),
-    image("img_capa", 100, Y[5], "Capa (prova social)", IMG["capa"], caption=CAP_CAPA),
-    image("img_materiais", 250, Y[5], "Mockup 1.000 materiais (convite)", IMG["materiais"], caption=CAP_MATERIAIS),
+    image("img_capa", 100, Y[5], "Capa (prova + convite)", IMG["capa"], caption=CAP_CAPA),
 ] + ([image("img_print1", 400, Y[5], "Depoimento real", IMG["print1"])] if HAS_PRINTS else []) + [
     capture("c_amostra", 100, Y[9], "Aguardar sim amostra", "quer_amostra", timeout=20),
 
-    # E4 — amostra COMPLETA: vídeo + páginas de produto + áudio explicando + âncora c/ CTA
+    # E4 — amostra COMPLETA: vídeo + 3 páginas REAIS do PDF + áudio explicando + âncora c/ CTA
     n("video_amostra", "image", 100, Y[10], {
         "label": "Amostra em vídeo", "mediaUrl": IMG["amostra_video"],
         "mediaType": "video", "caption": CAP_VIDEO}),
-    image("img_planos", 250, Y[10], "Plano de aula BNCC", IMG["planos"], caption=CAP_PLANOS),
-    image("img_atividades", 400, Y[10], "Atividades práticas", IMG["atividades"], caption=CAP_ATIVIDADES),
-    n("audio_material", "image", 550, Y[10], {
+    image("img_am1", 250, Y[10], "Amostra real: labirinto", IMG["amostra1"], caption=CAP_AM1),
+    image("img_am2", 400, Y[10], "Amostra real: traçar", IMG["amostra2"], caption=CAP_AM2),
+    image("img_am3", 550, Y[10], "Amostra real: rotina", IMG["amostra3"], caption=CAP_AM3),
+    n("audio_material", "image", 700, Y[10], {
         "label": "Áudio: explicando o material", "mediaUrl": AUDIO["material"], "mediaType": "audio"}),
     text("t6", 100, Y[11], "Âncora 47,90→19,90 + CTA", T6_PRECO),
     n("audio_fecho", "image", 400, Y[14], {
@@ -334,9 +332,9 @@ nodes = [
 ]
 
 chain = [
-    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "img_capa", "img_materiais",
+    "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "img_capa",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
-    "c_amostra", "video_amostra", "img_planos", "img_atividades", "audio_material",
+    "c_amostra", "video_amostra", "img_am1", "img_am2", "img_am3", "audio_material",
     "t6", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
 ]
 
