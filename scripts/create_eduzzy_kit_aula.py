@@ -191,9 +191,14 @@ T_PIX_AFTER = (
 # IA de dúvidas pós-pix: pergunta que não é objeção/ack/pagamento cai num FAQ
 # TRAVADO da Juliana (única fonte da verdade; nunca preço, nunca "confirmado";
 # fora do FAQ → chama a equipe). Erro de IA → cai no aguardo padrão (t_ack).
-FAQ_PROMPT = (
-    "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de "
-    "educação infantil que acabou de receber o Pix do Kit Aula Pronta e fez uma pergunta.\n\n"
+def faq_prompt(contexto: str, cta: str) -> str:
+    return (
+        f"Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de "
+        f"educação infantil que {contexto} e fez uma pergunta.\n\n" + FAQ_CORPO +
+        f"- Feche sempre com carinho: {cta}"
+    )
+
+FAQ_CORPO = (
     "FATOS (única fonte da verdade — não invente NADA além disso):\n"
     "- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à "
     "BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de "
@@ -210,8 +215,26 @@ FAQ_PROMPT = (
     "- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n"
     "- NUNCA diga que o pagamento foi confirmado ou recebido.\n"
     "- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n"
-    "- Feche sempre lembrando com carinho: quando pagar, é só mandar o print do comprovante aqui."
 )
+
+FAQ_PROMPT = faq_prompt(
+    "acabou de receber o Pix do Kit Aula Pronta",
+    "quando pagar, é só mandar o print do comprovante aqui.")
+FAQ_PROMPT_FECHO = faq_prompt(
+    "está decidindo a compra do Kit Aula Pronta (ainda não recebeu o código Pix)",
+    "se quiser garantir, é só dizer 'quero resolver' que você libera o acesso na hora.")
+
+# Objeção de dinheiro/agenda no FECHAMENTO (nº1 da autópsia: "sem dinheiro, só no
+# final do mês") — acolhe, guarda a condição e deixa a porta aberta. Lead real
+# 556899411016 ficou no vácuo com isso em 2026-07-17.
+T_OBJ_FECHO = (
+    "Te entendo perfeitamente 💙 Fica tranquila!\n\n"
+    "Vou guardar seu acesso e a condição de *R$ 19,90* aqui na nossa conversa — quando "
+    "der pra você, é só me mandar um *quero resolver* que eu libero na hora.\n\n"
+    "E lembra: você tem *garantia incondicional de 30 dias* — se não servir pra sua "
+    "rotina, devolvemos cada centavo. Risco zero 😊"
+)
+T_REANCHOR = "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
 
 # Confirmação neutra pós-pix ("ok", "vou pagar") → aguardo simpático, NUNCA o
 # validador de comprovante (bug real 2026-07-17: "Ok" levou rejeição de print inexistente)
@@ -256,12 +279,8 @@ FAIXA_EXTRA = {
     "errorMessage": ("Só preciso da faixa da sua turminha 😊 Responda *1*, *2*, *3* ou *4*:\n"
                      "1️⃣ 2 a 3 anos\n2️⃣ 3 a 4 anos\n3️⃣ 4 a 5 anos\n4️⃣ 5 a 6 anos"),
 }
-FECHO_EXTRA = {
-    "validationRegex": "resolver|quero|sim|ok|okay|claro|bora|vamos|pode|fech|aceito|libera|👍",
-    "errorMessage": ("Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\n"
-                     "Enquanto isso, me confirma: quer resolver isso hoje? Me diz *quero resolver* "
-                     "que eu já libero seu acesso ⤵️"),
-}
+# O fechamento não rejeita mais por regex (objeção de caixa morria em silêncio):
+# c_fecho aceita tudo e a triagem classify_fecho decide — fechar / objeção / IA.
 
 nodes = [
     n("trigger", "trigger", 100, Y[0], {"label": "Início (qualquer mensagem)", "triggerType": "any_message"}),
@@ -296,7 +315,25 @@ nodes = [
     text("t6", 100, Y[11], "Âncora 47,90→19,90 + CTA", T6_PRECO),
     n("audio_fecho", "image", 400, Y[14], {
         "label": "Áudio: fechamento (reoferta rm)", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
-    capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20, extra=FECHO_EXTRA),
+    capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20),
+    n("classify_fecho", "classify_intent", 250, Y[13], {
+        "label": "Triagem do fechamento", "intents": [
+            {"handle": "close", "label": "Quer fechar",
+             "patterns": ["quero resolver", "quero", "resolver", "sim", "ok", "okay", "claro",
+                          "bora", "vamos", "pode", "fechado", "fechar", "aceito", "libera",
+                          "quero sim", "manda", "envia", "👍"]},
+            {"handle": "objection", "label": "Objeção dinheiro/agenda",
+             "patterns": ["não tenho", "nao tenho", "tá caro", "ta caro", "muito caro", "sem dinheiro",
+                          "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",
+                          "depois eu", "mês que vem", "mes que vem", "quando receber", "semana que vem",
+                          "final do mes", "final do mês", "fim do mes", "fim do mês", "to sem",
+                          "tô sem", "estou sem", "salario", "salário", "quando eu puder"]},
+            {"handle": "doubt", "label": "Dúvida → IA FAQ", "isDefault": True}]}),
+    text("t_obj_fecho", 550, Y[13], "Acolhe objeção (guarda condição)", T_OBJ_FECHO),
+    n("ai_faq_fecho", "ai_response", 700, Y[13], {
+        "label": "IA: dúvidas no fechamento", "systemPrompt": FAQ_PROMPT_FECHO,
+        "useHistory": True, "temperature": 0.4, "maxTokens": 220}),
+    text("t_reanchor", 850, Y[13], "Re-âncora", T_REANCHOR),
 
     # Pix 19,90 copia-e-cola (BR Code com valor embutido) + comprovante
     n("pix_main", "pix", 100, Y[14], {
@@ -376,8 +413,10 @@ chain = [
     "tag_entry", "t1", "c_faixa", "t2", "audio_dor", "img_capa",
 ] + (["img_print1"] if HAS_PRINTS else []) + [
     "c_amostra", "video_amostra", "img_am1", "img_am2", "img_am3", "audio_material",
-    "t6", "c_fecho", "t_pix_after", "pix_main", "tag_checkout", "c5",
+    "t6", "c_fecho",
 ]
+# caminho do pix (alvo do handle 'close' da triagem do fechamento)
+chain_pix = ["t_pix_after", "pix_main", "tag_checkout", "c5"]
 
 if not INCLUDE_IMAGES:
     # Sem imagens: legenda vira mensagem de texto; imagem sem legenda sai da corrente.
@@ -396,6 +435,17 @@ if not INCLUDE_IMAGES:
     chain = kept
 
 edges = [e(chain[i], chain[i + 1]) for i in range(len(chain) - 1)]
+edges += [e(chain_pix[i], chain_pix[i + 1]) for i in range(len(chain_pix) - 1)]
+
+# ── Triagem do fechamento: fechar / objeção acolhida / dúvida → IA ───────────
+edges += [
+    e("c_fecho", "classify_fecho"),
+    e("classify_fecho", "t_pix_after", "close"),
+    e("classify_fecho", "t_obj_fecho", "objection"), e("t_obj_fecho", "c_fecho"),
+    e("classify_fecho", "ai_faq_fecho", "doubt"),
+    e("ai_faq_fecho", "c_fecho", "success"), e("ai_faq_fecho", "t_reanchor", "error"),
+    e("t_reanchor", "c_fecho"),
+]
 
 # ── Edges: guardas, remarketing suave, comprovante, entrega ──────────────────
 edges += [

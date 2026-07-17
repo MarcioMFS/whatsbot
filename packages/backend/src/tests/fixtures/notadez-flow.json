@@ -287,9 +287,121 @@
      "quero",
      "kit",
      "professora"
-    ],
-    "validationRegex": "resolver|quero|sim|ok|okay|claro|bora|vamos|pode|fech|aceito|libera|👍",
-    "errorMessage": "Ótima pergunta! 😊 Se ficar qualquer dúvida, nossa equipe te responde por aqui.\n\nEnquanto isso, me confirma: quer resolver isso hoje? Me diz *quero resolver* que eu já libero seu acesso ⤵️"
+    ]
+   }
+  },
+  {
+   "id": "classify_fecho",
+   "type": "classify_intent",
+   "position": {
+    "x": 250,
+    "y": 2000
+   },
+   "data": {
+    "label": "Triagem do fechamento",
+    "intents": [
+     {
+      "handle": "close",
+      "label": "Quer fechar",
+      "patterns": [
+       "quero resolver",
+       "quero",
+       "resolver",
+       "sim",
+       "ok",
+       "okay",
+       "claro",
+       "bora",
+       "vamos",
+       "pode",
+       "fechado",
+       "fechar",
+       "aceito",
+       "libera",
+       "quero sim",
+       "manda",
+       "envia",
+       "👍"
+      ]
+     },
+     {
+      "handle": "objection",
+      "label": "Objeção dinheiro/agenda",
+      "patterns": [
+       "não tenho",
+       "nao tenho",
+       "tá caro",
+       "ta caro",
+       "muito caro",
+       "sem dinheiro",
+       "só tenho",
+       "so tenho",
+       "mais barato",
+       "desconto",
+       "não posso",
+       "nao posso",
+       "depois eu",
+       "mês que vem",
+       "mes que vem",
+       "quando receber",
+       "semana que vem",
+       "final do mes",
+       "final do mês",
+       "fim do mes",
+       "fim do mês",
+       "to sem",
+       "tô sem",
+       "estou sem",
+       "salario",
+       "salário",
+       "quando eu puder"
+      ]
+     },
+     {
+      "handle": "doubt",
+      "label": "Dúvida → IA FAQ",
+      "isDefault": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "t_obj_fecho",
+   "type": "text_message",
+   "position": {
+    "x": 550,
+    "y": 2000
+   },
+   "data": {
+    "label": "Acolhe objeção (guarda condição)",
+    "message": "Te entendo perfeitamente 💙 Fica tranquila!\n\nVou guardar seu acesso e a condição de *R$ 19,90* aqui na nossa conversa — quando der pra você, é só me mandar um *quero resolver* que eu libero na hora.\n\nE lembra: você tem *garantia incondicional de 30 dias* — se não servir pra sua rotina, devolvemos cada centavo. Risco zero 😊"
+   }
+  },
+  {
+   "id": "ai_faq_fecho",
+   "type": "ai_response",
+   "position": {
+    "x": 700,
+    "y": 2000
+   },
+   "data": {
+    "label": "IA: dúvidas no fechamento",
+    "systemPrompt": "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de educação infantil que está decidindo a compra do Kit Aula Pronta (ainda não recebeu o código Pix) e fez uma pergunta.\n\nFATOS (única fonte da verdade — não invente NADA além disso):\n- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de rotina, relatórios e pareceres.\n- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e cola' — o valor já vai preenchido.\n- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o comprovante for confirmado.\n- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\nREGRAS OBRIGATÓRIAS:\n- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n- NUNCA diga que o pagamento foi confirmado ou recebido.\n- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n- Feche sempre com carinho: se quiser garantir, é só dizer 'quero resolver' que você libera o acesso na hora.",
+    "useHistory": true,
+    "temperature": 0.4,
+    "maxTokens": 220
+   }
+  },
+  {
+   "id": "t_reanchor",
+   "type": "text_message",
+   "position": {
+    "x": 850,
+    "y": 2000
+   },
+   "data": {
+    "label": "Re-âncora",
+    "message": "Me diz *quero resolver* que eu já libero seu acesso ⤵️"
    }
   },
   {
@@ -470,7 +582,7 @@
    },
    "data": {
     "label": "IA: dúvidas pós-pix (FAQ travado)",
-    "systemPrompt": "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de educação infantil que acabou de receber o Pix do Kit Aula Pronta e fez uma pergunta.\n\nFATOS (única fonte da verdade — não invente NADA além disso):\n- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de rotina, relatórios e pareceres.\n- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e cola' — o valor já vai preenchido.\n- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o comprovante for confirmado.\n- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\nREGRAS OBRIGATÓRIAS:\n- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n- NUNCA diga que o pagamento foi confirmado ou recebido.\n- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n- Feche sempre lembrando com carinho: quando pagar, é só mandar o print do comprovante aqui.",
+    "systemPrompt": "Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de educação infantil que acabou de receber o Pix do Kit Aula Pronta e fez uma pergunta.\n\nFATOS (única fonte da verdade — não invente NADA além disso):\n- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de rotina, relatórios e pareceres.\n- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e cola' — o valor já vai preenchido.\n- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o comprovante for confirmado.\n- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\nREGRAS OBRIGATÓRIAS:\n- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n- NUNCA diga que o pagamento foi confirmado ou recebido.\n- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n- Feche sempre com carinho: quando pagar, é só mandar o print do comprovante aqui.",
     "useHistory": true,
     "temperature": 0.4,
     "maxTokens": 220
@@ -1128,13 +1240,6 @@
    "targetHandle": null
   },
   {
-   "id": "e-c_fecho-t_pix_after",
-   "source": "c_fecho",
-   "target": "t_pix_after",
-   "sourceHandle": null,
-   "targetHandle": null
-  },
-  {
    "id": "e-t_pix_after-pix_main",
    "source": "t_pix_after",
    "target": "pix_main",
@@ -1152,6 +1257,62 @@
    "id": "e-tag_checkout-c5",
    "source": "tag_checkout",
    "target": "c5",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-c_fecho-classify_fecho",
+   "source": "c_fecho",
+   "target": "classify_fecho",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_fecho-t_pix_after-close",
+   "source": "classify_fecho",
+   "target": "t_pix_after",
+   "sourceHandle": "close",
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_fecho-t_obj_fecho-objection",
+   "source": "classify_fecho",
+   "target": "t_obj_fecho",
+   "sourceHandle": "objection",
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_obj_fecho-c_fecho",
+   "source": "t_obj_fecho",
+   "target": "c_fecho",
+   "sourceHandle": null,
+   "targetHandle": null
+  },
+  {
+   "id": "e-classify_fecho-ai_faq_fecho-doubt",
+   "source": "classify_fecho",
+   "target": "ai_faq_fecho",
+   "sourceHandle": "doubt",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ai_faq_fecho-c_fecho-success",
+   "source": "ai_faq_fecho",
+   "target": "c_fecho",
+   "sourceHandle": "success",
+   "targetHandle": null
+  },
+  {
+   "id": "e-ai_faq_fecho-t_reanchor-error",
+   "source": "ai_faq_fecho",
+   "target": "t_reanchor",
+   "sourceHandle": "error",
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_reanchor-c_fecho",
+   "source": "t_reanchor",
+   "target": "c_fecho",
    "sourceHandle": null,
    "targetHandle": null
   },

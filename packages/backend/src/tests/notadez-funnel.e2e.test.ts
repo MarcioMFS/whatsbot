@@ -274,9 +274,9 @@ test('faixa "3 a 4 anos" por extenso fica verbatim (não vira item 3 do menu)', 
   assert.ok(!r.msgs.all.some(m => m.includes('4 a 5 anos')), 'não pode mapear pro item 3')
 })
 
-// ─── 3. Aparte: pergunta não avança; re-âncora; 2º aparte → handoff TERMINAL ──
+// ─── 3. Triagem do fechamento: dúvida → IA; objeção de caixa → acolhe; nada morre mudo ──
 
-test('pergunta no fechamento: re-âncora sem avançar; 2ª ESPAÇADA → handoff terminal; msgs seguintes ignoradas', async () => {
+test('pergunta no fechamento → IA responde sem avançar; "quero resolver" depois fecha normal', async () => {
   const r2 = rig()
   await walkTo(r2, 'c_fecho')
   assert.equal(convOf(r2)?.currentNodeId, 'c_fecho')
@@ -284,37 +284,26 @@ test('pergunta no fechamento: re-âncora sem avançar; 2ª ESPAÇADA → handoff
   r2.msgs.clear()
   await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'É impresso ou digital?')
   assert.equal(convOf(r2)?.currentNodeId, 'c_fecho', 'pergunta NÃO avança o funil')
-  assert.ok(r2.msgs.all.some(m => m.toLowerCase().includes('quero resolver')), 're-âncora repete a pergunta do funil')
+  assert.ok(r2.msgs.all.includes('stub'), 'IA FAQ do fechamento respondeu')
   assert.ok(!r2.msgs.all.some(m => m.includes('equipenotadez')), 'não pode ter avançado pro pix')
 
-  // simula ESPAÇAMENTO (>30s/60s): rejeição espaçada de verdade conta pro escalonamento
-  const conv1 = convOf(r2)!
-  conv1.setVariable('__capture_reject_at', String(Date.now() - 40_000))
-  conv1.setVariable('__capture_errmsg_at', String(Date.now() - 70_000))
-
   r2.msgs.clear()
-  await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'e vem apostila junto?')
-  assert.equal(convOf(r2)?.status, 'handoff', '2º aparte ESPAÇADO escala pro humano')
-
-  r2.msgs.clear()
-  await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'alô?')
-  assert.equal(r2.msgs.texts.length, 0, 'handoff é mudo (nada de funil por cima do humano)')
-  assert.equal(convOf(r2)?.status, 'handoff', 'handoff é TERMINAL (não vira ended)')
+  await r2.svc.handleIncomingMessage(r2.bot, PHONE, 'quero resolver')
+  assert.equal(convOf(r2)?.currentNodeId, 'c5', 'fecha normal depois da dúvida')
 })
 
-test('RAJADA no fechamento: 2 msgs seguidas NÃO escalam nem repetem o aparte; funil segue vivo', async () => {
+test('objeção "sem dinheiro, só no final do mês" no fechamento → acolhe e guarda condição (bug real 17/07)', async () => {
   const r = rig()
   await walkTo(r, 'c_fecho')
 
   r.msgs.clear()
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'tem parcelado?')
-  await r.svc.handleIncomingMessage(r.bot, PHONE, 'tem pra maternal?')   // <30s depois (rajada)
-  assert.notEqual(convOf(r)?.status, 'handoff', 'rajada NÃO escala pro dono')
-  assert.equal(convOf(r)?.currentNodeId, 'c_fecho', 'continua aguardando no mesmo lugar')
-  const apartes = r.msgs.all.filter(m => m.toLowerCase().includes('quero resolver')).length
-  assert.equal(apartes, 1, 'aparte enviado UMA vez (sem papagaio)')
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Mais eu estou sem dinheiro agora só no final do mês oh')
+  assert.ok(r.msgs.all.some(m => m.includes('Vou guardar seu acesso')), 'acolhida da objeção de caixa')
+  assert.ok(r.msgs.all.some(m => m.includes('garantia incondicional')), 'garantia reforçada')
+  assert.equal(convOf(r)?.currentNodeId, 'c_fecho', 'segue esperando o quero resolver')
+  assert.ok(!r.msgs.all.some(m => m.includes('equipenotadez')), 'objeção não dispara pix')
 
-  // e a resposta válida em seguida DESCE o funil normalmente
+  // e quando ela puder, fecha
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'quero resolver sim')
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'resposta válida avança pro pix')
