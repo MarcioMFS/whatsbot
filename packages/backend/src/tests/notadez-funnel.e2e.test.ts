@@ -227,7 +227,8 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   assert.ok(r.msgs.all.some(m => m.includes('2 a 3 anos')), 'menu "1" vira rótulo "2 a 3 anos"')
   assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note da dor enviado')
   assert.ok(r.msgs.media.some(m => (m.mediaType ?? 'image') === 'image'), 'capa (prova+convite) enviada')
-  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 3, `rajada pós-faixa enxuta (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 3)`)
+  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 4, `rajada pós-faixa enxuta (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 4 — texto só no eco)`)
+  assert.equal(r.msgs.texts.length, 1, 'texto da rajada pós-faixa é só o eco (narrativa nos áudios/legendas)')
 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'SIM')  // ← case-insensitive
@@ -237,7 +238,8 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   assert.ok(vids[0].mediaUrl.includes('amostra-video'), 'URL do vídeo de amostra')
   assert.equal(r.msgs.media.filter(m => m.mediaType === 'audio').length, 1, 'voice note do material enviado')
   assert.ok(r.msgs.all.some(m => m.includes('quero resolver')), 'CTA escrito na âncora')
-  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 3, `rajada da amostra enxuta (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 3)`)
+  assert.ok(r.msgs.texts.length + r.msgs.media.length <= 5, `rajada da amostra (${r.msgs.texts.length + r.msgs.media.length} bolhas; máx 5 — amostra completa)`)
+  assert.equal(r.msgs.texts.length, 1, 'texto da rajada da amostra é só a âncora+CTA (narrativa nos áudios/legendas)')
   assert.ok(r.msgs.all.some(m => m.includes('R$ 47,90')), 'âncora R$47,90 presente')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'condição 19,90 presente')
 
