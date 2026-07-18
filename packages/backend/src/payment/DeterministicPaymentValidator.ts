@@ -45,6 +45,7 @@ export class DeterministicPaymentValidator {
     intent: PaymentIntentProps,
     isTransactionAlreadyUsed: boolean,
     isReceiptFingerprintUsed: boolean,
+    tolerances?: { underCentavos?: number; overCentavos?: number | null },
   ): PaymentValidationDecision {
     const base = { extracted, expected: intent, checkedAt: new Date() }
     const reject = (reason: ValidationRejectionReason, debugInfo?: Record<string, unknown>): PaymentValidationDecision =>
@@ -80,16 +81,24 @@ export class DeterministicPaymentValidator {
       return reject('intent_not_pending', { intentStatus: intent.status })
     }
 
-    // ── Rule 6: amount check — pagou IGUAL ou A MAIS aprova ───────────────
-    // Igualdade exata rejeitava cliente que arredonda pra cima (caso real 18/07:
-    // R$ 20,00 num pix de R$ 19,90 → "não consegui confirmar"). A MENOS segue
-    // rejeitando (amount_mismatch) com a diferença no debug pro alerta do dono.
-    if (extracted.amountCentavos < intent.amount) {
-      return reject('amount_mismatch', {
-        extracted: extracted.amountCentavos,
-        expected: intent.amount,
-        diffCentavos: extracted.amountCentavos - intent.amount,
-      })
+    // ── Rule 6: amount check com tolerância configurável (painel do bot) ──
+    // A MENOS: aceita até `underCentavos` abaixo (default 0). A MAIS: aprova até
+    // `overCentavos` acima (ausente/null = sem teto — arredondar pra cima nunca
+    // barra; caso real 18/07: R$20,00 num pix de 19,90 era rejeitado por +10c).
+    // Acima do teto → humano confere (pode ser pagamento errado grosseiro).
+    {
+      const under = tolerances?.underCentavos ?? 0
+      const over = tolerances?.overCentavos ?? null
+      const diffCentavos = extracted.amountCentavos - intent.amount
+      if (diffCentavos < -under || (over != null && diffCentavos > over)) {
+        return reject('amount_mismatch', {
+          extracted: extracted.amountCentavos,
+          expected: intent.amount,
+          diffCentavos,
+          toleranceUnderCentavos: under,
+          toleranceOverCentavos: over,
+        })
+      }
     }
 
     // ── Rule 7: date validation ────────────────────────────────────────────

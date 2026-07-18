@@ -36,8 +36,10 @@ export class PaymentOrchestrator {
     phoneNumber: string
     imageBase64: string
     paymentIntentId: string
+    // Tolerância de valor do painel do bot (centavos): a-menos aceito / teto do a-mais
+    tolerances?: { underCentavos?: number; overCentavos?: number | null }
   }): Promise<PaymentOrchestratorResult> {
-    const { botId, conversationId, phoneNumber, imageBase64, paymentIntentId } = params
+    const { botId, conversationId, phoneNumber, imageBase64, paymentIntentId, tolerances } = params
 
     // ── Step 1: Load PaymentIntent ────────────────────────────────────────
     const intent = await this.paymentIntentRepo.findById(paymentIntentId)
@@ -75,6 +77,7 @@ export class PaymentOrchestrator {
       intent.toJSON(),
       isTransactionUsed,
       isFingerprintUsed,
+      tolerances,
     )
 
     // [diag] por que aprova/rejeita — observabilidade do funil de pagamento

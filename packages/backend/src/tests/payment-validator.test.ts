@@ -238,3 +238,29 @@ test('fingerprint: different amount = different fingerprint', () => {
   const fp2 = validator.buildFingerprint(makeReceipt({ amountCentavos: 1600 }))
   assert.notEqual(fp1, fp2)
 })
+
+// ─── Tolerância configurável (painel do bot): até X a menos / teto do a mais ──
+
+test('tolerância under=100: R$14,90 num pix de R$15 APROVA (90c dentro da margem)', () => {
+  const d = validator.validate(makeReceipt({ amountCentavos: 1490 }), makeIntent(), false, false, { underCentavos: 100 })
+  assert.equal(d.approved, true)
+})
+
+test('tolerância under=100: R$13,50 num pix de R$15 rejeita (150c além da margem)', () => {
+  const d = validator.validate(makeReceipt({ amountCentavos: 1350 }), makeIntent(), false, false, { underCentavos: 100 })
+  assert.equal(d.approved, false)
+  assert.equal(d.reason, 'amount_mismatch')
+})
+
+test('teto over=1000: +R$5 aprova; +R$20 cai pra humano', () => {
+  const ok = validator.validate(makeReceipt({ amountCentavos: 2000 }), makeIntent(), false, false, { overCentavos: 1000 })
+  assert.equal(ok.approved, true)
+  const alto = validator.validate(makeReceipt({ amountCentavos: 3500 }), makeIntent(), false, false, { overCentavos: 1000 })
+  assert.equal(alto.approved, false)
+  assert.equal(alto.reason, 'amount_mismatch')
+})
+
+test('sem tolerâncias: comportamento padrão (a mais ilimitado, a menos rejeita)', () => {
+  assert.equal(validator.validate(makeReceipt({ amountCentavos: 99900 }), makeIntent(), false, false).approved, true)
+  assert.equal(validator.validate(makeReceipt({ amountCentavos: 1499 }), makeIntent(), false, false).approved, false)
+})

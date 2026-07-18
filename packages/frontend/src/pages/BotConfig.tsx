@@ -584,6 +584,26 @@ function ModulosTab({
                       onChange={e => set('defaultPaymentExpirationMinutes', Number(e.target.value))}
                       className="mk-input w-full px-3 py-2.5 text-sm" />
                   </div>
+                  {/* Tolerância do validador de comprovante — valores em R$, salvos em centavos */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Aceitar até (R$) a menos</label>
+                      <input type="number" min={0} step={0.5}
+                        value={((globalConfig.pixToleranceUnderCentavos as number | undefined) ?? 0) / 100}
+                        onChange={e => set('pixToleranceUnderCentavos', Math.round(Number(e.target.value || 0) * 100))}
+                        className="mk-input w-full px-3 py-2.5 text-sm" />
+                    </div>
+                    <div>
+                      <label className="mk-eyebrow block mb-2" style={{ fontSize: '.62rem' }}>Teto do a mais (R$)</label>
+                      <input type="number" min={0} step={0.5} placeholder="sem limite"
+                        value={(globalConfig.pixToleranceOverCentavos as number | undefined) != null ? (globalConfig.pixToleranceOverCentavos as number) / 100 : ''}
+                        onChange={e => set('pixToleranceOverCentavos', e.target.value === '' ? undefined : Math.round(Number(e.target.value) * 100))}
+                        className="mk-input w-full px-3 py-2.5 text-sm" />
+                    </div>
+                  </div>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>
+                    Comprovante com valor dentro dessas margens aprova sozinho. Acima do teto (ou abaixo do "a menos") cai pra confirmação humana.
+                  </p>
                 </div>
               )}
               {m.id === 'human_handoff' && m.enabled && (

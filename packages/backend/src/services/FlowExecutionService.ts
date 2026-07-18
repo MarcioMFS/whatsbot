@@ -1384,6 +1384,10 @@ export class FlowExecutionService {
           phoneNumber: conversation.phoneNumber,
           imageBase64,
           paymentIntentId,
+          tolerances: {
+            underCentavos: bot.globalConfig?.pixToleranceUnderCentavos,
+            overCentavos: bot.globalConfig?.pixToleranceOverCentavos ?? null,
+          },
         })
 
         conversation.setVariable('__validation_reason', result.decision.reason)

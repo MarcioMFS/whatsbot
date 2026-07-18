@@ -33,6 +33,10 @@ export interface FlowRoutingRule {
 export interface BotGlobalConfig {
   defaultPixKey?: string
   defaultReceiverName?: string
+  // Tolerância de valor na validação de comprovante (centavos):
+  // under = aceita pagar até X a menos; over = teto do a-mais (ausente = sem teto)
+  pixToleranceUnderCentavos?: number
+  pixToleranceOverCentavos?: number
   ownerPhone?: string
   supportFlowId?: string
   defaultCurrency?: string

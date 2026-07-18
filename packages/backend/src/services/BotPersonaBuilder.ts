@@ -188,6 +188,9 @@ export const GlobalConfigSchema = z.object({
   supportFlowId:                   z.string().uuid().optional(),
   defaultCurrency:                 z.string().trim().max(10).optional(),
   defaultPaymentExpirationMinutes: z.number().int().min(1).max(10080).optional(),
+  // Tolerância do validador de comprovante (centavos): a-menos aceito / teto do a-mais
+  pixToleranceUnderCentavos:       z.number().int().min(0).max(100_000).optional(),
+  pixToleranceOverCentavos:        z.number().int().min(0).max(1_000_000).optional(),
   // Persona
   assistantIdentityMode:    z.enum(['named', 'brand_only']).optional(),
   assistantName:            z.string().trim().min(1).max(80).optional(),
