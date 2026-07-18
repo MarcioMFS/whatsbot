@@ -1972,7 +1972,11 @@ export class FlowExecutionService {
           const isYes = this.isYesMessage(rawText)
           const isNo = this.isNoMessage(rawText)
 
-          if (isYes || isNo) {
+          // Funil roteirizado (flag no nó): este interceptador é do fluxo de CATÁLOGO
+          // (DramaHub) — os fallbacks dele ("Certo 😊 Pode me falar o que você quer?")
+          // atropelavam a venda do funil, onde "sim" é fechamento e as REGRAS decidem.
+          const skipYesNo = (data as { skipYesNoContext?: boolean }).skipYesNoContext === true
+          if ((isYes || isNo) && !skipYesNo) {
             const lastBotMsg = [...conversation.history].reverse().find(m => m.role === 'assistant')?.content ?? null
             const qType = this.detectBotQuestionType(lastBotMsg)
             const cart = Cart.fromVariables(conversation.variables)

@@ -191,38 +191,53 @@ T_PIX_AFTER = (
 # IA de dúvidas pós-pix: pergunta que não é objeção/ack/pagamento cai num FAQ
 # TRAVADO da Juliana (única fonte da verdade; nunca preço, nunca "confirmado";
 # fora do FAQ → chama a equipe). Erro de IA → cai no aguardo padrão (t_ack).
+# Prompt da IA de dúvidas — reescrito com /copywriting (18/07): a IA é VENDEDORA,
+# não atendente. Estrutura fixa resposta→benefício→CTA; pergunta aberta é PROIBIDA
+# (bug real: "Certo 😊 Pode me falar o que você quer?" no meio do fechamento).
 def faq_prompt(contexto: str, cta: str) -> str:
     return (
         f"Você é a Juliana, consultora da equipe Nota Dez, no WhatsApp com uma professora de "
-        f"educação infantil que {contexto} e fez uma pergunta.\n\n" + FAQ_CORPO +
-        f"- Feche sempre com carinho: {cta}"
+        f"educação infantil que {contexto}. Seu trabalho não é só tirar a dúvida: é FECHAR a "
+        f"venda com carinho. Toda resposta sua termina puxando o próximo passo.\n\n"
+        + FAQ_FATOS +
+        f"\nESTRUTURA OBRIGATÓRIA da resposta (máx 4 linhas no total):\n"
+        f"1. Responda a dúvida DIRETO na primeira frase, com o fato específico — nada de rodeio.\n"
+        f"2. Conecte ao que ela ganha: tempo, domingo livre, coordenação aprovando de primeira.\n"
+        f"3. Termine SEMPRE com este convite (adapte a vírgula, nunca o sentido): {cta}\n\n"
+        f"PROIBIDO (quebra a venda):\n"
+        f"- Pergunta aberta: 'o que você quer?', 'como posso ajudar?', 'pode explicar melhor?'.\n"
+        f"- Terminar sem o convite do passo 3.\n"
+        f"- Mencionar valores, descontos ou condições — o preço é o que já apareceu na conversa.\n"
+        f"- Dizer que o pagamento foi confirmado ou recebido.\n"
+        f"- Assunto fora dos FATOS: diga que vai chamar alguém da equipe — e mesmo assim feche com o convite.\n\n"
+        f"Se a mensagem dela não for uma pergunta clara (ex.: 'sim', 'entendi', 'aa tá'): NÃO peça "
+        f"esclarecimento — acolha em meia linha e feche com o convite.\n\n"
+        f"EXEMPLO:\n"
+        f"Ela: 'é mensalidade?'\n"
+        f"Você: 'Não, professora! É pagamento único — o acesso é seu pra sempre, sem nenhuma cobrança "
+        f"depois 😊 Você resolve o planejamento de uma vez e libera seus domingos. {cta}'"
     )
 
-FAQ_CORPO = (
+FAQ_FATOS = (
     "FATOS (única fonte da verdade — não invente NADA além disso):\n"
     "- Kit: acervo completo pra educação infantil (2 a 6 anos) — planos de aula alinhados à "
     "BNCC, atividades de traçado, coordenação motora, alfabetização e lúdicas, modelos de "
     "rotina, relatórios e pareceres.\n"
     "- Tudo editável e pronto pra imprimir, organizado por faixa etária.\n"
-    "- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança recorrente).\n"
-    "- Como pagar: copiar o código Pix já enviado e colar no app do banco em 'Pix → copia e "
-    "cola' — o valor já vai preenchido.\n"
+    "- Pagamento: ÚNICO via Pix (não é mensalidade; nenhuma cobrança depois).\n"
+    "- Como pagar: copiar a chave Pix enviada na conversa (equipenotadez@jim.com) e fazer o "
+    "Pix pelo app do banco no valor combinado.\n"
     "- Entrega: os 16 materiais em PDF chegam AQUI nesta conversa, na hora, assim que o "
     "comprovante for confirmado.\n"
-    "- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n\n"
-    "REGRAS OBRIGATÓRIAS:\n"
-    "- Responda APENAS com os fatos acima, em até 3 linhas, tom caloroso e direto (pt-BR).\n"
-    "- NUNCA mencione valores, descontos ou condições — o preço é o que já foi enviado na conversa.\n"
-    "- NUNCA diga que o pagamento foi confirmado ou recebido.\n"
-    "- Pergunta fora dos fatos: diga que vai chamar alguém da equipe pra ajudar.\n"
+    "- Garantia: incondicional de 30 dias — se não servir, devolvemos 100%.\n"
 )
 
 FAQ_PROMPT = faq_prompt(
-    "acabou de receber o Pix do Kit Aula Pronta",
-    "quando pagar, é só mandar o print do comprovante aqui.")
+    "acabou de receber a chave Pix do Kit Aula Pronta",
+    "Assim que fizer o Pix, me manda o *print do comprovante* aqui que eu libero seu acesso na hora ⤵️")
 FAQ_PROMPT_FECHO = faq_prompt(
-    "está decidindo a compra do Kit Aula Pronta (ainda não recebeu o código Pix)",
-    "se quiser garantir, é só dizer 'quero resolver' que você libera o acesso na hora.")
+    "está decidindo a compra do Kit Aula Pronta (ainda não recebeu a chave Pix)",
+    "Me diz *quero resolver* que eu já libero seu acesso ⤵️")
 
 # Objeção de dinheiro/agenda no FECHAMENTO (nº1 da autópsia: "sem dinheiro, só no
 # final do mês") — acolhe, guarda a condição e deixa a porta aberta. Lead real
@@ -317,7 +332,7 @@ nodes = [
         "label": "Áudio: fechamento (reoferta rm)", "mediaUrl": AUDIO["fecho"], "mediaType": "audio"}),
     capture("c_fecho", 100, Y[13], "Aguardar quero resolver", "eu_quero", timeout=20),
     n("classify_fecho", "classify_intent", 250, Y[13], {
-        "label": "Triagem do fechamento", "intents": [
+        "label": "Triagem do fechamento", "skipYesNoContext": True, "intents": [
             {"handle": "close", "label": "Quer fechar",
              "patterns": ["quero resolver", "quero", "resolver", "sim", "ok", "okay", "claro",
                           "bora", "vamos", "pode", "fechado", "fechar", "aceito", "libera",
@@ -351,7 +366,7 @@ nodes = [
     n("cond_receipt", "condition", 250, Y[16], {
         "label": "Veio print?", "variable": "__imageBase64", "operator": "regex", "value": ".+"}),
     n("classify_pos", "classify_intent", 250, Y[17], {
-        "label": "Triagem pós-pix", "intents": [
+        "label": "Triagem pós-pix", "skipYesNoContext": True, "intents": [
             {"handle": "objection", "label": "Objeção/agenda",
              "patterns": ["não tenho", "nao tenho", "tá caro", "ta caro", "muito caro", "sem dinheiro",
                           "só tenho", "so tenho", "mais barato", "desconto", "não posso", "nao posso",

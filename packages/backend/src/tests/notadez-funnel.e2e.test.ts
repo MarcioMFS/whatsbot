@@ -491,3 +491,15 @@ test('"já paguei" continua indo pro validador (patterns explícitos), não pra 
   assert.ok(!r.msgs.all.includes('stub'), 'não passou pela IA')
   assert.ok(r.msgs.all.some(m => m.includes('não consegui confirmar')), 'validador pede o print')
 })
+
+// ─── 14. "Sim" solto no fechamento FECHA (o fallback de catálogo atropelava) ──
+
+test('"Sim" curto no fechamento → pix direto, sem "Pode me falar o que você quer?"', async () => {
+  const r = rig()
+  await walkTo(r, 'c_fecho')
+  r.msgs.clear()
+  await r.svc.handleIncomingMessage(r.bot, PHONE, 'Sim')
+  assert.ok(!r.msgs.all.some(m => m.includes('Pode me falar o que você quer')), 'fallback de catálogo não pode atropelar o funil')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', '"sim" fecha e vai pro pix')
+  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave pix enviada')
+})
