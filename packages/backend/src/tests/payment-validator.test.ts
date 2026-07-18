@@ -107,17 +107,22 @@ test('reject: missing amount', () => {
   assert.equal(d.reason, 'missing_required_fields')
 })
 
-test('reject: amount mismatch (R$16 instead of R$15)', () => {
+// Pagou A MAIS aprova (caso real 18/07: R$20,00 num pix de R$19,90 era rejeitado)
+test('approve: pagou a mais (R$16 num pix de R$15)', () => {
   const d = validator.validate(makeReceipt({ amountCentavos: 1600 }), makeIntent(), false, false)
-  assert.equal(d.approved, false)
-  assert.equal(d.reason, 'amount_mismatch')
-  assert.equal((d.debugInfo as Record<string, unknown>)['diffCentavos'], 100)
+  assert.equal(d.approved, true)
 })
 
-test('reject: amount mismatch by 1 centavo', () => {
+test('approve: pagou 1 centavo a mais', () => {
   const d = validator.validate(makeReceipt({ amountCentavos: 1501 }), makeIntent(), false, false)
+  assert.equal(d.approved, true)
+})
+
+test('reject: pagou A MENOS (R$14,90 num pix de R$15)', () => {
+  const d = validator.validate(makeReceipt({ amountCentavos: 1490 }), makeIntent(), false, false)
   assert.equal(d.approved, false)
   assert.equal(d.reason, 'amount_mismatch')
+  assert.equal((d.debugInfo as Record<string, unknown>)['diffCentavos'], -10)
 })
 
 test('reject: receipt older than payment intent', () => {
