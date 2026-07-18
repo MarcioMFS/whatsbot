@@ -51,10 +51,14 @@ export class GroqAdapter implements AIProviderPort {
   }
 
   private buildUserPrompt(params: AIGenerateParams): string {
-    let prompt = params.promptTemplate
-    for (const [key, value] of Object.entries(params.variables)) {
+    // promptTemplate é OPCIONAL (nó ai_response só com systemPrompt): sem template, a
+    // mensagem do usuário vai crua — antes `.replace` em undefined derrubava TODA
+    // chamada do nó (IA 100% muda em prod, caindo no edge de erro; 2026-07-18).
+    let prompt = params.promptTemplate ?? ''
+    for (const [key, value] of Object.entries(params.variables ?? {})) {
       prompt = prompt.replace(new RegExp(`{{${key}}}`, 'g'), value)
     }
+    if (!prompt.trim()) return params.userMessage
     if (prompt.includes('{{user_message}}')) {
       return prompt.replace('{{user_message}}', params.userMessage)
     }

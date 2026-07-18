@@ -12,10 +12,12 @@ export class GeminiAdapter implements AIProviderPort {
   readonly providerName = 'gemini'
 
   private buildUserPrompt(params: AIGenerateParams): string {
-    let prompt = params.promptTemplate
-    for (const [key, value] of Object.entries(params.variables)) {
+    // promptTemplate é OPCIONAL (nó ai_response só com systemPrompt) — mesmo fix do Groq
+    let prompt = params.promptTemplate ?? ''
+    for (const [key, value] of Object.entries(params.variables ?? {})) {
       prompt = prompt.replace(new RegExp(`{{${key}}}`, 'g'), value)
     }
+    if (!prompt.trim()) return params.userMessage
     if (prompt.includes('{{user_message}}')) {
       return prompt.replace('{{user_message}}', params.userMessage)
     }

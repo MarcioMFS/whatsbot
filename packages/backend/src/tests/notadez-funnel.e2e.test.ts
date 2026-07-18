@@ -483,13 +483,15 @@ test('pergunta pós-pix ("como recebo o material?") → IA responde e volta a es
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
 })
 
-test('"já paguei" continua indo pro validador (patterns explícitos), não pra IA', async () => {
+test('"já paguei" (texto) → pede o print com tom positivo, sem rejeição de validador', async () => {
   const r = rig()
   await walkTo(r, 'c5')
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'já paguei')
   assert.ok(!r.msgs.all.includes('stub'), 'não passou pela IA')
-  assert.ok(r.msgs.all.some(m => m.includes('não consegui confirmar')), 'validador pede o print')
+  assert.ok(r.msgs.all.some(m => m.includes('print do comprovante')), 'pede o print gentilmente')
+  assert.ok(!r.msgs.all.some(m => m.includes('não consegui confirmar')), 'sem tom de rejeição pra quem só avisou')
+  assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue esperando o print')
 })
 
 // ─── 14. "Sim" solto no fechamento FECHA (o fallback de catálogo atropelava) ──

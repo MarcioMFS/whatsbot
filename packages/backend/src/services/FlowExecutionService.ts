@@ -1078,6 +1078,9 @@ export class FlowExecutionService {
           const fallback = flow.getNextNodes(node.id)
           return (nexts[0] ?? fallback[0])?.id
         } catch (err) {
+          // NUNCA engolir mudo: 2 dias de IA 100% quebrada (promptTemplate undefined)
+          // passaram invisíveis porque este catch não logava nada.
+          console.error(`[ai_response] node=${node.id} falhou → edge de erro:`, err instanceof Error ? err.message : err)
           const errNodes = flow.getNextNodes(node.id, 'error')
           if (errNodes[0]) return errNodes[0].id
           return undefined

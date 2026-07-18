@@ -601,6 +601,18 @@
    }
   },
   {
+   "id": "t_pede_print",
+   "type": "text_message",
+   "position": {
+    "x": 850,
+    "y": 2900
+   },
+   "data": {
+    "label": "Pede o print",
+    "message": "Que ótimo! 🙌 Então só me manda o *print do comprovante* aqui na conversa que eu confirmo e já libero seu acesso na hora ⤵️"
+   }
+  },
+  {
    "id": "t_downsell",
    "type": "text_message",
    "position": {
@@ -1504,10 +1516,17 @@
    "targetHandle": null
   },
   {
-   "id": "e-classify_pos-v1-validate",
+   "id": "e-classify_pos-t_pede_print-validate",
    "source": "classify_pos",
-   "target": "v1",
+   "target": "t_pede_print",
    "sourceHandle": "validate",
+   "targetHandle": null
+  },
+  {
+   "id": "e-t_pede_print-c5",
+   "source": "t_pede_print",
+   "target": "c5",
+   "sourceHandle": null,
    "targetHandle": null
   },
   {

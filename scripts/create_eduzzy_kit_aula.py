@@ -258,6 +258,13 @@ T_ACK = (
     "chegar, eu já libero seu acesso."
 )
 
+# Avisou que pagou (texto, sem print): comemora e pede o print — jamais o tom de
+# rejeição do validador ("não consegui confirmar") pra quem só deu a boa notícia.
+T_PEDE_PRINT = (
+    "Que ótimo! 🙌 Então só me manda o *print do comprovante* aqui na conversa que eu "
+    "confirmo e já libero seu acesso na hora ⤵️"
+)
+
 # Downsell: objeção de preço/agenda pós-pix → oferta final R$ 14,90 imediata
 T_DOWNSELL = (
     "Entendo perfeitamente, professora 💙 Então deixa eu fazer uma coisa que eu não faço "
@@ -384,6 +391,9 @@ nodes = [
         "label": "IA: dúvidas pós-pix (FAQ travado)", "systemPrompt": FAQ_PROMPT,
         "useHistory": True, "temperature": 0.4, "maxTokens": 220}),
     text("t_ack", 250, Y[19], "Aguardo do comprovante", T_ACK),
+    # "paguei/mandei" por TEXTO não é comprovante: pede o print com tom positivo
+    # (antes ia pro validador → "não consegui confirmar" pra quem só avisou)
+    text("t_pede_print", 850, Y[19], "Pede o print", T_PEDE_PRINT),
     text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
     n("pix_down", "pix", 550, Y[17], {
         "label": "Pix downsell R$14,90 (chave email)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
@@ -482,7 +492,7 @@ edges += [
     e("cond_receipt", "v1", "true"), e("cond_receipt", "classify_pos", "false"),
     e("classify_pos", "t_downsell", "objection"), e("t_downsell", "pix_down"), e("pix_down", "c5"),
     e("classify_pos", "t_ack", "ack"), e("t_ack", "c5"),
-    e("classify_pos", "v1", "validate"),
+    e("classify_pos", "t_pede_print", "validate"), e("t_pede_print", "c5"),
     # dúvida → IA FAQ → volta a esperar o comprovante; IA fora do ar → aguardo padrão
     e("classify_pos", "ai_faq", "question"),
     e("ai_faq", "c5", "success"), e("ai_faq", "t_ack", "error"),
