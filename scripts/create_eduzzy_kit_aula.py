@@ -335,11 +335,11 @@ nodes = [
         "useHistory": True, "temperature": 0.4, "maxTokens": 220}),
     text("t_reanchor", 850, Y[13], "Re-âncora", T_REANCHOR),
 
-    # Pix 19,90 copia-e-cola (BR Code com valor embutido) + comprovante
+    # Pix 19,90 — chave EMAIL copiável (card nativo do WhatsApp não chega de conta
+    # não-business; EMV copia-e-cola disponível via brCode:True se quiser voltar)
     n("pix_main", "pix", 100, Y[14], {
-        "label": "Pix R$19,90 (copia e cola)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "label": "Pix R$19,90 (chave email)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
         "amount": "19,90", "description": "Kit Aula Pronta Infantil — condição especial",
-        "brCode": True, "merchantCity": "RECIFE",
         "trustLine": "Garantia incondicional de 30 dias — se não servir pra sua rotina, devolvemos cada centavo 💙",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     text("t_pix_after", 100, Y[15], "Pedir comprovante", T_PIX_AFTER),
@@ -371,9 +371,8 @@ nodes = [
     text("t_ack", 250, Y[19], "Aguardo do comprovante", T_ACK),
     text("t_downsell", 400, Y[17], "Downsell 14,90", T_DOWNSELL),
     n("pix_down", "pix", 550, Y[17], {
-        "label": "Pix downsell R$14,90 (copia e cola)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
+        "label": "Pix downsell R$14,90 (chave email)", "pixKey": PIX_KEY, "recipientName": PIX_NAME,
         "amount": "14,90", "description": "Kit Aula Pronta Infantil — oferta final",
-        "brCode": True, "merchantCity": "RECIFE",
         "trustLine": "Garantia incondicional de 30 dias — se não servir, devolvemos cada centavo 💙",
         "expiresInMinutes": 120, "outputVariable": "paymentIntentId"}),
     n("v1", "ai_validate_receipt", 100, Y[18], {"label": "Validar comprovante", "paymentIntentVariable": "paymentIntentId"}),

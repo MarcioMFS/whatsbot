@@ -250,9 +250,9 @@ test('caminho feliz v9: problema → faixa "1" → amostra real → QUERO RESOLV
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'QUERO RESOLVER')
   assert.equal(convOf(r)?.currentNodeId, 'c5')
   const last = r.msgs.all[r.msgs.all.length - 1]
-  assert.ok(last.startsWith('000201') && last.includes('equipenotadez@jim.com'), 'BR Code copia-e-cola isolado na última bolha')
-  assert.ok(last.includes('540519.90'), 'valor 19,90 embutido no código')
+  assert.equal(last, 'equipenotadez@jim.com', 'chave email isolada na última bolha (copiável)')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
+  assert.ok(r.msgs.all.some(m => m.includes('Garantia incondicional')), 'linha de confiança na bolha do pix')
   assert.ok(convOf(r)?.variables['paymentIntentId'], 'PaymentIntent criado')
 
   r.msgs.clear()
@@ -388,7 +388,7 @@ test('goto adianta o funil: lead na faixa vai direto pro pix — chave na últim
   conv.moveToNode('t_pix_after')
   await r.svc.resumeFromNode(r.bot, loadFlow(), conv)
   assert.equal(convOf(r)?.currentNodeId, 'c5')
-  assert.ok(r.msgs.all[r.msgs.all.length - 1].startsWith('000201'), 'BR Code copia-e-cola na última bolha')
+  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave email na última bolha')
   assert.ok(r.msgs.all.some(m => m.includes('19,90')), 'pix no valor 19,90')
 })
 
@@ -434,8 +434,7 @@ test('objeção "tá caro" no pós-pix → downsell 14,90 com pix novo, volta a 
   r.msgs.clear()
   await r.svc.handleIncomingMessage(r.bot, PHONE, 'tá caro, não tenho esse valor agora')
   assert.ok(r.msgs.all.some(m => m.includes('14,90')), 'downsell 14,90 oferecido')
-  const lastDown = r.msgs.all[r.msgs.all.length - 1]
-  assert.ok(lastDown.startsWith('000201') && lastDown.includes('540514.90'), 'BR Code do downsell com 14,90 embutido')
+  assert.equal(r.msgs.all[r.msgs.all.length - 1], 'equipenotadez@jim.com', 'chave email do downsell na última bolha')
   assert.equal(convOf(r)?.currentNodeId, 'c5', 'segue aguardando o comprovante')
   assert.ok(!r.msgs.all.some(m => m.includes('Pagamento confirmado')), 'objeção nunca confirma pagamento')
 })
