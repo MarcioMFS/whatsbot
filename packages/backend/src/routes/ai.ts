@@ -44,7 +44,15 @@ export async function aiRoutes(app: FastifyInstance, ctx: AICtx) {
   // disparava geração à vontade (DoS financeiro). 10/min por IP nesta rota.
   app.post('/generate-bot-config', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req, reply) => {
     const parsed = GenerateSchema.safeParse(req.body)
-    if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() })
+    if (!parsed.success) {
+      // Mensagem LEGÍVEL — o flatten cru virava "[object Object]" na tela (caso real
+      // 29/07: 4 tentativas com descrição curta e nenhuma pista do que estava errado)
+      const issue = parsed.error.errors[0]
+      const msg = issue?.path[0] === 'description'
+        ? 'Descreva um pouco mais o seu negócio (mínimo 10 caracteres) — quanto mais detalhe sobre produto, preço e público, melhor o bot fica 😊'
+        : `Dados inválidos: ${issue?.path.join('.') ?? 'verifique os campos'}`
+      return reply.code(400).send({ error: msg })
+    }
 
     const { description, language, provider } = parsed.data
 

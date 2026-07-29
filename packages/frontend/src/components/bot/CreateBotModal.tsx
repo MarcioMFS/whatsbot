@@ -65,6 +65,10 @@ export function CreateBotModal({ onClose, onCreated }: Props) {
 
   const generate = async () => {
     if (!description.trim()) { setError(t('describeFirst')); return }
+    if (description.trim().length < 10) {
+      setError('Descreva um pouco mais o seu negócio (mínimo 10 caracteres) — produto, preço e público ajudam a IA a montar um bot melhor 😊')
+      return
+    }
     setError('')
     setGenerating(true)
     try {
