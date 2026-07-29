@@ -187,12 +187,14 @@ export class EvolutionAPIAdapter implements MessagingPort {
   private async _fetchQRCode(instanceName: string, retries = 6, delayMs = 2000): Promise<string> {
     for (let i = 0; i < retries; i++) {
       try {
-        const data = await this.request<{ data?: { Qrcode?: string; Code?: string } }>(
+        const data = await this.request<{ data?: Record<string, string> }>(
           '/instance/qr',
           {},
           instanceName,
         )
-        const raw = data.data?.Qrcode ?? data.data?.Code ?? ''
+        // evolution-go novo (2026-07) renomeou os campos pra minúsculo — aceitar ambos
+        const d = data.data ?? {}
+        const raw = d.Qrcode ?? d.qrcode ?? d.Code ?? d.code ?? ''
         if (raw) {
           if (raw.startsWith('data:image')) return raw.replace('data:image/png;base64,', '')
           if (raw.length > 100) return raw
