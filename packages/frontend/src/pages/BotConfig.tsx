@@ -31,6 +31,8 @@ interface GlobalConfig {
   poolOptOut?: boolean
   defaultPixKey?: string
   defaultReceiverName?: string
+  pixToleranceUnderCentavos?: number
+  pixToleranceOverCentavos?: number
   ownerPhone?: string
   supportFlowId?: string
   defaultCurrency?: string
