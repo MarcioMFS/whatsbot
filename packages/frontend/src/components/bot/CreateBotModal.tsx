@@ -76,6 +76,13 @@ export function CreateBotModal({ onClose, onCreated }: Props) {
       setGenerated(config)
       setEditedPrompt(config.systemPrompt)
       if (!botName) setBotName(config.productName + ' Bot')
+      // instância auto-preenchida (slug do produto) — campo técnico vazio deixava o
+      // botão Criar MUDO (caso real 29/07: usuária nova travada sem nenhuma pista)
+      if (!instanceName) {
+        const slug = config.productName.normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30)
+        setInstanceName(slug || 'meu-bot')
+      }
       setStep(2)
       setTimeout(() => {
         gsap.fromTo('.step2-content',
@@ -91,7 +98,10 @@ export function CreateBotModal({ onClose, onCreated }: Props) {
   }
 
   const createBot = async () => {
-    if (!botName || !instanceName || !generated) return
+    // nunca falhar MUDO: diga qual campo falta
+    if (!generated) { setError('Gere a configuração com a IA primeiro (passo anterior) 😊'); return }
+    if (!botName) { setError('Dá um nome pro seu bot antes de criar 😊'); return }
+    if (!instanceName) { setError('Preencha o nome da instância (ex.: meu-bot) — é o identificador técnico do WhatsApp.'); return }
     setError('')
     setCreating(true)
     try {
