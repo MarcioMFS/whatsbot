@@ -51,6 +51,38 @@ def send_text(instance: str, number: str, text: str, timeout: int = 20) -> bool:
         return False
 
 
+def api_key() -> str:
+    """apikey global do evolution — fica no .env, fora do repo."""
+    try:
+        for line in Path("/root/work/whatsbot/.env").read_text().splitlines():
+            line = line.strip()
+            if line.startswith("EVOLUTION_API_KEY="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return ""
+
+
+def connected_instances() -> set:
+    """Instâncias com sessão ativa AGORA.
+
+    Probe em instância deslogada falha SEMPRE, e reiniciar o container não conserta
+    sessão que precisa de QR — só derruba as instâncias que estão de pé. Foi exatamente
+    isso que aconteceu em 2026-08-23: a site-01 estava sem sessão, o watchdog entrou em
+    loop de restart a cada 5 min (78 num dia) e derrubou uma conexão recém-escaneada.
+    """
+    try:
+        req = urlreq.Request(f"{EVO}/instance/all", headers={"apikey": api_key()})
+        with urlreq.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read().decode())
+        return {i.get("name") for i in data.get("data", []) if i.get("connected")}
+    except Exception as e:
+        # Sem saber quem está de pé, o comportamento antigo (testar todas) é o mais seguro:
+        # é melhor um restart a mais do que deixar passar degradação real.
+        log(f"não deu pra listar instâncias ({e}) — testando todas as configuradas")
+        return set(INSTANCES)
+
+
 def load_state() -> dict:
     try:
         return json.loads(STATE.read_text())
@@ -61,9 +93,20 @@ def load_state() -> dict:
 def main() -> None:
     state = load_state()
 
+    # Só testa quem tem sessão. Instância deslogada é problema de QR, não de container:
+    # reiniciar não traz ela de volta e ainda derruba as que estão conectadas.
+    live = connected_instances()
+    targets = {inst: num for inst, num in INSTANCES.items() if inst in live}
+    if not targets:
+        offline = ", ".join(sorted(INSTANCES)) or "(nenhuma configurada)"
+        log(f"nenhuma instância conectada ({offline}) — precisa escanear QR; sem restart")
+        state["fails"] = 0
+        STATE.write_text(json.dumps(state))
+        return
+
     # texto do probe varia por execução (self-message idêntica em loop é sinal robótico)
     probe_text = f"ok {datetime.now():%H:%M}"
-    ok = all(send_text(inst, self_num, probe_text) for inst, self_num in INSTANCES.items())
+    ok = all(send_text(inst, self_num, probe_text) for inst, self_num in targets.items())
     if ok:
         if state["fails"]:
             log(f"recuperado sem restart (fails era {state['fails']})")
@@ -84,7 +127,7 @@ def main() -> None:
             state["last_restart"] = time.time()
             state["fails"] = 0
             time.sleep(20)
-            recovered = all(send_text(i, n, f"ok {datetime.now():%H:%M}") for i, n in INSTANCES.items())
+            recovered = all(send_text(i, n, f"ok {datetime.now():%H:%M}") for i, n in targets.items())
             status = "✅ envios voltaram" if recovered else "❌ AINDA MUDO — olhar manualmente!"
             log(f"pós-restart: {status}")
             send_text(ALERT_INSTANCE, ALERT_PHONE,
