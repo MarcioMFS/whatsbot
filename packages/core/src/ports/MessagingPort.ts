@@ -42,6 +42,10 @@ export interface MessagingPort {
   sendMedia?(msg: OutgoingMedia): Promise<void>
   sendPresence?(msg: OutgoingPresence): Promise<void>
   getInstanceStatus(instanceName: string): Promise<InstanceStatus>
+  // Existência ≠ conexão: getInstanceStatus devolve 'close' tanto para instância
+  // desconectada quanto para instância inexistente, então não serve para detectar colisão
+  // de nome na criação. Opcional para não obrigar toda implementação (ex.: CloudAPI).
+  instanceExists?(instanceName: string): Promise<boolean>
   createInstance(instanceName: string, webhookUrl?: string, webhookSecret?: string): Promise<{ qrCode: string }>
   deleteInstance(instanceName: string): Promise<void>
   setWebhook(instanceName: string, webhookUrl: string, secret: string): Promise<void>

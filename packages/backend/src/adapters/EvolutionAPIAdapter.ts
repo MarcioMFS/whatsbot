@@ -124,6 +124,11 @@ export class EvolutionAPIAdapter implements MessagingPort {
     return { instanceName, state }
   }
 
+  async instanceExists(instanceName: string): Promise<boolean> {
+    const data = await this.request<{ data: EvoGoInstance[] }>('/instance/all')
+    return data.data.some((i) => i.name === instanceName)
+  }
+
   async createInstance(
     instanceName: string,
     webhookUrl?: string,
