@@ -49,7 +49,7 @@ import {
   type ConversationSnapshot,
   type CartItem,
 } from '@whatsbot/core'
-import type { AIGenerationService } from './AIGenerationService.js'
+import type { AIGenerationService, ProviderName } from './AIGenerationService.js'
 import { buildPixBrCode } from './pixBrCode.js'
 import { mkdirSync, writeFileSync } from 'fs'
 import { join as joinPath } from 'path'
@@ -1053,7 +1053,7 @@ export class FlowExecutionService {
         const imageBase64 = conversation.variables['__imageBase64']
         if (imageBase64) conversation.setVariable('__imageBase64', '') // consume — não reutilizar
         const nodeProvider = (data as Record<string, unknown>).provider as string | undefined
-        const provider = imageBase64 ? 'claude' : (nodeProvider ?? bot.aiConfig.provider)
+        const provider = (imageBase64 ? 'claude' : (nodeProvider ?? bot.aiConfig.provider)) as ProviderName
         const nodeTemp = (data as Record<string, unknown>).temperature as number | undefined
         const nodeMaxTokens = (data as Record<string, unknown>).maxTokens as number | undefined
         try {
@@ -2588,7 +2588,9 @@ export class FlowExecutionService {
     })
     await this.handoffRepo.save(handoff)
     this.observationRepo?.updateOutcomeByConversation(params.conversation.id, 'escalated', params.reason).catch(e => console.error('[FES] outcome escalated failed:', e?.message))
-    this.emit(params.bot.id, params.conversation.id, params.conversation.phoneNumber, 'handoff_requested', {
+    // 'handoff_requested' não existe em ConversationEventType — o nome canônico (e o único
+    // que alguém consulta) é 'handoff_triggered'.
+    this.emit(params.bot.id, params.conversation.id, params.conversation.phoneNumber, 'handoff_triggered', {
       reason: params.reason,
       handoffId: handoff.id,
     })
@@ -2966,8 +2968,19 @@ export class FlowExecutionService {
           ? `Lead: ${lead.totalSessions} sessões, tags: [${lead.tags.join(', ')}], temperatura: ${lead.leadTemperature}.`
           : ''
         const prompt = `${context}\nMensagem do cliente: "${text}"\n\nRetorne JSON com exatamente estas chaves:\n{"intent":"greeting|buy_interest|catalog|quantity|availability_check|title_search|doubt|price_issue|pix_pending|upsell|unknown","confidence":0.0,"quantityDetected":null,"titleDetected":null,"objectionType":null,"sentiment":"positive|neutral|negative","shouldEscalate":false}\n\navailability_check = cliente pergunta se uma série específica está disponível ("você tem X?", "tem essa série?", "vi X, vocês têm?")\ntitleDetected = nome da série mencionada, se houver\n\nRetorne SOMENTE o JSON, sem texto adicional.`
-        const r = await this.aiService.generate('groq', { prompt, temperature: 0.1, maxTokens: 120 })
-        const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
+        // mesmos campos errados do interceptor: `prompt` não existe em AIGenerateParams e o
+        // resultado expõe `content`. Com tsx (sem typecheck) isso virava TypeError engolido
+        // pelo catch — a classificação de intenção ambígua NUNCA rodou.
+        const r = await this.aiService.generate('groq', {
+          systemPrompt: prompt,
+          promptTemplate: '',
+          history: [],
+          userMessage: 'Responda apenas com o JSON.',
+          variables: {},
+          temperature: 0.1,
+          maxTokens: 120,
+        })
+        const raw = r.content.trim().replace(/^```json?|```$/g, '').trim()
         const parsed = JSON.parse(raw)
         return {
           intent: parsed.intent ?? 'unknown',
@@ -3237,12 +3250,18 @@ Regra: só use "respond" se a resposta for factual e curta. Para qualquer ação
 
     try {
       const provider = agentConfig.provider ?? 'groq'
+      // idem: campos errados + `r.text` inexistente faziam o roteamento por agente cair
+      // sempre no catch.
       const r = await this.aiService.generate(provider, {
-        prompt,
+        systemPrompt: prompt,
+        promptTemplate: '',
+        history: [],
+        userMessage: 'Responda apenas com o JSON.',
+        variables: {},
         temperature: 0.2,
         maxTokens: 200,
       })
-      const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
+      const raw = r.content.trim().replace(/^```json?|```$/g, '').trim()
       const parsed = JSON.parse(raw)
       return {
         action: parsed.action ?? 'route',
@@ -3302,12 +3321,21 @@ Regra: "answer" só para dúvidas factuais rápidas. "redirect" quando o cliente
 
     try {
       const provider = interceptor.provider ?? 'groq'
+      // Estes campos estavam errados e o `catch` logo abaixo escondia a falha: `prompt` não
+      // existe em AIGenerateParams (o adapter recebia systemPrompt undefined) e o resultado
+      // expõe `content`, não `text` — então `r.text.trim()` lançava TypeError e o interceptor
+      // devolvia 'ignore' SEMPRE, em toda mensagem. O backend roda com tsx (sem checagem de
+      // tipos), então nada disso aparecia no deploy.
       const r = await this.aiService.generate(provider, {
-        prompt,
+        systemPrompt: prompt,
+        promptTemplate: '',
+        history: [],
+        userMessage: 'Responda apenas com o JSON.',
+        variables: {},
         temperature: 0.2,
         maxTokens: 150,
       })
-      const raw = r.text.trim().replace(/^```json?|```$/g, '').trim()
+      const raw = r.content.trim().replace(/^```json?|```$/g, '').trim()
       const parsed = JSON.parse(raw)
       return {
         action: parsed.action ?? 'ignore',

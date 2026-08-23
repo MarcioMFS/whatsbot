@@ -4,7 +4,7 @@ import type { IAgentProvider, CompleteRequest, ProviderResponse, AgentMessage, T
 // Groq (OpenAI-compatible) como provider do agente — tool-calling via llama-3.3-70b.
 // Sem visão: o modelo é texto, então imagens em AgentMessage são ignoradas (a tool de
 // comprovante usa Claude separadamente; a visão de catálogo fica indisponível com Groq).
-const MODEL = process.env.GROQ_AGENT_MODEL ?? 'llama-3.3-70b-versatile'
+const MODEL = process.env.GROQ_AGENT_MODEL ?? 'openai/gpt-oss-120b'
 
 type OpenAITool = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } }
 type OpenAIToolCall = { id: string; type: 'function'; function: { name: string; arguments: string } }

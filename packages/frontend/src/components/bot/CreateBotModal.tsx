@@ -116,7 +116,8 @@ export function CreateBotModal({ onClose, onCreated }: Props) {
         },
         aiConfig: {
           provider,
-          model: provider === 'claude' ? 'claude-sonnet-4-6' : 'llama-3.3-70b-versatile',
+          // gpt-oss-120b substituiu o llama-3.3-70b-versatile, aposentado pela Groq (404).
+          model: provider === 'claude' ? 'claude-sonnet-4-6' : 'openai/gpt-oss-120b',
           temperature: 0.7,
           maxTokens: 1024,
           systemPromptTemplate: editedPrompt,

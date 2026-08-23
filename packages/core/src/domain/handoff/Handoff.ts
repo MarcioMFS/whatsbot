@@ -11,6 +11,7 @@ export type HandoffReason =
   | 'user_request'
   | 'capture_stuck'
   | 'escalated'
+  | 'fraud_accusation' // cliente acusa golpe/fraude — vai pra humano, nunca encerra sozinho
   | 'custom'
 
 export interface HandoffProps {

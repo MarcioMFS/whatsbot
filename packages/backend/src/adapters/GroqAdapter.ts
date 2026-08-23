@@ -1,6 +1,12 @@
 import Groq from 'groq-sdk'
 import type { AIProviderPort, AIGenerateParams, AIGenerateResult } from '@whatsbot/core'
 
+// A Groq aposentou o llama-3.3-70b-versatile: a API passou a responder 404 model_not_found,
+// derrubando a geração de bot ("Criar seu bot" → Groq) e o agente de todo bot com provider groq.
+// Substituto validado em 2026-08-23 contra a API real: gpt-oss-120b passou em JSON estruturado
+// (1,2s) e em tool-calling (0,3s); qwen3.6-27b devolveu JSON inválido e foi descartado.
+const DEFAULT_MODEL = process.env.GROQ_MODEL ?? 'openai/gpt-oss-120b'
+
 export class GroqAdapter implements AIProviderPort {
   readonly providerName = 'groq'
   private clients: Groq[]
@@ -24,7 +30,7 @@ export class GroqAdapter implements AIProviderPort {
       const client = this.clients[this.currentIndex]
       try {
         const response = await client.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
+          model: DEFAULT_MODEL,
           max_tokens: params.maxTokens ?? 1024,
           temperature: params.temperature ?? 0.7,
           messages,

@@ -22,11 +22,14 @@ export type ConversationEventType =
   | 'order_created'
   | 'delivery_sent'
   | 'delivery_pending'
+  | 'delivery_failed' // itens que não puderam ser entregues (DeliveryService já emite)
   | 'node_reached'
 
 export interface ConversationEvent {
   botId: string
-  conversationId: string
+  // null é legítimo: há eventos sem conversa (ex.: ack inline pós-compra). O tipo dizia
+  // string e o emitter já passava null — descartar esses eventos apagava telemetria.
+  conversationId: string | null
   phoneNumber: string
   eventType: ConversationEventType
   payload: Record<string, unknown>
